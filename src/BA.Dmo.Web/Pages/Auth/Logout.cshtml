@@ -1,0 +1,23 @@
+@page "/logout"
+@model BA.Dmo.Web.Pages.Auth.LogoutModel
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@{
+    Layout = null; // Auth surface is outside the application shell (05_SHL §5).
+}
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BA DMO — Sair</title>
+</head>
+<body>
+    <main>
+        <h1>Sair</h1>
+        <form method="post">
+            @Html.AntiForgeryToken()
+            <button type="submit">Terminar sessão</button>
+        </form>
+    </main>
+</body>
+</html>

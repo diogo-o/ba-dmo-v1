@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- BA DMO web layer: Razor Pages, shell, view models, route guards.
+       Also hosts the operational CLI verbs (migrate / bootstrap-admin) via process arguments (GLM-ARCH-15). -->
+  <ItemGroup>
+    <ProjectReference Include="..\BA.Dmo.Application\BA.Dmo.Application.csproj" />
+    <ProjectReference Include="..\BA.Dmo.Infrastructure\BA.Dmo.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <!-- Ship the fresh-build migration family with the deployed web output so the
+       CLI-only migrate command (Render pre-deploy, PV-05) finds the scripts. -->
+  <ItemGroup>
+    <Content Include="..\..\database\migrations\**\*.sql"
+             Link="database\migrations\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

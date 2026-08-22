@@ -1,0 +1,26 @@
+@page "/access-denied"
+@model BA.Dmo.Web.Pages.AccessDeniedModel
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@{
+    Layout = null; // Safe state renders without the module shell (GLM-SHL-06).
+}
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BA DMO — Acesso negado</title>
+    <link rel="stylesheet" href="~/styles/dmo-tokens.css" />
+    <link rel="stylesheet" href="~/styles/dmo-foundation.css" />
+    <link rel="stylesheet" href="~/styles/dmo-components.css" />
+</head>
+<body>
+    <main class="dmo-safe-state">
+        <section class="dmo-safe-state__card">
+            <h1>Acesso negado</h1>
+            <p>Não tem autorização para aceder a esta área.</p>
+            <a class="dmo-button outline" href="/login">Voltar à entrada</a>
+        </section>
+    </main>
+</body>
+</html>

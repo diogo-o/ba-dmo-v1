@@ -1,0 +1,92 @@
+@page "/login"
+@model BA.Dmo.Web.Pages.Auth.LoginModel
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@{
+    Layout = null; // Auth surface is outside the application shell (05_SHL §5).
+}
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Entrar — BA DMO</title>
+    <link rel="stylesheet" href="~/styles/dmo-tokens.css" />
+    <link rel="stylesheet" href="~/styles/dmo-foundation.css" />
+    <link rel="stylesheet" href="~/styles/dmo-components.css" />
+    <link rel="stylesheet" href="~/styles/dmo-layout.css" />
+    <link rel="stylesheet" href="~/styles/dmo-utilities.css" />
+</head>
+@* Login composition per the Design-Reference (login.html): split shell with
+   the identity panel and the form side. No role choice, no test credentials
+   shown (DMO §24). Error messages never confirm email existence. *@
+<body class="login-body">
+    <main class="login-shell dmo-card">
+        <section class="identity">
+            <img class="brand-logo" src="~/assets/ba-logo.png" alt="BA" />
+            <div class="copy">
+                <div class="eyebrow">BA GLASS</div>
+                <h1>Portal DMO</h1>
+                <p>Aplicações do Departamento DMO</p>
+            </div>
+            <div class="identity-foot">
+                Acesso reservado a utilizadores autorizados.
+                <strong>Portal DMO · Desenvolvido por Diogo Oliveira · 2026</strong>
+            </div>
+        </section>
+        <section class="login-side">
+            <form class="login-form" method="post" data-dmo-login>
+                @Html.AntiForgeryToken()
+                <h2>Entrar</h2>
+                <p class="lead">Introduza as suas credenciais para aceder ao Portal DMO.</p>
+                <div class="notice" role="alert">
+                    <b>ⓘ</b>
+                    <div>
+                        <strong>Ambiente de testes</strong>
+                        <span>Os dados introduzidos podem não representar produção.</span>
+                    </div>
+                </div>
+                <div class="dmo-field">
+                    <label for="email">Email</label>
+                    <input id="email" name="email" type="email" autocomplete="username"
+                           placeholder="nome@empresa.com" required value="@Model.Email" />
+                    @* Password input intentionally has no value attribute: it is
+                       never stored or re-shown after a failed attempt. *@
+                </div>
+                <div class="dmo-field">
+                    <label for="password">Palavra-passe</label>
+                    <div class="password-wrap">
+                        <input id="password" name="password" type="password"
+                               autocomplete="current-password" required />
+                        <button class="dmo-button password-toggle" type="button"
+                                data-dmo-password-toggle="password"
+                                data-label-show="Mostrar" data-label-hide="Ocultar">Mostrar</button>
+                    </div>
+                </div>
+                <button class="dmo-button submit" type="submit" data-dmo-login-submit>
+                    <span class="dmo-button__label">Entrar</span>
+                </button>
+                @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+                {
+                    <div class="dmo-form-message" role="alert">@Model.ErrorMessage</div>
+                }
+            </form>
+        </section>
+    </main>
+    <script src="~/scripts/dmo-interactions.js" defer></script>
+    <script>
+        // Reference login submit state (login.html): disables the trigger
+        // and shows the in-progress label while authentication runs.
+        document.addEventListener("DOMContentLoaded", function () {
+            var form = document.querySelector("[data-dmo-login]");
+            if (!form) { return; }
+            form.addEventListener("submit", function () {
+                var submit = form.querySelector("[data-dmo-login-submit]");
+                if (!submit) { return; }
+                submit.disabled = true;
+                var label = submit.querySelector(".dmo-button__label");
+                if (label) { label.textContent = "A entrar…"; }
+            });
+        });
+    </script>
+</body>
+</html>

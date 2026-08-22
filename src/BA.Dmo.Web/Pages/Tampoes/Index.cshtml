@@ -1,0 +1,403 @@
+@page "/tampoes"
+@model BA.Dmo.Web.Pages.Tampoes.IndexModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.ModulePolicies.Tampoes)]
+@{
+    ViewData["Title"] = "Tampões";
+}
+<link rel="stylesheet" href="~/styles/modules/tampoes-layout.css" />
+
+<nav class="tampoes-tabs" aria-label="Navegação Tampões">
+    <button class="tab active" data-view="registo" type="button">Registo</button>
+    <button class="tab" data-view="consulta" type="button">Consulta</button>
+    <button class="tab" data-view="planeamento" type="button">Planeamento</button>
+    <button class="tab" data-view="historico" type="button">Histórico</button>
+    <button class="tab" data-view="linhas" type="button">Linhas e Máquinas</button>
+    <button class="tab right" data-view="opcoes" type="button">Opções</button>
+</nav>
+
+<main data-testid="page-tampoes" class="tampoes-page">
+
+    <!-- ===== Registo ===== -->
+    <section class="tampoes-view active" id="registo">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Registo de quantidades</h2>
+                <p>Adicionar ou remover quantidade de um saldo. Diâmetro e Calote vêm dos dropdowns de Opções.</p>
+            </div>
+        </div>
+        <div class="tampoes-inline-card dmo-card">
+            <div class="tampoes-filter-row">
+                <div class="dmo-field">
+                    <label for="rDiameter">Diâmetro (mm)</label>
+                    <select id="rDiameter"></select>
+                </div>
+                <div class="dmo-field">
+                    <label for="rCalote">Profundidade/Calote (mm)</label>
+                    <select id="rCalote"></select>
+                </div>
+                <div class="dmo-field">
+                    <label for="rSaldo">Saldo</label>
+                    <select id="rSaldo">
+                        <option value="Enchidos">Enchidos</option>
+                        <option value="PorEncher">Por encher</option>
+                    </select>
+                </div>
+                <div class="dmo-field">
+                    <label for="rQty">Quantidade</label>
+                    <input id="rQty" type="number" inputmode="numeric" min="1" step="1" autocomplete="off" />
+                </div>
+            </div>
+            <div class="dmo-row-actions">
+                <button type="button" class="dmo-button success" data-add-qty>Adicionar quantidade</button>
+                <button type="button" class="dmo-button danger" data-remove-qty>Remover quantidade</button>
+            </div>
+        </div>
+        <div id="registerFeedback" class="dmo-empty-state" hidden></div>
+    </section>
+
+    <!-- ===== Consulta (mobile-first) ===== -->
+    <section class="tampoes-view" id="consulta">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Consulta</h2>
+                <p>Clique seleciona; duplo clique abre o detalhe da configuração.</p>
+            </div>
+        </div>
+        <div class="tampoes-filter-row">
+            <div class="dmo-field">
+                <label for="cDiameter">Diâmetro (mm)</label>
+                <select id="cDiameter"></select>
+            </div>
+            <div class="dmo-field">
+                <label for="cCalote">Profundidade/Calote (mm)</label>
+                <select id="cCalote"></select>
+            </div>
+            <div class="dmo-field">
+                <label class="tampoes-inline">
+                    <input id="cEmpty" type="checkbox" />
+                    <span>Incluir sem resultado</span>
+                </label>
+            </div>
+            <div class="tampoes-action-row">
+                <button type="button" class="dmo-button" data-consult>Consultar</button>
+            </div>
+        </div>
+
+        <div class="dmo-table-card">
+            <div class="dmo-table-wrap">
+                <table class="dmo-table" id="consultaTable">
+                    <thead>
+                        <tr>
+                            <th>Diâmetro</th>
+                            <th>Calote</th>
+                            <th>Enchidos</th>
+                            <th>Por encher</th>
+                            <th>Total</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="consultaBody"></tbody>
+                </table>
+            </div>
+            <div class="dmo-empty-state" hidden id="consultaEmpty">Não foi encontrada uma configuração com estes valores.</div>
+            <div class="dmo-row-actions tampoes-actions" id="consultaActions" hidden>
+                <button type="button" class="dmo-button" data-alterar-estado>Estado</button>
+                <button type="button" class="dmo-button" data-alterar-config>Configuração</button>
+                <button type="button" class="dmo-button" data-abrir-detalhe>Ver detalhe</button>
+            </div>
+        </div>
+
+        <!-- Balance blocks (mobile-first, dominant digits). -->
+        <div class="tampoes-saldos" id="selectedSaldos" hidden>
+            <div class="tampoes-saldo-block">
+                <span class="saldo-label">Enchidos</span>
+                <span class="saldo-value" data-saldo-enchidos>0</span>
+            </div>
+            <div class="tampoes-saldo-block">
+                <span class="saldo-label">Por encher</span>
+                <span class="saldo-value" data-saldo-por-encher>0</span>
+            </div>
+        </div>
+
+        <!-- Alterar estado inline card. -->
+        <div class="tampoes-inline-card dmo-card" id="estadoCard" hidden>
+            <h3>Estado</h3>
+            <div class="tampoes-filter-row">
+                <div class="dmo-field">
+                    <label for="eSaldo">Novo estado</label>
+                    <select id="eSaldo">
+                        <option value="Enchidos">Enchidos</option>
+                        <option value="PorEncher">Por encher</option>
+                    </select>
+                </div>
+                <div class="dmo-field">
+                    <label for="eQty">Quantidade</label>
+                    <input id="eQty" type="number" inputmode="numeric" min="1" step="1" autocomplete="off" />
+                </div>
+            </div>
+            <div class="dmo-row-actions">
+                <button type="button" class="dmo-button success" data-confirm-estado>Confirmar</button>
+                <button type="button" class="dmo-button" data-cancel-estado>Cancelar</button>
+            </div>
+        </div>
+
+        <!-- Alterar configuração inline card. -->
+        <div class="tampoes-inline-card dmo-card" id="configCard" hidden>
+            <h3>Configuração</h3>
+            <div class="tampoes-source-readonly">
+                <span data-config-origin>—</span> · Enchidos
+            </div>
+            <div class="tampoes-compare">
+                <div class="dmo-field">
+                    <label for="xDiameterNovo">Diâmetro novo (mm)</label>
+                    <select id="xDiameterNovo"></select>
+                </div>
+                <div class="dmo-field">
+                    <label for="xCaloteNovo">Calote nova (mm)</label>
+                    <select id="xCaloteNovo"></select>
+                </div>
+                <div class="dmo-field">
+                    <label for="xQty">Quantidade a transformar</label>
+                    <input id="xQty" type="number" inputmode="numeric" min="1" step="1" autocomplete="off" />
+                </div>
+            </div>
+            <div class="dmo-row-actions">
+                <button type="button" class="dmo-button success" data-confirm-config>Confirmar</button>
+                <button type="button" class="dmo-button" data-cancel-config>Cancelar</button>
+            </div>
+        </div>
+
+        <!-- Detalhe (double-click open): record sheet. -->
+        <div class="dmo-card tampoes-detail" id="detalheCard" hidden>
+            <h3>Detalhe da configuração</h3>
+            <div class="dmo-table-wrap">
+                <table class="dmo-table">
+                    <tbody id="detalheBody"></tbody>
+                </table>
+            </div>
+            <div id="detalheMachines" class="tampoes-detail__section"></div>
+            <div id="detalheComments" class="tampoes-detail__section"></div>
+            <h4>Histórico de máquinas</h4>
+            <div id="detalheHistory"></div>
+            <div class="dmo-row-actions">
+                <button type="button" class="dmo-button" data-close-detalhe>Fechar</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== Planeamento ===== -->
+    <section class="tampoes-view" id="planeamento">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Planeamento</h2>
+                <p>Planear cria uma necessidade prevista; não adiciona, remove nem reserva stock.</p>
+            </div>
+        </div>
+        <div class="tampoes-inline-card dmo-card">
+            <div class="tampoes-filter-row">
+                <div class="dmo-field">
+                    <label for="pConfiguration">Configuração</label>
+                    <select id="pConfiguration"></select>
+                </div>
+                <div class="dmo-field">
+                    <label for="pQty">Quantidade necessária</label>
+                    <input id="pQty" type="number" inputmode="numeric" min="1" step="1" autocomplete="off" />
+                </div>
+                <div class="dmo-field">
+                    <label for="pDate">Data prevista</label>
+                    <input id="pDate" type="date" />
+                </div>
+                <div class="dmo-field">
+                    <label for="pNotes">Notas (opcional)</label>
+                    <input id="pNotes" type="text" autocomplete="off" />
+                </div>
+            </div>
+            <div class="dmo-row-actions">
+                <button type="button" class="dmo-button success" data-planear>Planear</button>
+            </div>
+        </div>
+
+        <div class="dmo-table-card">
+            <div class="dmo-table-wrap">
+                <table class="dmo-table" id="planosTable">
+                    <thead>
+                        <tr><th>Configuração</th><th>Necessidade</th><th>Data prevista</th><th>Enchidos</th><th>Diferença</th><th>Estado</th></tr>
+                    </thead>
+                    <tbody id="planosBody"></tbody>
+                </table>
+            </div>
+            <div class="dmo-empty-state" hidden id="planosEmpty">Sem planos.</div>
+            <div class="dmo-row-actions tampoes-actions" id="planosActions" hidden>
+                <button type="button" class="dmo-button" data-cancelar-plano>Cancelar plano</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== Histórico ===== -->
+    <section class="tampoes-view" id="historico">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Histórico de movimentos</h2>
+                <p>Movimentos imutáveis. Um clique seleciona; duplo clique abre o detalhe.</p>
+            </div>
+        </div>
+        <div class="tampoes-filter-row">
+            <div class="dmo-field">
+                <label for="hFrom">Data início</label>
+                <input id="hFrom" type="date" />
+            </div>
+            <div class="dmo-field">
+                <label for="hTo">Data fim</label>
+                <input id="hTo" type="date" />
+            </div>
+            <div class="dmo-field">
+                <label for="hType">Movimento</label>
+                <select id="hType">
+                    <option value="">Todos</option>
+                    <option value="Adicionar">Adicionar</option>
+                    <option value="Remover">Remover</option>
+                    <option value="AlterarEstado">Estado</option>
+                    <option value="AlterarConfiguracao">Configuração</option>
+                </select>
+            </div>
+            <div class="tampoes-action-row">
+                <button type="button" class="dmo-button" data-apply-history>Filtrar</button>
+            </div>
+        </div>
+        <div class="dmo-table-card">
+            <div class="dmo-table-wrap">
+                <table class="dmo-table" id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>Data/hora</th><th>Origem/configuração</th><th>Destino</th><th>Movimento</th>
+                            <th>Saldo</th><th>Quantidade</th><th>Antes</th><th>Depois</th><th>Operador</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody"></tbody>
+                </table>
+            </div>
+            <div class="dmo-empty-state" hidden id="historyEmpty">Sem movimentos.</div>
+        </div>
+    </section>
+
+    <!-- ===== Linhas e Máquinas ===== -->
+    <section class="tampoes-view" id="linhas">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Linhas e Máquinas</h2>
+                <p>Gerir as máquinas onde os tampões trabalham e adicionar comentários por linha.</p>
+            </div>
+        </div>
+
+        <div class="tampoes-inline-card dmo-card">
+            <h3>Máquinas por linha</h3>
+            <div id="tampoesLinePanel" class="tampoes-lines-grid" data-testid="tampoes-lines-grid">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+
+        <div class="tampoes-inline-card dmo-card" id="linhaDetalheCard" hidden>
+            <div class="tampoes-card-head">
+                <h3 id="linhaDetalheTitle">Detalhes da linha</h3>
+                <button type="button" class="dmo-button" data-close-linha-det>Fechar</button>
+            </div>
+            <div class="tampoes-inline-card">
+                <h4>Máquinas desta linha</h4>
+                <div id="linhaMachinesList" class="tampoes-machines-list"></div>
+                <div class="tampoes-filter-row">
+                    <div class="dmo-field">
+                        <label for="novaMaquina">Adicionar máquina</label>
+                        <select id="novaMaquina">
+                            @foreach (var line in BA.Dmo.Domain.Modules.Boquilhas.BoquilhasModuleCatalog.Lines)
+                            {
+                                <option value="@line">@line</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="dmo-field">
+                        <button type="button" class="dmo-button success" data-add-linha-maquina>Adicionar</button>
+                    </div>
+                </div>
+            </div>
+            <div class="tampoes-inline-card">
+                <h4>Observações da linha</h4>
+                <div id="linhaCommentsList" class="tampoes-comments-list"></div>
+                <div class="tampoes-filter-row">
+                    <div class="dmo-field">
+                        <label for="novaObservacao">Nova observação</label>
+                        <input id="novaObservacao" type="text" autocomplete="off" placeholder="Escreva a observação..." />
+                    </div>
+                    <div class="dmo-field">
+                        <button type="button" class="dmo-button" data-save-linha-comentario>Guardar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== Opções (right-aligned tab) ===== -->
+    <section class="tampoes-view" id="opcoes">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Opções — campos comparáveis</h2>
+                <p>Gerido pelo Operador. Desativar remove dos dropdowns novos sem apagar configurações nem histórico.</p>
+            </div>
+        </div>
+
+        <div class="tampoes-inline-card dmo-card">
+            <div class="tampoes-filter-row">
+                <div class="dmo-field">
+                    <label for="oFieldName">Campo</label>
+                    <input id="oFieldName" type="text" autocomplete="off" placeholder="ex.: Diâmetro" />
+                </div>
+                <div class="dmo-field">
+                    <label for="oUnit">Unidade</label>
+                    <input id="oUnit" type="text" autocomplete="off" placeholder="ex.: mm" />
+                </div>
+                <div class="dmo-field">
+                    <label for="oPrecision">Casas decimais (máx 2)</label>
+                    <input id="oPrecision" type="number" min="0" max="2" autocomplete="off" />
+                </div>
+            </div>
+            <div class="dmo-row-actions">
+                <button type="button" class="dmo-button success" data-add-field>Adicionar campo</button>
+            </div>
+            <div class="dmo-table-card">
+                <table class="dmo-table" id="fieldsTable">
+                    <thead><tr><th>Campo</th><th>Unidade</th><th>Casas</th><th>Ativo</th></tr></thead>
+                    <tbody id="fieldsBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="tampoes-inline-card dmo-card">
+            <h3>Valores disponíveis</h3>
+            <div class="tampoes-filter-row">
+                <div class="dmo-field">
+                    <label for="vField">Para o campo</label>
+                    <select id="vField"></select>
+                </div>
+                <div class="dmo-field">
+                    <label for="vValue">Valor numérico</label>
+                    <input id="vValue" type="number" step="0.0001" autocomplete="off" />
+                </div>
+                <div class="dmo-field">
+                    <label for="vLabel">Rótulo</label>
+                    <input id="vLabel" type="text" autocomplete="off" />
+                </div>
+            </div>
+            <div class="dmo-row-actions">
+                <button type="button" class="dmo-button success" data-add-value>Adicionar valor</button>
+            </div>
+            <div class="dmo-table-card">
+                <table class="dmo-table" id="valuesTable">
+                    <thead><tr><th>Valor</th><th>Rótulo</th><th>Ativo</th></tr></thead>
+                    <tbody id="valuesBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</main>
+
+<div class="dmo-toast" role="status" id="toast"></div>
+<script src="~/scripts/tampoes.js" defer></script>

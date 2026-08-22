@@ -1,0 +1,748 @@
+/* ============================================================
+   Job On — module layout (U-13)
+   Composition / layout / edit-mode gating ONLY (GLM-DSN-03,
+   DESIGN_IMPLEMENTATION_CONTRACT §3.3). This file organizes
+   grid, order, widths and read/edit-mode reveals for the Job On
+   surface. It does NOT redefine colour/radius/shadow/typography
+   nor the universal button/field/card/pill/table/calendar
+   components — those are the canonical dmo-* classes in the
+   shared layer.
+   ============================================================ */
+
+/* Page container (replaces the reference nested <main class="main">). */
+.jobon-page {
+  max-width: var(--dmo-page-max-width);
+  margin: 0 auto;
+  padding: var(--dmo-space-6) var(--dmo-page-gutter-desktop);
+}
+
+/* Local tab bar (reference .tabs / .tab). */
+.jobon-tabs {
+  display: flex;
+  gap: var(--dmo-space-6);
+  padding: 0 2px;
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+}
+.jobon-tabs .tab {
+  background: none;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  padding: 12px 2px;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-md);
+  font-weight: var(--dmo-font-weight-extrabold);
+  line-height: 1;
+}
+.jobon-tabs .tab.active {
+  color: var(--dmo-brand-600);
+  border-bottom-color: var(--dmo-brand-600);
+}
+.jobon-tabs .settings {
+  margin-left: auto;
+}
+
+/* Views: only the active one is visible. */
+.jobon-view {
+  display: none;
+}
+.jobon-view.active {
+  display: block;
+}
+
+.page-title {
+  margin: var(--dmo-space-4) 0 var(--dmo-space-4);
+}
+.page-title.with-action {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--dmo-space-3);
+}
+.page-title h2 {
+  margin: 0;
+  color: var(--dmo-text);
+  font-size: var(--dmo-font-size-xl);
+}
+
+/* Planner split. */
+.planner {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: var(--dmo-space-4);
+  align-items: start;
+}
+.calendar {
+  padding: var(--dmo-space-4);
+}
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cal-head .dmo-icon-button {
+  min-height: 32px;
+  width: 32px;
+}
+
+.day-card {
+  padding: var(--dmo-space-4);
+}
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--dmo-space-3);
+}
+.card-head h3 {
+  margin: 0;
+  font-size: var(--dmo-font-size-card-title);
+}
+.card-head-actions {
+  display: flex;
+  gap: var(--dmo-space-2);
+}
+
+/* Filters (composition only; internals use canonical .dmo-field). */
+.filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) 130px 90px auto;
+  gap: var(--dmo-space-2);
+  align-items: end;
+  margin-top: var(--dmo-space-3);
+  padding: var(--dmo-space-3);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-subtle);
+}
+.filters > .dmo-button {
+  min-height: var(--dmo-control-height);
+}
+
+/* Histórico filter row (Design-Reference exact seven-column template). */
+.historico-filters {
+  grid-template-columns: 1.5fr 120px 110px 135px 135px 90px auto;
+}
+
+/* Definições filter row (Design-Reference exact four-column template). */
+.definicoes-filters {
+  grid-template-columns: 150px 190px minmax(220px, 1fr) auto;
+}
+
+/* List footer + pagination cluster. Composition only; the arrow buttons use
+   the canonical .dmo-icon-button (no canonical arrows-only primitive exists —
+   the Job On pager is intentionally NOT .dmo-pagination). */
+.list-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dmo-space-3);
+  margin-top: var(--dmo-space-3);
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-sm);
+}
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pager .dmo-icon-button {
+  width: var(--dmo-button-height);
+  padding: 0;
+}
+
+/* Create panel. */
+.create-panel {
+  display: none;
+  margin-top: var(--dmo-space-3);
+  padding: var(--dmo-space-4);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-card);
+  background: var(--dmo-card);
+}
+.create-panel.open {
+  display: block;
+}
+.create-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) 120px 90px 90px 90px 150px;
+  gap: var(--dmo-space-2);
+  align-items: end;
+  margin-top: var(--dmo-space-3);
+}
+.source-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--dmo-space-2);
+  margin-top: var(--dmo-space-3);
+}
+.source {
+  padding: 11px;
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-card);
+  color: var(--dmo-text);
+  text-align: left;
+  cursor: pointer;
+}
+.source:hover,
+.source.selected {
+  border-color: var(--dmo-brand-600);
+  background: var(--dmo-brand-050);
+}
+.source span {
+  display: block;
+  margin-top: 3px;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-label);
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--dmo-space-2);
+  margin-top: var(--dmo-space-3);
+  padding-top: var(--dmo-space-3);
+  border-top: var(--dmo-border-width) solid var(--dmo-border);
+}
+
+/* Sheet. */
+.sheet {
+  margin-top: var(--dmo-space-4);
+}
+.sheet-head {
+  position: sticky;
+  top: 0;
+  z-index: var(--dmo-z-sticky);
+  padding: var(--dmo-space-4);
+}
+.context {
+  display: grid;
+  grid-template-columns: 135px 135px 90px minmax(130px, 1.4fr) 85px 62px 55px 72px 86px 80px 105px;
+  gap: var(--dmo-space-2);
+}
+.context > div {
+  padding: 8px 9px;
+  border-left: 3px solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-subtle);
+  opacity: 0.72;
+}
+.context span {
+  display: block;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-xs);
+  text-transform: uppercase;
+}
+.context input,
+.context select {
+  width: 100%;
+  min-height: 26px;
+  padding: 3px 5px;
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-card);
+  color: var(--dmo-text);
+  font-weight: var(--dmo-font-weight-extrabold);
+}
+.context .key-context {
+  border-left-color: var(--dmo-brand-600);
+  background: var(--dmo-brand-050);
+  opacity: 1;
+}
+.context .key-context span {
+  color: var(--dmo-brand-700);
+}
+.context .key-context input,
+.context .key-context select {
+  font-size: var(--dmo-font-size-md);
+  color: var(--dmo-text);
+}
+.sheet-toolbar {
+  display: flex;
+  gap: var(--dmo-space-2);
+  flex-wrap: wrap;
+  margin-top: var(--dmo-space-3);
+}
+
+/* Compact buttons inside tool cards / selection actions (composition:
+   sizing only; visual state machine lives on the canonical .dmo-button). */
+.jobon-page .dmo-button.compact {
+  min-height: var(--dmo-button-height-compact);
+  padding: 4px 8px;
+  font-size: var(--dmo-font-size-label);
+}
+
+/* Visual row + image box. */
+.visual-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: var(--dmo-space-3);
+  align-items: stretch;
+  margin-top: var(--dmo-space-3);
+}
+.image-box {
+  display: flex;
+  align-items: center;
+  gap: var(--dmo-space-3);
+  padding: 9px 10px;
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-card);
+}
+.image-preview {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px dashed var(--dmo-brand-100);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-subtle);
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-xs);
+  text-align: center;
+  overflow: hidden;
+}
+.image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.image-box strong,
+.image-box small {
+  display: block;
+}
+.image-box small {
+  margin-top: 2px;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-xs);
+}
+.image-upload {
+  margin-top: 6px;
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: var(--dmo-font-size-label);
+}
+
+/* Sheet body. */
+.visual-row + .sheet-body {
+  margin-top: var(--dmo-space-4);
+}
+.sheet-body {
+  padding: var(--dmo-space-4);
+}
+.section-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 2px 0 var(--dmo-space-3);
+  padding: 8px 10px;
+  border-left: 4px solid var(--dmo-brand-600);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-subtle);
+}
+.section-bar h3 {
+  margin: 0;
+  font-size: var(--dmo-font-size-lg);
+}
+
+/* Tool grid (composition only). */
+.tool-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--dmo-space-3);
+  align-items: start;
+}
+.tool {
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-card);
+  background: var(--dmo-card);
+  overflow: hidden;
+}
+.tool.wide {
+  grid-column: span 2;
+}
+.tool-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 11px;
+  background: var(--dmo-subtle);
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+}
+.tool-title h4 {
+  margin: 0;
+  font-size: var(--dmo-font-size-lg);
+  color: var(--dmo-text);
+}
+.tool-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tool-body {
+  padding: var(--dmo-space-3);
+}
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+.mini-grid .full {
+  grid-column: 1 / -1;
+}
+.mini-grid .dmo-field input,
+.mini-grid .dmo-field select {
+  min-height: var(--dmo-control-height-compact);
+  padding: 6px 8px;
+  font-size: var(--dmo-font-size-sm);
+}
+.mini-grid textarea,
+.mini-grid .dmo-field textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+.measure-table {
+  width: 100%;
+  white-space: normal;
+}
+.measure-table th,
+.measure-table td {
+  padding: 6px 7px;
+}
+.measure-table input,
+.measure-table select {
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 6px;
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-card);
+}
+.quantity {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.quantity > div {
+  padding: 7px 8px;
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-subtle);
+}
+.quantity span {
+  display: block;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-xs);
+}
+.quantity strong {
+  font-size: var(--dmo-font-size-md);
+}
+
+/* Priority / secondary tool emphasis (composition). */
+.tool.priority {
+  border-color: var(--dmo-brand-100);
+  box-shadow: var(--dmo-shadow-card);
+}
+.tool.priority .tool-title {
+  border-left: 4px solid var(--dmo-brand-600);
+  background: var(--dmo-brand-050);
+}
+.tool.priority .tool-title h4 {
+  font-size: var(--dmo-font-size-xl);
+}
+.tool.secondary {
+  opacity: 0.86;
+}
+
+/* Read-only sheet fields (edit-mode gating). */
+.sheet:not(.editing) .tool input,
+.sheet:not(.editing) .tool select,
+.sheet:not(.editing) .tool textarea,
+.sheet:not(.editing) .notes textarea,
+.sheet:not(.editing) .context input,
+.sheet:not(.editing) .context select {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--dmo-text);
+  pointer-events: none;
+}
+.sheet:not(.editing) .tool select,
+.sheet:not(.editing) .context select {
+  appearance: none;
+}
+.sheet:not(.editing) .dmo-field label,
+.sheet:not(.editing) .field label {
+  color: var(--dmo-muted);
+}
+.sheet:not(.editing) .image-upload {
+  display: none;
+}
+body[data-can-edit-jobon="false"] .responsible-only {
+  display: none !important;
+}
+body[data-can-confirm-verifications="false"] .checks input {
+  pointer-events: none;
+}
+.sheet:not(.editing) .sheet-mode {
+  border-color: var(--dmo-brand-050);
+  background: var(--dmo-brand-050);
+  color: var(--dmo-brand-700);
+}
+.sheet.editing .sheet-mode {
+  border-color: var(--dmo-warning-soft);
+  background: var(--dmo-warning-soft);
+  color: var(--dmo-warning);
+}
+
+/* Edit-only reveal (gating). */
+.edit-only {
+  display: none;
+}
+#jobSheet.editing .edit-only {
+  display: inline-flex;
+}
+#jobSheet.editing td.edit-only,
+#jobSheet.editing th.edit-only {
+  display: table-cell;
+}
+#jobSheet.editing .dmo-row-actions.edit-only,
+#jobSheet.editing .edit-only.dmo-row-actions {
+  display: flex;
+}
+
+/* Inventory picker (edit-only; future-domain Armazém/Ferramentas). */
+.inventory-picker {
+  display: none;
+  margin-top: var(--dmo-space-4);
+}
+.inventory-picker.open {
+  display: block;
+}
+.inventory-filters {
+  display: grid;
+  grid-template-columns: 2fr 100px 150px 150px auto;
+  gap: var(--dmo-space-2);
+  align-items: end;
+  margin-top: var(--dmo-space-2);
+  padding: var(--dmo-space-3);
+  background: var(--dmo-subtle);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);
+}
+.inventory-source {
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-sm);
+}
+
+/* Lower grid: checks + notes (composition only). */
+.lower-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--dmo-space-4);
+  margin-top: var(--dmo-space-4);
+}
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dmo-space-2);
+  margin-top: var(--dmo-space-2);
+}
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--dmo-space-2);
+  padding: 9px 10px;
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-card);
+}
+.check small {
+  display: block;
+  margin-top: 2px;
+  color: var(--dmo-muted);
+}
+.check .dmo-pill,
+.check .pill {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+.history-box {
+  margin-top: var(--dmo-space-4);
+}
+
+/* Level where the mode indicator appears without aggressive colours. */
+.sheet-mode {
+  margin-left: auto;
+}
+
+/* Responsive (reference breakpoints). */
+@media (max-width: 1100px) {
+  .planner {
+    grid-template-columns: 280px 1fr;
+  }
+  .tool-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .context {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .create-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .jobon-page {
+    padding: var(--dmo-space-4) var(--dmo-page-gutter-mobile);
+  }
+  .dmo-work-split {
+    grid-template-columns: 1fr;
+  }
+  .dmo-sidebar {
+    display: none;
+  }
+  .planner,
+  .lower-grid,
+  .visual-row {
+    grid-template-columns: 1fr;
+  }
+  .calendar {
+    max-width: 330px;
+  }
+  .filters,
+  .create-grid,
+  .context,
+  .tool-grid,
+  .inventory-filters {
+    grid-template-columns: 1fr;
+  }
+  .tool.wide {
+    grid-column: auto;
+  }
+  .source-grid {
+    grid-template-columns: 1fr;
+  }
+  .card-head {
+    flex-direction: column;
+  }
+  .card-head-actions {
+    width: 100%;
+  }
+  .card-head-actions .dmo-button {
+    flex: 1;
+  }
+  .sheet-head {
+    position: static;
+  }
+}
+
+/* ============================================================
+   R011 — Universal Landing calendar + production list:
+   deterministic machine/line colour markers (B1..C3).
+   The colour identifies the MACHINE/LINE only — it NEVER carries a
+   semantic status (error/NOK/warning/approval). Keys map to the
+   --dmo-line-* tokens in dmo-tokens.css (placeholder hues refined in
+   the later CSS/visual pass; the line->key mapping is fixed).
+   ============================================================ */
+
+/* Calendar day: coloured chips for each production line on that day.
+   Multiple lines on the same day are shown side by side — never hidden. */
+.dmo-calendar__day {
+  padding-bottom: 10px;
+}
+.dmo-line-chips {
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  display: flex;
+  gap: 2px;
+  transform: translateX(-50%);
+}
+.dmo-line-chip {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  display: inline-block;
+}
+/* selected day inverts chips to keep them legible on the brand fill. */
+.dmo-calendar__day.selected:not(.is-today) .dmo-line-chip {
+  border: 1px solid var(--dmo-text-on-color);
+}
+
+/* Production list rows: a small deterministic line swatch beside the date
+   and the line chip joins the machine cell. */
+.dmo-line-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.dmo-line-machine {
+  display: inline-flex;
+  align-items: center;
+}
+.dmo-line-machine::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  margin-right: 6px;
+  background: var(--dmo-border);
+}
+
+/* Line -> colour key (deterministic JobOnLineColor). Placeholder hues. */
+.dmo-line-b1 { background: var(--dmo-line-b1); }
+.dmo-line-b2 { background: var(--dmo-line-b2); }
+.dmo-line-b3 { background: var(--dmo-line-b3); }
+.dmo-line-c1 { background: var(--dmo-line-c1); }
+.dmo-line-c2 { background: var(--dmo-line-c2); }
+.dmo-line-c3 { background: var(--dmo-line-c3); }
+
+/* ============================================================
+   Sidepanel (blue sidebar with production context per line).
+   Only shown on the planeamento view; hidden on folha/historico/definicoes.
+   ============================================================ */
+.jobon-view #linePanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dmo-space-3);
+}
+
+.line-card {
+  padding: var(--dmo-space-3) var(--dmo-space-4);
+  border-radius: var(--dmo-r-card);
+  background: var(--dmo-sidebar-card-bg);
+  border: var(--dmo-border-width) solid var(--dmo-sidebar-card-border);
+  color: var(--dmo-text-on-color);
+}
+
+.line-card .line-name {
+  display: block;
+  font-weight: var(--dmo-font-weight-extrabold);
+  font-size: var(--dmo-font-size-xl);
+  margin-bottom: 2px;
+}
+
+.line-card .line-production {
+  display: block;
+  font-size: var(--dmo-font-size-lg);
+  color: var(--dmo-text-on-color);
+}
+
+.line-card .line-ref {
+  display: block;
+  font-size: var(--dmo-font-size-md);
+  color: var(--dmo-brand-300);
+}
+
+.line-card.empty {
+  opacity: 0.6;
+}
+
+.line-card.empty .line-empty {
+  font-size: var(--dmo-font-size-md);
+  color: var(--dmo-brand-300);
+}

@@ -1,0 +1,220 @@
+/* ============================================================
+   Reparação Interna — module layout (U-16)
+   Composition / layout ONLY (GLM-DSN-03, DESIGN_IMPLEMENTATION_CONTRACT §3.3).
+   Organizes grid, order, widths and reveals for the Reparação Interna surface
+   including the MANDATORY full-width line-card selector (REPARACAO_INTERNA
+   brief §3): the selector and the context/registo cards are never side-by-side.
+   Does NOT redefine colour/radius/shadow/typography nor the canonical dmo-*
+   components — those live in the shared layer.
+   ============================================================ */
+
+.reparacao-interna-page {
+  max-width: var(--dmo-page-max-width);
+  margin: 0 auto;
+  padding: var(--dmo-space-6) var(--dmo-page-gutter-desktop);
+}
+
+.reparacao-interna-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dmo-space-6);
+  padding: 0 2px;
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+}
+.reparacao-interna-tabs .tab {
+  background: none;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  padding: 12px 2px;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-md);
+  font-weight: var(--dmo-font-weight-extrabold);
+  line-height: 1;
+}
+.reparacao-interna-tabs .tab.active {
+  color: var(--dmo-brand-600);
+  border-bottom-color: var(--dmo-brand-600);
+}
+
+.reparacao-interna-view {
+  display: none;
+}
+.reparacao-interna-view.active {
+  display: block;
+}
+
+/* ============================================================
+   Registo — full-width line-card selector + context card.
+   The selector occupies one full-width row; the context/registo card is on its
+   own row immediately below. They NEVER appear side-by-side (brief §3).
+   ============================================================ */
+
+.flow {
+  grid-template-columns: minmax(0, 1fr);
+}
+.flow > * {
+  min-width: 0;
+}
+
+.line-choice {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+.line-card {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: var(--dmo-space-3);
+  cursor: pointer;
+  text-align: left;
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-radius-card);
+  background: var(--dmo-surface-card);
+}
+.line-card .line-card-label {
+  font-weight: var(--dmo-font-weight-bold);
+}
+.line-card .line-card-ref {
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.reparacao-interna-selector {
+  margin-bottom: var(--dmo-space-4);
+}
+
+.reparacao-interna-context {
+  padding: var(--dmo-space-4);
+}
+
+.reparacao-interna-context-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--dmo-space-3);
+  margin-bottom: var(--dmo-space-4);
+}
+
+.reparacao-interna-context-grid > div {
+  padding: var(--dmo-space-2) var(--dmo-space-3);
+  border-left: 3px solid var(--dmo-brand-600);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-brand-050);
+}
+
+.reparacao-interna-context-grid span {
+  display: block;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-label);
+  text-transform: uppercase;
+}
+
+.reparacao-interna-context-grid strong {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--dmo-font-size-md);
+}
+
+.context-summary {
+  margin-bottom: var(--dmo-space-3);
+}
+
+.reparacao-interna-strong {
+  font-weight: var(--dmo-font-weight-extrabold);
+}
+
+/* Type toggles CM/MF reuse the canonical dmo-button; a small active emphasis. */
+#contextDetail [data-type].active {
+  border-width: 2px;
+}
+
+/* ============================================================
+   Histórico — filters + table + actions + pagination.
+   ============================================================ */
+
+.reparacao-interna-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--dmo-space-3);
+  align-items: end;
+  margin-bottom: var(--dmo-space-4);
+}
+
+.reparacao-interna-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dmo-space-2);
+}
+
+.reparacao-interna-action-row {
+  display: flex;
+  gap: var(--dmo-space-2);
+  align-items: center;
+}
+
+.reparacao-interna-actions {
+  margin-top: var(--dmo-space-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dmo-space-3);
+}
+
+/* Standard action button is the design-system default (min-height 36px,
+   padding 7px 12px); no larger variant is created for Corrigir registo (brief §7). */
+.reparacao-interna-actions .dmo-button {
+  min-height: 36px;
+  padding: 7px 12px;
+}
+
+.reparacao-interna-pagination {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dmo-space-2);
+}
+
+.reparacao-interna-original-note {
+  color: var(--dmo-muted);
+  margin-bottom: var(--dmo-space-3);
+}
+
+#historyTable tbody tr.selected {
+  background: var(--dmo-brand-100);
+}
+
+.reparacao-interna-correction,
+.reparacao-interna-detail {
+  margin-top: var(--dmo-space-4);
+  max-width: 720px;
+}
+
+/* ============================================================
+   Responsive — the line-card selector grid collapses to 3 then 2 columns.
+   Cards never invade another panel; no horizontal scroll (brief §3).
+   ============================================================ */
+@media (max-width: 1100px) {
+  .line-choice {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .reparacao-interna-page {
+    padding: var(--dmo-space-4) var(--dmo-page-gutter-mobile);
+  }
+  .line-choice {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .reparacao-interna-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .reparacao-interna-pagination {
+    justify-content: center;
+  }
+}

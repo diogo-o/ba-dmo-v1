@@ -1,0 +1,129 @@
+/* ============================================================
+   BA DMO — dmo-foundation.css (U-08)
+   Global element foundation transcribed from the reference
+   (dmo-design-system.css body/control globals) plus the closed
+   P0 a11y rules (focus visibility, reduced motion). Token
+   references only — no raw visual values.
+   ============================================================ */
+
+* {
+  box-sizing: border-box;
+}
+
+/* Reference body global: font 14px/1.45 Inter stack, page surface, text. */
+body {
+  margin: 0;
+  background: var(--dmo-page);
+  color: var(--dmo-text);
+  font: var(--dmo-font-size-md)/var(--dmo-line-height-normal) var(--dmo-font-family);
+}
+
+/* Reference control global. */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+/* ---------- Text hierarchy (DMO §5 role table, P0-1 exact scale) ---------- */
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0 0 var(--dmo-space-3);
+  color: var(--dmo-text);
+  line-height: var(--dmo-line-height-tight);
+}
+
+/* View title (reference page-head h2 = 24px ≈ xl token role). */
+h1 {
+  font-size: var(--dmo-font-size-xl);
+  font-weight: var(--dmo-font-weight-extrabold);
+}
+
+/* Section title (reference table-title h3 15px). */
+h2 {
+  font-size: var(--dmo-font-size-card-title);
+  font-weight: var(--dmo-font-weight-bold);
+}
+
+h3 {
+  font-size: var(--dmo-font-size-card-title);
+  font-weight: var(--dmo-font-weight-bold);
+}
+
+h4 {
+  font-size: var(--dmo-font-size-md);
+  font-weight: var(--dmo-font-weight-bold);
+}
+
+p {
+  margin: 0 0 var(--dmo-space-3);
+}
+
+a {
+  color: var(--dmo-brand-700);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Focus: visible everywhere (DMO §23) ---------- */
+
+:focus-visible {
+  outline: var(--dmo-border-width-strong) solid var(--dmo-brand-600);
+  outline-offset: var(--dmo-border-width);
+}
+
+/* ---------- Control baseline for inputs outside a .dmo-field
+   (smallest neutral behavior; canonical styling lives in .dmo-field) ---------- */
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  min-height: var(--dmo-control-height);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-card);
+  color: var(--dmo-text);
+  padding: 9px 11px; /* reference .dmo-field control padding */
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--dmo-brand-600);
+  box-shadow: var(--dmo-focus-halo);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled,
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* ---------- Table baseline (canonical .dmo-table refines this) ---------- */
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+/* ---------- Reduced motion (GLM-DSN-01 P0-6; DMO §23) ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}

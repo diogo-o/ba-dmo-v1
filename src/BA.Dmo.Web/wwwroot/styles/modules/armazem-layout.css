@@ -1,0 +1,133 @@
+/* ============================================================
+   Armazém — module layout (U-14)
+   Composition / layout ONLY (GLM-DSN-03, DESIGN_IMPLEMENTATION_CONTRACT §3.3).
+   Organizes grid, order, widths and reveals for the Armazém surface.
+   Does NOT redefine colour/radius/shadow/typography nor the canonical
+   dmo-* components (button/field/card/pill/table/alert) — those live in the
+   shared layer.
+   ============================================================ */
+
+.armazem-page {
+  max-width: var(--dmo-page-max-width);
+  margin: 0 auto;
+  padding: var(--dmo-space-6) var(--dmo-page-gutter-desktop);
+}
+
+/* Module tabs — canonical anatomy (mirrors .boquilhas-tabs / W7A-W7B:
+   gap 28px, gutter padding, 650 weight, 3px active underline, min-height).
+   Reference armazem.html .tabs uses 750/26px — app-wide consolidation wins
+   (W7 tab-bar wave); recorded MINOR_DELTA. */
+.armazem-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 28px;
+  padding: 0 var(--dmo-page-gutter-desktop);
+  min-height: var(--dmo-tabs-height);
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+  background: var(--dmo-card);
+}
+.armazem-tabs .tab {
+  appearance: none;
+  border: 0;
+  background: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  padding: 0 2px;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-md);
+  font-weight: 650; /* canonical module tab weight (W7A reference exact) */
+  line-height: 1;
+  transition: color var(--dmo-transition-fast), border-color var(--dmo-transition-fast);
+}
+.armazem-tabs .tab:hover {
+  background: none;
+}
+.armazem-tabs .tab.active {
+  color: var(--dmo-brand-600);
+  border-bottom-color: var(--dmo-brand-600);
+}
+
+.armazem-view {
+  display: none;
+}
+.armazem-view.active {
+  display: block;
+}
+
+.armazem-action-row {
+  display: flex;
+  gap: var(--dmo-space-2);
+  margin-bottom: var(--dmo-space-4);
+}
+.armazem-action-row > .dmo-button {
+  min-height: var(--dmo-control-height);
+}
+
+.armazem-card {
+  padding: var(--dmo-space-4);
+  margin-bottom: var(--dmo-space-4);
+  max-width: 720px;
+}
+
+.armazem-grid {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(150px, 1.2fr) minmax(140px, 1fr) 150px minmax(180px, 1.4fr);
+  gap: var(--dmo-space-3);
+  align-items: end;
+}
+.armazem-card .armazem-grid {
+  grid-template-columns: minmax(110px, 1fr) minmax(170px, 1.3fr) minmax(140px, 1fr) 160px minmax(200px, 1.4fr);
+}
+
+.armazem-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--dmo-space-2);
+  margin-top: var(--dmo-space-3);
+}
+
+.armazem-search {
+  padding: var(--dmo-space-3);
+  margin-bottom: var(--dmo-space-3);
+  max-width: 860px;
+}
+.armazem-search .armazem-grid {
+  grid-template-columns: minmax(110px, 1fr) minmax(170px, 1.3fr) minmax(140px, 1fr) 160px;
+}
+
+.armazem-results {
+  margin-bottom: var(--dmo-space-4);
+}
+
+@media (max-width: 900px) {
+  .armazem-grid,
+  .armazem-card .armazem-grid,
+  .armazem-search .armazem-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 980px) {
+  .armazem-tabs {
+    overflow-x: auto;
+    padding: 0 var(--dmo-page-gutter-tablet);
+  }
+}
+
+@media (max-width: 720px) {
+  .armazem-page {
+    padding: var(--dmo-space-4) var(--dmo-page-gutter-mobile);
+  }
+  .armazem-tabs {
+    padding: 0 var(--dmo-page-gutter-mobile);
+  }
+  .armazem-grid,
+  .armazem-card .armazem-grid,
+  .armazem-search .armazem-grid {
+    grid-template-columns: 1fr;
+  }
+  .armazem-action-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

@@ -1,0 +1,1521 @@
+/* ============================================================
+   BA DMO â€” dmo-components.css (U-08)
+   Universal components, each implemented ONCE (contract Â§3.2).
+   Sections 1â€“12 are transcribed from the Design-Reference
+   (dmo-design-system.css + the repeated patterns of the HTML
+   pages). Sections 13+ cover components documented in
+   DMO_DESIGN_SYSTEM v2.7 but absent from the reference CSS â€”
+   built with the smallest neutral behavior compatible with the
+   reference (reported under DISCREPANCIES).
+   ============================================================ */
+
+/* ---------- 1. Button (reference .dmo-button exact) ----------
+   State machine: filled rest â†’ white inverted hover/focus; the
+   variant color travels through --button-color. No brightness. */
+
+.dmo-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--dmo-button-height);
+  padding: 7px 12px;
+  border: var(--dmo-border-width) solid var(--button-color, var(--dmo-brand-600));
+  border-radius: var(--dmo-r-control);
+  background: var(--button-color, var(--dmo-brand-600));
+  color: var(--dmo-text-on-color);
+  font-weight: var(--dmo-font-weight-bold);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--dmo-transition-fast),
+              color var(--dmo-transition-fast),
+              border-color var(--dmo-transition-fast);
+  box-sizing: border-box;
+}
+
+.dmo-button:hover,
+.dmo-button:focus-visible {
+  background: var(--dmo-card);
+  color: var(--button-color, var(--dmo-brand-600));
+  outline: none; /* inverted state IS the focus signal; global :focus-visible
+                    still draws the outline on keyboard focus */
+  text-decoration: none;
+}
+
+.dmo-button.danger { --button-color: var(--dmo-danger); }
+.dmo-button.success { --button-color: var(--dmo-success); }
+
+/* Ghost / tertiary button — transparent bg, muted text.
+   Used for Cancel / secondary actions where emphasis is not needed. */
+.dmo-button.ghost {
+  --button-color: var(--dmo-muted);
+  background: transparent;
+  border-color: var(--dmo-border);
+}
+.dmo-button.ghost:hover,
+.dmo-button.ghost:focus-visible {
+  --button-color: var(--dmo-brand-600);
+  background: var(--dmo-page);
+  border-color: var(--dmo-brand-600);
+  color: var(--dmo-text);
+}
+
+/* Outline variant — transparent bg, brand-colored border + text.
+   Useful when two primary-style buttons sit together. */
+.dmo-button.outline {
+  --button-color: var(--dmo-brand-600);
+  background: transparent;
+  color: var(--button-color, var(--dmo-brand-600));
+}
+.dmo-button.outline:hover,
+.dmo-button.outline:focus-visible {
+  background: var(--button-color, var(--dmo-brand-600));
+  color: var(--dmo-text-on-color);
+}
+
+.dmo-button:disabled {
+  --button-color: var(--dmo-disabled);
+  cursor: not-allowed;
+}
+
+/* Loading keeps width: label hidden, spinner over the filled surface. */
+.dmo-button.is-loading {
+  position: relative;
+  pointer-events: none;
+}
+
+.dmo-button.is-loading .dmo-button__label {
+  visibility: hidden;
+}
+
+.dmo-button.is-loading::after {
+  content: "";
+  position: absolute;
+  width: var(--dmo-icon-sm);
+  height: var(--dmo-icon-sm);
+  border: var(--dmo-border-width-strong) solid var(--dmo-text-on-color);
+  border-top-color: transparent;
+  border-radius: var(--dmo-radius-pill);
+  animation: dmo-spin 800ms linear infinite;
+}
+
+@keyframes dmo-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Icon button (reference exact: 36px square). */
+.dmo-icon-button {
+  width: var(--dmo-icon-button-size);
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.dmo-icon-button svg {
+  width: var(--dmo-icon-md);
+  height: var(--dmo-icon-md);
+}
+
+/* All buttons share the canonical height — no variant overrides (P0-4). */
+.dmo-row-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* Compact row actions (reference admin.html .row-actions .dmo-button exact:
+   min-height 30px, 5px 8px, 11px). */
+.dmo-row-actions .dmo-button {
+  min-height: var(--dmo-row-action-height);
+  padding: 5px 8px;
+  font-size: var(--dmo-font-size-label);
+}
+
+/* ---------- 2. Field (reference .dmo-field exact) ---------- */
+
+.dmo-field label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-label);
+  font-weight: 750;
+}
+
+.dmo-field input,
+.dmo-field select,
+.dmo-field textarea {
+  width: 100%;
+  min-height: var(--dmo-control-height);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-card);
+  color: var(--dmo-text);
+  padding: 9px 11px;
+  outline: none;
+}
+
+/* Compact fields — short inputs (3-4 chars, numbers, codes) */
+.dmo-field--compact input,
+.dmo-field--compact select {
+  min-height: var(--dmo-control-height-compact);
+  padding: 4px 8px;
+  font-size: var(--dmo-font-size-sm);
+  max-width: 140px;
+}
+
+.dmo-field--compact label {
+  font-size: var(--dmo-font-size-xs);
+}
+
+.dmo-field input:focus,
+.dmo-field select:focus,
+.dmo-field textarea:focus {
+  border-color: var(--dmo-brand-600);
+  box-shadow: var(--dmo-focus-halo);
+}
+
+.dmo-field input:read-only,
+.dmo-field textarea:read-only {
+  background: var(--dmo-subtle);
+}
+
+.dmo-field input:disabled,
+.dmo-field select:disabled,
+.dmo-field textarea:disabled {
+  background: var(--dmo-subtle);
+  color: var(--dmo-muted);
+}
+
+.dmo-field.is-error input,
+.dmo-field.is-error select,
+.dmo-field.is-error textarea {
+  border-color: var(--dmo-danger);
+}
+
+.dmo-field__helper {
+  font-size: var(--dmo-font-size-label);
+  color: var(--dmo-muted);
+  margin: 5px 0 0;
+}
+
+.dmo-field__error {
+  font-size: var(--dmo-font-size-xs);
+  color: var(--dmo-danger);
+  margin: 5px 0 0;
+}
+
+/* Reference modal-grid (create/edit form layout). */
+.dmo-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--dmo-space-3);
+}
+
+.dmo-modal-grid .span2 {
+  grid-column: 1 / -1;
+}
+
+/* ---------- 3. Card (reference exact) ---------- */
+
+.dmo-card {
+  background: var(--dmo-card);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-card);
+  box-shadow: var(--dmo-shadow-card);
+}
+
+.dmo-card.is-dirty {
+  border-color: var(--dmo-warning);
+}
+
+/* ---------- 4. Pill / status (reference .dmo-pill exact variants;
+   text + color, never color alone â€” DMO Â§16) ---------- */
+
+.dmo-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--dmo-radius-pill);
+  background: var(--dmo-brand-050);
+  color: var(--dmo-brand-700);
+  font-size: var(--dmo-font-size-pill);
+  font-weight: var(--dmo-font-weight-extrabold);
+  white-space: nowrap;
+}
+
+.dmo-pill.active {
+  background: var(--dmo-success-soft);
+  color: var(--dmo-success); /* reference exact token pair */
+}
+
+.dmo-pill.inactive {
+  background: var(--dmo-surface-inactive);
+  color: var(--dmo-muted);
+}
+
+.dmo-pill.pending {
+  background: var(--dmo-pending-soft);
+  color: var(--dmo-pending);
+}
+
+.dmo-pill.approved {
+  background: var(--dmo-success-soft);
+  color: var(--dmo-pill-approved-text); /* reference exact */
+}
+
+.dmo-pill.rejected {
+  background: var(--dmo-danger-soft);
+  color: var(--dmo-danger); /* reference exact token pair */
+}
+
+.dmo-pill.record-type {
+  background: var(--dmo-pill-record-type-bg);
+  color: var(--dmo-pill-record-type-text); /* reference exact pair */
+}
+
+/* ---------- 5. Table (reference .dmo-table exact) ---------- */
+
+.dmo-table-wrap {
+  overflow: auto;
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-table);
+}
+
+.dmo-table {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+
+.dmo-table th {
+  background: var(--dmo-subtle);
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-table-head);
+  text-transform: uppercase;
+  text-align: left;
+  padding: 11px 12px;
+}
+
+.dmo-table td {
+  padding: 11px 12px;
+  border-top: var(--dmo-border-width) solid var(--dmo-border);
+}
+
+.dmo-table tr[data-row] {
+  cursor: pointer;
+}
+
+.dmo-table tr[data-row]:hover {
+  background: var(--dmo-page);
+}
+
+.dmo-table tr.selected {
+  background: var(--dmo-brand-100);
+}
+
+/* Table card chrome (reference admin table-card/table-title exact). */
+.dmo-table-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.dmo-table-title {
+  padding: 17px 18px;
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dmo-space-3);
+}
+
+.dmo-table-title h3 {
+  margin: 0;
+  font-size: var(--dmo-font-size-card-title);
+}
+
+/* ---------- 6. Canonical selectable lists (reference exact) ---------- */
+
+[data-dmo-list] [data-dmo-row] {
+  cursor: pointer;
+  transition: background var(--dmo-transition-fast),
+              border-color var(--dmo-transition-fast);
+}
+
+[data-dmo-list] [data-dmo-row]:hover {
+  background: var(--dmo-page);
+}
+
+[data-dmo-list] [data-dmo-row]:focus-visible {
+  outline: var(--dmo-row-focus-ring);
+  outline-offset: 1px;
+}
+
+[data-dmo-list] [data-dmo-row].selected {
+  background: var(--dmo-brand-100);
+  border-color: var(--dmo-brand-600);
+}
+
+/* ---------- 7. Modal / Confirmation (reference exact anatomy) ---------- */
+
+.dmo-modal-backdrop {
+  display: none;
+  position: fixed;
+  z-index: var(--dmo-z-overlay);
+  inset: 0;
+  background: var(--dmo-overlay-veil);
+  padding: var(--dmo-space-6);
+  align-items: center;
+  justify-content: center;
+}
+
+.dmo-modal-backdrop.open {
+  display: flex;
+}
+
+.dmo-modal {
+  width: min(var(--dmo-modal-width), 100%);
+  max-height: var(--dmo-modal-max-height);
+  display: flex;
+  flex-direction: column;
+  background: var(--dmo-card);
+  border-radius: var(--dmo-r-modal);
+  box-shadow: var(--dmo-shadow-modal);
+}
+
+.dmo-modal-head,
+.dmo-modal-foot {
+  display: flex;
+  align-items: center;
+  padding: 18px 20px;
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+}
+
+.dmo-modal-head h2 {
+  margin: 0;
+  font-size: var(--dmo-font-size-modal-title);
+}
+
+.dmo-modal-head .dmo-icon-button {
+  margin-left: auto;
+}
+
+.dmo-modal-body {
+  padding: var(--dmo-space-5);
+  overflow: auto;
+}
+
+.dmo-modal-foot {
+  border: 0;
+  border-top: var(--dmo-border-width) solid var(--dmo-border);
+  justify-content: flex-end;
+  gap: var(--dmo-space-2);
+}
+
+/* ---------- 8. Toast (reference exact) ---------- */
+
+.dmo-toast {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: var(--dmo-z-toast);
+  background: var(--dmo-brand-950);
+  color: var(--dmo-text-on-color);
+  padding: 11px 15px;
+  border-radius: var(--dmo-r-toast);
+  box-shadow: var(--dmo-shadow-card);
+  opacity: 0;
+  transform: translateY(50px);
+  transition: var(--dmo-duration-normal) var(--dmo-ease-standard);
+}
+
+.dmo-toast.show {
+  opacity: 1;
+  transform: none;
+}
+
+.dmo-toast.error {
+  background: var(--dmo-danger);
+}
+
+/* ---------- 9. Calendar (reference exact states) ---------- */
+
+.dmo-calendar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dmo-space-2);
+}
+
+.dmo-calendar__week,
+.dmo-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.dmo-calendar__week {
+  margin-top: var(--dmo-space-3);
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-table-head);
+  font-weight: var(--dmo-font-weight-extrabold);
+  text-align: center;
+}
+
+.dmo-calendar__grid {
+  margin-top: 7px;
+}
+
+.dmo-calendar__day {
+  position: relative;
+  min-height: var(--dmo-calendar-day-min);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-calendar-day);
+  background: var(--dmo-card);
+  color: var(--dmo-text);
+  font-weight: var(--dmo-font-weight-bold);
+  cursor: pointer;
+}
+
+.dmo-calendar__day:hover {
+  border-color: var(--dmo-brand-600);
+  background: var(--dmo-page);
+}
+
+.dmo-calendar__day.has-record::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--dmo-warning);
+  transform: translateX(-50%);
+}
+
+.dmo-calendar__day.selected {
+  background: var(--dmo-brand-600);
+  border-color: var(--dmo-brand-600);
+  color: var(--dmo-text-on-color);
+}
+
+.dmo-calendar__day.selected::after {
+  background: var(--dmo-text-on-color);
+}
+
+/* Today indicator required by Plan-V3 GLM-DSN-05 ("hoje com indicador
+   prÃ³prio"); the Design-Reference CSS is silent on today, so this is the
+   smallest neutral marker compatible with the reference day styling:
+   the strong brand border + aria-current="date" (never color alone). */
+.dmo-calendar__day.is-today:not(.selected) {
+  border: var(--dmo-border-width-strong) solid var(--dmo-brand-600);
+}
+
+.dmo-calendar__day:disabled {
+  visibility: hidden;
+}
+
+/* ---------- 10. Application header (reference exact anatomy) ---------- */
+
+.dmo-app-header {
+  min-height: var(--dmo-header-height);
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 10px 28px;
+  background: var(--dmo-card);
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+}
+
+.dmo-app-header__logo {
+  width: var(--dmo-logo-size);
+  height: var(--dmo-logo-size);
+  object-fit: contain;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.dmo-app-header__page {
+  min-width: 0;
+}
+
+.dmo-app-header__page h1 {
+  margin: 0;
+  color: var(--dmo-text);
+  font-size: var(--dmo-font-size-header-title);
+  line-height: var(--dmo-line-height-tight);
+  font-weight: var(--dmo-font-weight-extrabold);
+}
+
+.dmo-app-header__page p {
+  margin: 3px 0 0;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-label);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dmo-app-header__user {
+  margin-left: auto;
+  min-width: 150px;
+  padding-left: 18px;
+  text-align: right;
+  border-left: var(--dmo-border-width) solid var(--dmo-border);
+}
+
+.dmo-app-header__user strong {
+  display: block;
+  color: var(--dmo-text);
+  font-size: var(--dmo-font-size-xs);
+  line-height: 1.3;
+}
+
+.dmo-app-header__user span {
+  display: block;
+  margin-top: 2px;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-label);
+  line-height: 1.3;
+}
+
+.dmo-app-header__user a {
+  display: inline-block;
+  margin-top: var(--dmo-space-1);
+  color: var(--dmo-brand-700);
+  font-size: var(--dmo-font-size-label);
+}
+
+/* ---------- 11. Filter rows + pagination sizing (reference exact rules) ---------- */
+
+.filters > .dmo-button,
+.search > .dmo-button,
+.history-filters > .dmo-button,
+.dmo-filter-row > .dmo-button {
+  min-height: var(--dmo-control-height);
+}
+
+.dmo-pagination > .dmo-icon-button {
+  width: var(--dmo-pagination-size);
+  min-width: var(--dmo-pagination-size);
+  min-height: var(--dmo-pagination-size);
+  height: var(--dmo-pagination-size);
+  padding: 0;
+}
+
+.dmo-pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--dmo-space-3);
+  padding: var(--dmo-space-3) 18px;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-sm);
+}
+
+/* ---------- 12. Form message (reference login form-message exact) ---------- */
+
+.dmo-form-message {
+  margin-top: var(--dmo-space-3);
+  padding: 10px 12px;
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-danger-soft);
+  color: var(--dmo-danger);
+  font-size: var(--dmo-font-size-xs);
+}
+
+.dmo-form-message ul {
+  margin: 0;
+  padding-left: var(--dmo-space-4);
+}
+
+/* ============================================================
+   13+. DMO-documented components absent from the reference CSS.
+   Smallest neutral behavior compatible with the reference; each
+   is isolated here for replacement when the reference grows.
+   ============================================================ */
+
+/* Inline notice/alert (pattern taken from reference login .notice). */
+.dmo-alert {
+  display: flex;
+  gap: 10px;
+  background: var(--dmo-brand-050);
+  border-left: 4px solid var(--dmo-brand-600);
+  padding: 11px 13px;
+  border-radius: var(--dmo-r-control);
+  margin-bottom: var(--dmo-space-5);
+}
+
+.dmo-alert.success { background: var(--dmo-success-soft); border-left-color: var(--dmo-success); }
+.dmo-alert.warning { background: var(--dmo-warning-soft); border-left-color: var(--dmo-warning); }
+.dmo-alert.danger { background: var(--dmo-danger-soft); border-left-color: var(--dmo-danger); }
+
+/* Empty / error / loading states (DMO Â§21: cause + next step; skeleton
+   without layout shift). */
+.dmo-empty-state,
+.dmo-error-state {
+  padding: var(--dmo-space-6);
+  text-align: center;
+  color: var(--dmo-muted);
+}
+
+.dmo-empty-state strong,
+.dmo-error-state strong {
+  display: block;
+  color: var(--dmo-text);
+  margin-bottom: var(--dmo-space-1);
+}
+
+.dmo-skeleton {
+  display: block;
+  min-height: var(--dmo-row-height);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-subtle);
+  animation: dmo-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes dmo-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .55; }
+}
+
+/* Segmented selector (DMO Â§10: selected filled, others outlined). */
+.dmo-segmented {
+  display: inline-flex;
+  border: var(--dmo-border-width) solid var(--dmo-brand-600);
+  border-radius: var(--dmo-r-control);
+  overflow: hidden;
+}
+
+.dmo-segmented__option {
+  min-height: var(--dmo-control-height);
+  padding: 0 var(--dmo-space-4);
+  border: 0;
+  background: var(--dmo-card);
+  color: var(--dmo-brand-600);
+  font-weight: var(--dmo-font-weight-bold);
+  cursor: pointer;
+}
+
+.dmo-segmented__option + .dmo-segmented__option {
+  border-left: var(--dmo-border-width) solid var(--dmo-brand-600);
+}
+
+.dmo-segmented__option[aria-pressed="true"],
+.dmo-segmented__option.is-selected {
+  background: var(--dmo-brand-600);
+  color: var(--dmo-text-on-color);
+}
+
+/* Menu/dropdown surface, tooltip (shadows/surfaces from tokens). */
+.dmo-menu {
+  min-width: var(--dmo-menu-min-width);
+  max-height: var(--dmo-menu-max-height);
+  overflow: auto;
+  padding: var(--dmo-space-1);
+  background: var(--dmo-card);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);
+  box-shadow: var(--dmo-shadow-menu);
+  z-index: var(--dmo-z-dropdown);
+}
+
+.dmo-menu__option {
+  display: flex;
+  align-items: center;
+  gap: var(--dmo-space-2);
+  width: 100%;
+  min-height: var(--dmo-control-height-compact);
+  padding: var(--dmo-space-1) var(--dmo-space-3);
+  border: 0;
+  border-radius: var(--dmo-r-control);
+  background: none;
+  color: var(--dmo-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.dmo-menu__option:hover,
+.dmo-menu__option:focus-visible {
+  background: var(--dmo-brand-050); /* DMO Â§11 option hover */
+}
+
+.dmo-menu__option.is-selected {
+  background: var(--dmo-brand-100); /* DMO Â§11 selected option */
+  color: var(--dmo-brand-700);
+}
+
+.dmo-tooltip {
+  position: absolute;
+  z-index: var(--dmo-z-dropdown);
+  max-width: var(--dmo-tooltip-max-width);
+  padding: var(--dmo-space-1) var(--dmo-space-2);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-brand-950);
+  color: var(--dmo-text-on-color);
+  font-size: var(--dmo-font-size-xs);
+}
+
+/* History entry (contract Â§13 compact row + Anterior/Novo compare). */
+.dmo-history-entry__compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--dmo-space-3);
+  padding: var(--dmo-space-3);
+  background: var(--dmo-subtle);
+  border-radius: var(--dmo-r-control);
+}
+
+.dmo-history-entry__compare > div {
+  min-width: 0;
+}
+
+.dmo-history-entry__compare strong {
+  display: block;
+  margin-bottom: var(--dmo-space-1);
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-label);
+  letter-spacing: var(--dmo-letter-spacing-caps);
+  text-transform: uppercase;
+}
+
+/* Historia module — grouped-entity list, entry detail, snapshots */
+.historia-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dmo-space-3);
+}
+
+.historia-group__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--dmo-space-3);
+  margin-bottom: var(--dmo-space-3);
+}
+
+.historia-group__entity {
+  margin: 0 0 2px;
+}
+
+.historia-entry summary {
+  cursor: pointer;
+  color: var(--dmo-brand-700);
+  font-size: var(--dmo-font-size-sm);
+  font-weight: var(--dmo-font-weight-semibold);
+  user-select: none;
+}
+
+.historia-entry[open] summary {
+  color: var(--dmo-brand-600);
+}
+
+.historia-entry__detail {
+  margin-top: var(--dmo-space-2);
+  padding: var(--dmo-space-3);
+  background: var(--dmo-subtle);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);
+}
+
+.historia-entry__meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--dmo-space-2) var(--dmo-space-3);
+  margin: 0;
+}
+
+.historia-entry__meta dt {
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-label);
+  font-weight: var(--dmo-font-weight-semibold);
+  letter-spacing: var(--dmo-letter-spacing-caps);
+  text-transform: uppercase;
+}
+
+.historia-entry__meta dd {
+  margin: 2px 0 0;
+  font-size: var(--dmo-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.historia-entry__snapshot {
+  margin: 0;
+  padding: var(--dmo-space-2) var(--dmo-space-3);
+  background: var(--dmo-card);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);
+  font-size: var(--dmo-font-size-xs);
+  line-height: var(--dmo-line-height-normal);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
+}
+
+/* Shared empty table cell — center-aligned muted */
+.dmo-table td.empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--dmo-muted);
+}
+
+/* Read-only resolved path (07_DESIGN Â§4 item 18). */
+.dmo-path-readonly {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dmo-space-2);
+  min-height: var(--dmo-control-height-compact);
+  padding: 0 var(--dmo-space-3);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-subtle);
+  color: var(--dmo-text);
+  font-size: var(--dmo-font-size-sm);
+}
+
+.dmo-path-readonly.is-warning {
+  border-color: var(--dmo-warning);
+  background: var(--dmo-warning-soft);
+}
+
+
+/* Responsive table behavior (reference exact media rule) — preserved global. */
+@media (max-width: 720px) {
+  .dmo-modal-backdrop {
+    padding: var(--dmo-space-3);
+  }
+
+  .dmo-table {
+    min-width: 760px;
+  }
+
+  .dmo-history-entry__compare {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   Safe state page frame (W5; authority §4.21–4.23)
+   Minimal neutral frame for standalone safe-state pages
+   (NoAccess / AccessDenied): centered card on the page
+   surface, tokens only — no page-local component system.
+   Adapted from the completed DMO presentation (dmo-components.css
+   §23); all values are existing --dmo-* tokens or the locked
+   24px h1 / 460px card width of the reference implementation.
+   ============================================================ */
+
+.dmo-safe-state {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  padding: 28px;
+  background: var(--dmo-page);
+}
+
+.dmo-safe-state__card {
+  width: 100%;
+  max-width: 460px;
+  padding: var(--dmo-space-6);
+  background: var(--dmo-card);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-radius-card);
+  box-shadow: var(--dmo-shadow-card);
+  text-align: center;
+}
+
+.dmo-safe-state__card h1 {
+  margin: 0 0 var(--dmo-space-2);
+  font-size: 24px;
+}
+
+.dmo-safe-state__card p {
+  margin: 0 0 var(--dmo-space-4);
+  color: var(--dmo-muted);
+}
+
+/* ============================================================
+   Boquilhas create lot — compact inline fields
+   ============================================================ */
+
+.boquilhas-create {
+  padding: var(--dmo-space-3);
+  max-width: 100%;
+}
+
+.boquilhas-create .dmo-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--dmo-space-2);
+  align-items: end;
+}
+
+/* Compact input fields for lot creation using global .dmo-field--compact */
+.boquilhas-create .dmo-field--compact input,
+.boquilhas-create .dmo-field--compact select {
+  width: 100%;
+}
+
+.boquilhas-create fieldset {
+  border: none;
+  padding: 0;
+  margin: var(--dmo-space-2) 0;
+}
+
+.boquilhas-create fieldset legend {
+  font-size: var(--dmo-font-size-xs);
+  color: var(--dmo-muted);
+  margin-bottom: 4px;
+  font-weight: var(--dmo-font-weight-semibold);
+}
+
+.boquilhas-lines-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dmo-space-2);
+}
+
+.dmo-line-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-radius-sm);
+  background: var(--dmo-surface-card);
+  font-size: var(--dmo-font-size-sm);
+  cursor: pointer;
+  transition: all var(--dmo-transition-fast);
+  user-select: none;
+}
+
+.dmo-line-chip:hover {
+  background: var(--dmo-brand-050);
+  border-color: var(--dmo-brand-600);
+}
+
+.dmo-line-chip input[type="checkbox"] {
+  margin: 0;
+  width: auto;
+}
+
+.dmo-line-chip input[type="checkbox"]:checked {
+  accent-color: var(--dmo-brand-600);
+}
+
+.dmo-line-chip:has(input:checked) {
+  background: var(--dmo-brand-600);
+  color: var(--dmo-text-on-color);
+  border-color: var(--dmo-brand-600);
+}
+
+@media (max-width: 980px) {
+  .boquilhas-create .dmo-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .boquilhas-create .dmo-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   Boquilhas side panel — positioned below tabs, flows naturally
+   ============================================================ */
+
+.boquilhas-page > .boquilhas-layout {
+  display: flex;
+  margin-left: var(--dmo-sidebar-width);
+  min-height: calc(100vh - var(--dmo-header-height) - var(--dmo-tabs-height));
+}
+
+.boquilhas-side {
+  position: fixed;
+  z-index: var(--dmo-z-sticky);
+  top: var(--dmo-header-height);         /* right below header */
+  bottom: 0;
+  left: 0;
+  width: var(--dmo-sidebar-width);
+  background: linear-gradient(180deg, var(--dmo-brand-900), var(--dmo-brand-950));
+  padding: 20px 16px;
+  overflow-y: auto;
+  color: var(--dmo-text-on-color);
+}
+
+/* side-head (reference exact): caps title 12px + muted subtitle 11.5px */
+.boquilhas-side .boquilhas-side__title {
+  margin: 0;
+  font-size: var(--dmo-font-size-xs);
+  letter-spacing: var(--dmo-letter-spacing-caps);
+  color: var(--dmo-text-on-color);
+  font-weight: var(--dmo-font-weight-bold);
+  text-transform: uppercase;
+  padding: 0 4px;
+}
+
+.boquilhas-side .boquilhas-side__sub {
+  margin: 3px 0 16px 0;
+  color: var(--dmo-sidebar-muted);
+  font-size: var(--dmo-font-size-xs);
+  padding: 0 4px;
+}
+
+.boquilhas-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dmo-space-2);
+}
+
+.boquilhas-line {
+  position: relative;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--dmo-radius-card);
+  padding: 13px;
+  margin-bottom: 10px;
+}
+
+/* machine card anatomy (reference boquilhas.html .machine exact):
+   name 15px/800 · job reference 13px/850 white underlined ·
+   ref 11.5px/650 (token --dmo-sidebar-ref) · meta 10.5px (token
+   --dmo-sidebar-meta) · empty 12px (token --dmo-brand-300).
+   (11.5/10.5 → closest tokens 12px/10px; recorded MINOR_DELTA.) */
+.boquilhas-line__head {
+  color: var(--dmo-text-on-color);
+}
+
+.boquilhas-line__head strong {
+  display: block;
+  font-weight: var(--dmo-font-weight-extrabold);
+  font-size: var(--dmo-font-size-card-title);
+  line-height: 1.1;
+}
+
+/* Active production line (reference .machine.production exact):
+   bg = token --dmo-sidebar-production-bg (reference value == brand-800)
+   + border = --dmo-brand-600 (reference border 1/255 off; token wins). */
+.boquilhas-line.production {
+  background: var(--dmo-sidebar-production-bg);
+  border-color: var(--dmo-brand-600);
+}
+
+.boquilhas-line__production {
+  display: block;
+  margin-top: 8px;
+  padding-bottom: 1px;
+  border-bottom: var(--dmo-border-width) solid var(--dmo-sidebar-job-underline);
+  font-size: var(--dmo-font-size-sm);
+  font-weight: var(--dmo-font-weight-extrabold);
+  color: var(--dmo-sidebar-job);
+}
+
+.boquilhas-line__ref {
+  display: block;
+  margin-top: 5px;
+  font-size: var(--dmo-font-size-xs);
+  font-weight: var(--dmo-font-weight-semibold);
+  color: var(--dmo-sidebar-ref);
+}
+
+.boquilhas-line__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--dmo-space-2);
+  margin-top: 5px;
+  color: var(--dmo-sidebar-meta);
+  font-size: var(--dmo-font-size-table-head);
+}
+
+.boquilhas-line__empty {
+  display: block;
+  margin-top: 7px;
+  color: var(--dmo-brand-300);
+  font-size: var(--dmo-font-size-xs);
+}
+
+/* Sidebar dropdown menu — white bg, dark text, compact (legacy, kept for potential reuse) */
+.boquilhas-menu {
+  display: none;
+  position: absolute;
+  z-index: 10;
+  right: 10px;
+  top: 34px;
+  min-width: auto;
+  max-width: 100px;
+  background: var(--dmo-card);
+  border: 1px solid var(--dmo-border);
+  border-radius: var(--dmo-radius-sm);
+  padding: 2px 0;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  color: var(--dmo-text);
+}
+
+.boquilhas-menu.open {
+  display: block;
+}
+
+.boquilhas-menu button {
+  width: 100%;
+  border: 0;
+  background: none;
+  text-align: left;
+  padding: 3px 6px;
+  font-size: var(--dmo-font-size-xs);
+  color: var(--dmo-text);
+  cursor: pointer;
+  transition: background var(--dmo-transition-fast), color var(--dmo-transition-fast);
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.boquilhas-menu button:hover,
+.boquilhas-menu button:focus-visible {
+  background: var(--dmo-brand-050);
+  color: var(--dmo-brand-900);
+}
+
+.boquilhas-menu button.danger {
+  color: var(--dmo-danger);
+}
+
+.boquilhas-menu button.danger:hover,
+.boquilhas-menu button.danger:focus-visible {
+  background: var(--dmo-danger-soft);
+  color: var(--dmo-danger);
+}
+
+.boquilhas-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Responsive — sidebar stacks on mobile */
+@media (max-width: 980px) {
+  .boquilhas-side {
+    width: var(--dmo-sidebar-width-compact);
+  }
+  .boquilhas-page > .boquilhas-layout {
+    margin-left: var(--dmo-sidebar-width-compact);
+  }
+}
+
+@media (max-width: 720px) {
+  .boquilhas-side {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: 100%;
+    height: auto;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--dmo-space-2);
+    margin-bottom: var(--dmo-space-4);
+  }
+  .boquilhas-page > .boquilhas-layout {
+    margin-left: 0;
+  }
+}
+
+/* ============================================================
+   Boquilhas tabs — navigation bar (reference boquilhas.html .tabs)
+   ============================================================ */
+
+.boquilhas-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 28px;
+  padding: 0 var(--dmo-page-gutter-desktop);
+  min-height: var(--dmo-tabs-height);
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+  background: var(--dmo-card);
+}
+
+.boquilhas-tabs .dmo-tab {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--dmo-muted);
+  font-weight: 650; /* reference .tab exact */
+  font-size: var(--dmo-font-size-md);
+  padding: 0 2px;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  transition: color var(--dmo-transition-fast), border-color var(--dmo-transition-fast);
+}
+
+.boquilhas-tabs .dmo-tab:hover {
+  background: none;
+}
+
+.boquilhas-tabs .dmo-tab.active {
+  color: var(--dmo-brand-600);
+  border-bottom-color: var(--dmo-brand-600);
+}
+
+.boquilhas-tabs .dmo-tab.right {
+  margin-left: auto;
+}
+
+/* Boquilhas view sections */
+.boquilhas-view {
+  display: none;
+}
+
+.boquilhas-view.active {
+  display: block;
+}
+
+/* Card head — used in boquilhas registo/definicoes sections */
+.boquilhas-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dmo-space-3);
+  padding: 17px 18px;
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+}
+
+.boquilhas-card-head h3 {
+  margin: 0;
+  font-size: var(--dmo-font-size-card-title);
+}
+
+/* Lot detail section */
+.boquilhas-lot {
+  margin-top: var(--dmo-space-4);
+}
+
+/* Boquilhas tab — lot cards (reference .lots 2-col grid + .lot card) */
+.boquilhas-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.boquilhas-card {
+  text-align: left;
+  padding: 15px;
+  cursor: pointer;
+  transition: border-color var(--dmo-transition-fast), background var(--dmo-transition-fast);
+}
+
+.boquilhas-card:hover {
+  border-color: var(--dmo-brand-600);
+  background: var(--dmo-page);
+}
+
+.boquilhas-card__ref {
+  font-size: var(--dmo-font-size-card-title);
+  font-weight: var(--dmo-font-weight-bold);
+}
+
+.boquilhas-card__ref span {
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-sm);
+  font-weight: var(--dmo-font-weight-normal);
+}
+
+.boquilhas-card .dmo-pill {
+  display: inline-flex;
+  margin-top: var(--dmo-space-2);
+}
+
+.boquilhas-card__meta {
+  margin-top: var(--dmo-space-3);
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-xs);
+}
+
+/* Registo search results (reference .search-results container + .result rows) */
+.boquilhas-list--results {
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-table);
+  overflow: hidden;
+}
+
+.boquilhas-list-item {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: var(--dmo-card);
+  padding: 12px 14px;
+  font-size: var(--dmo-font-size-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dmo-transition-fast);
+}
+
+.boquilhas-list-item:hover {
+  background: var(--dmo-brand-050);
+}
+
+.boquilhas-list--results .boquilhas-list-item {
+  border-top: var(--dmo-border-width) solid var(--dmo-border);
+}
+
+.boquilhas-list--results .boquilhas-list-item:first-child {
+  border-top: 0;
+}
+
+/* Definições — repairer rows (reference .setting-row geometry) */
+.boquilhas-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dmo-space-3);
+  padding: 11px 12px;
+  background: var(--dmo-subtle);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);
+  margin-top: var(--dmo-space-2);
+}
+
+.boquilhas-list-row:first-child {
+  margin-top: 0;
+}
+
+/* Registo — lot resumo stats (reference snapshot-grid .stat exact:
+   subtle bg + 3px left brand accent + 9px radius; 10px label / 15px value) */
+.boquilhas-resumo__grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: var(--dmo-space-3);
+}
+
+.boquilhas-resumo__grid > div {
+  background: var(--dmo-subtle);
+  border-left: 3px solid var(--dmo-brand-600);
+  border-radius: var(--dmo-r-control);
+  padding: 11px;
+}
+
+.boquilhas-resumo__grid span {
+  display: block;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-table-head);
+}
+
+.boquilhas-resumo__grid strong {
+  font-size: var(--dmo-font-size-card-title);
+}
+
+.boquilhas-resumo__delta--negative {
+  color: var(--dmo-danger);
+}
+
+.boquilhas-warnings {
+  margin-top: var(--dmo-space-3);
+}
+
+/* Empty state hint (inline with empty text) */
+.peso-hint {
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-sm);
+  padding: var(--dmo-space-5);
+  text-align: center;
+}
+
+/* Search results list styling */
+.boquilhas-list {
+  margin-top: var(--dmo-space-3);
+}
+
+/* History summary (period summary cards) */
+.boquilhas-history-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--dmo-space-3);
+  padding: var(--dmo-space-4);
+  background: var(--dmo-subtle);
+  border-radius: var(--dmo-r-control);
+  margin-bottom: var(--dmo-space-3);
+}
+
+/* History filters — 8 children: 1 search + 5 selects + 2 buttons.
+   Adapts to the current markup with responsive column counts. */
+.boquilhas-history-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr auto auto;
+  gap: var(--dmo-space-2);
+  align-items: end;
+  padding: var(--dmo-space-3);
+}
+
+@media (max-width: 1200px) {
+  .boquilhas-history-filters {
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .boquilhas-history-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Module rows clear the fixed sidebar (reference: .main margin-left 276px
+   AND .tabs start at left:276px — the reference tabs bar never runs under
+   the sidebar). The global app-nav is shell-level (recorded, not touched). */
+.boquilhas-page > .dmo-page-head {
+  margin-left: var(--dmo-sidebar-width);
+}
+
+.boquilhas-page > .boquilhas-tabs {
+  margin-left: var(--dmo-sidebar-width);
+}
+
+/* Filter-row button keeps its natural width (reference .filter-actions);
+   the fluid auto-fit grid would otherwise stretch it full-column. */
+.boquilhas-page .audit-filters--auto > .dmo-button {
+  justify-self: start;
+}
+
+/* Responsive — Boquilhas grids (reference media rules: ≤980 1-col lots,
+   2-col stats; ≤720 stats collapse further) */
+@media (max-width: 980px) {
+  .boquilhas-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .boquilhas-resumo__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .boquilhas-page > .dmo-page-head,
+  .boquilhas-page > .boquilhas-tabs {
+    margin-left: var(--dmo-sidebar-width-compact);
+  }
+}
+
+@media (max-width: 720px) {
+  .boquilhas-resumo__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .boquilhas-page > .dmo-page-head,
+  .boquilhas-page > .boquilhas-tabs {
+    margin-left: 0;
+  }
+}
+
+/* Responsive — tabs on mobile stack or scroll */
+@media (max-width: 980px) {
+  .boquilhas-tabs {
+    overflow-x: auto;
+    padding: 0 var(--dmo-page-gutter-tablet);
+  }
+}
+
+@media (max-width: 720px) {
+  .boquilhas-history-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .boquilhas-history-summary {
+    grid-template-columns: 1fr;
+  }
+}
+

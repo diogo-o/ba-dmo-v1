@@ -1,0 +1,289 @@
+@page "/reparacao-interna"
+@model BA.Dmo.Web.Pages.ReparacaoInterna.IndexModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.ModulePolicies.ReparacaoInterna)]
+@{
+    ViewData["Title"] = "Reparação Interna";
+}
+<link rel="stylesheet" href="~/styles/modules/reparacao-interna-layout.css" />
+
+<nav class="reparacao-interna-tabs" aria-label="Navegação Reparação Interna">
+    <button class="tab active" data-view="registo" type="button">Registo</button>
+    <button class="tab" data-view="historico" type="button">Histórico</button>
+</nav>
+
+<main data-testid="page-reparacao-interna" class="reparacao-interna-page">
+
+    <!-- ===== Tab Registo ===== -->
+    <section class="reparacao-interna-view active" id="registo">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Registo de reparação interna</h2>
+                <p>Linha + Tipo CM/MF + número individual. Referência, lote, produção e operador vêm do Job On ativo da Linha.</p>
+            </div>
+        </div>
+
+        <!-- Full-width line-card selector (MUST NOT sit side-by-side with the context card). -->
+        <div class="dmo-card reparacao-interna-selector">
+            <h3>Linha</h3>
+            <div class="line-choice" id="lineChoice" data-testid="line-choice"></div>
+        </div>
+
+        <!-- Context + registo card, on its own row below the selector. -->
+        <div class="dmo-card reparacao-interna-context" id="contextCard">
+            <div class="context-summary" id="contextSummary">
+                <div class="context-readonly">
+                    <span class="context-value" data-context-readonly>Escolha uma Linha para carregar o contexto de produção.</span>
+                </div>
+            </div>
+
+            <div id="contextDetail" hidden>
+                <div class="reparacao-interna-context-grid">
+                    <div><span>Produção</span><strong data-ctx-producao></strong></div>
+                    <div><span>Referência</span><strong class="reparacao-interna-strong" data-ctx-referencia></strong></div>
+                    <div><span>Linha</span><strong data-ctx-linha></strong></div>
+                    <div><span>Job On</span><strong data-ctx-jobon></strong></div>
+                    <div><span>Data/contexto</span><strong data-ctx-periodo></strong></div>
+                </div>
+
+                <div class="dmo-row-actions">
+                    <button type="button" class="dmo-button" data-type="CM">CM</button>
+                    <button type="button" class="dmo-button" data-type="MF">MF</button>
+                    <button type="button" class="dmo-button" data-type="BQ">BQ</button>
+                </div>
+                <div class="dmo-field">
+                    <label for="individualNumbers">Números reparados (um por linha; repetidos são válidos)</label>
+                    <textarea id="individualNumbers" rows="4" autocomplete="off"></textarea>
+                </div>
+                <div class="dmo-empty-state reparacao-interna-context-note" id="contextNote" hidden></div>
+                <div class="reparacao-interna-override">
+                    <button type="button" class="dmo-button" data-toggle-override>Editar contexto</button>
+                </div>
+                <div id="overridePanel" hidden>
+                    <div class="dmo-field">
+                        <label for="ovProduction">Produção</label>
+                        <input id="ovProduction" type="text" autocomplete="off" />
+                    </div>
+                    <div class="dmo-field">
+                        <label for="ovReference">Referência</label>
+                        <input id="ovReference" type="text" autocomplete="off" />
+                    </div>
+                    <div class="dmo-empty-state">Ao editar o contexto, o registo é guardado com os valores indicados; a produção/Job On original não é alterada.</div>
+                </div>
+                <div class="dmo-row-actions">
+                    <button type="button" class="dmo-button success" data-registrar>Registar reparação</button>
+                    <button type="button" class="dmo-button" data-refresh-context>Recarregar contexto</button>
+                </div>
+            </div>
+
+            <div class="dmo-empty-state" id="contextBlocked" hidden></div>
+            <div class="dmo-empty-state" id="contextAmbiguous" hidden></div>
+
+            <div id="registerSummaryCard" class="dmo-card" hidden>
+                <h3>Confirmar registo</h3>
+                <p id="registerSummary"></p>
+                <div class="dmo-row-actions">
+                    <button type="button" class="dmo-button success" data-confirm-register>Confirmar</button>
+                    <button type="button" class="dmo-button" data-cancel-register>Cancelar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent registrations table (reference exact) -->
+        <div class="dmo-card reparacao-interna-context" id="recentRegistros">
+            <h3>Registos recentes</h3>
+            <div class="dmo-table-wrap">
+                <table class="dmo-table">
+                    <thead>
+                        <tr>
+                            <th>Data/hora</th>
+                            <th>Linha</th>
+                            <th>Tipo</th>
+                            <th>N.º individual</th>
+                            <th>Operador</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentRegistrosBody">
+                        <tr><td colspan="6" class="dmo-empty-state">Sem registos recentes.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== Tab Histórico ===== -->
+    <section class="reparacao-interna-view" id="historico">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Histórico de reparações internas</h2>
+                <p>Consulta por contexto, ferramenta e operador. Correções preservam o original e aparecem como Corrigido.</p>
+            </div>
+        </div>
+
+        <div class="reparacao-interna-filters dmo-card">
+            <div class="dmo-field">
+                <label for="fFrom">Data início</label>
+                <input id="fFrom" type="date" />
+            </div>
+            <div class="dmo-field">
+                <label for="fTo">Data fim</label>
+                <input id="fTo" type="date" />
+            </div>
+            <div class="dmo-field">
+                <label for="fLine">Linha</label>
+                <select id="fLine">
+                    <option value="">Todas</option>
+                    <option value="B1">B1</option>
+                    <option value="B2">B2</option>
+                    <option value="B3">B3</option>
+                    <option value="C1">C1</option>
+                    <option value="C2">C2</option>
+                    <option value="C3">C3</option>
+                </select>
+            </div>
+            <div class="dmo-field">
+                <label for="fType">Tipo</label>
+                <select id="fType">
+                    <option value="">Todos</option>
+                    <option value="CM">CM</option>
+                    <option value="MF">MF</option>
+                </select>
+            </div>
+            <div class="dmo-field">
+                <label for="fNumber">N.º individual</label>
+                <input id="fNumber" type="text" autocomplete="off" />
+            </div>
+            <div class="dmo-field">
+                <label for="fOperator">Operador</label>
+                <input id="fOperator" type="text" autocomplete="off" />
+            </div>
+            <div class="dmo-field">
+                <label class="reparacao-interna-inline">
+                    <input id="fOnlyCorrected" type="checkbox" />
+                    <span>Apenas corrigidos</span>
+                </label>
+            </div>
+            <div class="reparacao-interna-action-row">
+                <button type="button" class="dmo-button" data-apply-filter>Filtrar</button>
+                <button type="button" class="dmo-button" data-reset-filter>Limpar</button>
+            </div>
+        </div>
+
+        <div class="dmo-table-card">
+            <div class="dmo-table-wrap">
+                <table class="dmo-table" id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>Data/hora</th>
+                            <th>Linha</th>
+                            <th>Produção</th>
+                            <th>Referência</th>
+                            <th>Lote</th>
+                            <th>Tipo</th>
+                            <th>N.º individual</th>
+                            <th>Operador</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody"></tbody>
+                </table>
+            </div>
+            <div class="dmo-empty-state" hidden id="historyEmpty">Sem registos no histórico.</div>
+            <div class="dmo-row-actions reparacao-interna-actions" id="historyActions" hidden>
+                @if (Model.CanCorrigir)
+                {
+                    <button type="button" class="dmo-button" data-corrigir>Corrigir registo</button>
+                }
+                <span class="reparacao-interna-pagination">
+                    <button type="button" class="dmo-button" data-page-prev aria-label="Anterior">&lt;</button>
+                    <span data-page-info>0</span>
+                    <button type="button" class="dmo-button" data-page-next aria-label="Seguinte">&gt;</button>
+                </span>
+            </div>
+        </div>
+
+        <!-- Inline correction card (standard 36px button opens it). -->
+        <div class="dmo-card reparacao-interna-correction" id="correctionCard" hidden>
+            <h3>Corrigir registo</h3>
+            <p class="reparacao-interna-original-note">
+                Data/hora e operador originais permanecem read-only. Uma correção guarda um novo registo; o original nunca desaparece.
+            </p>
+            <div class="dmo-field">
+                <label for="cLine">Linha</label>
+                <select id="cLine">
+                    <option value="B1">B1</option>
+                    <option value="B2">B2</option>
+                    <option value="B3">B3</option>
+                    <option value="C1">C1</option>
+                    <option value="C2">C2</option>
+                    <option value="C3">C3</option>
+                </select>
+            </div>
+            <div class="dmo-field">
+                <label for="cType">Tipo</label>
+                <select id="cType">
+                    <option value="CM">CM</option>
+                    <option value="MF">MF</option>
+                    <option value="BQ">BQ</option>
+                </select>
+            </div>
+            <div class="dmo-field">
+                <label for="cNumber">Número individual</label>
+                <input id="cNumber" type="text" autocomplete="off" />
+            </div>
+            <div class="reparacao-interna-override">
+                <button type="button" class="dmo-button" data-toggle-ovcorrection>Editar contexto da correção</button>
+            </div>
+            <div id="ovCorrectionPanel" hidden>
+                <div class="dmo-field">
+                    <label for="cProduction">Produção</label>
+                    <input id="cProduction" type="text" autocomplete="off" />
+                </div>
+                <div class="dmo-field">
+                    <label for="cReference">Referência</label>
+                    <input id="cReference" type="text" autocomplete="off" />
+                </div>
+                <div class="dmo-empty-state">Uma correção guarda um novo registo; o original nunca desaparece e o Job On não é alterado.</div>
+            </div>
+            <div class="dmo-field">
+                <label for="cReason">Motivo (opcional)</label>
+                <input id="cReason" type="text" autocomplete="off" />
+            </div>
+            <div class="dmo-row-actions">
+                <button type="button" class="dmo-button success" data-confirm-correction>Guardar correção</button>
+                <button type="button" class="dmo-button" data-cancel-correction>Cancelar</button>
+            </div>
+        </div>
+
+        <!-- Detail (double-click open): read-only. -->
+        <div class="dmo-card reparacao-interna-detail" id="detailCard" hidden>
+            <h3>Detalhe do registo</h3>
+            <div class="dmo-table-wrap">
+                <table class="dmo-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>Valores atuais</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detailBody"></tbody>
+                </table>
+            </div>
+            <h4>Sequência de correções</h4>
+            <div class="dmo-table-wrap">
+                <table class="dmo-table" id="detailChain">
+                    <thead>
+                        <tr><th>Linha</th><th>Tipo</th><th>N.º</th><th>Operador</th><th>Data original</th><th>Estado</th></tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="dmo-row-actions">
+                <button type="button" class="dmo-button" data-close-detail>Fechar</button>
+            </div>
+        </div>
+    </section>
+</main>
+
+<div class="dmo-toast" role="status" id="toast"></div>
+<script src="~/scripts/reparacao-interna.js" defer></script>

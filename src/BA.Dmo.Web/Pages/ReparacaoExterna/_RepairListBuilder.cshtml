@@ -1,0 +1,69 @@
+@model ReparacaoExternaListBuilderModel
+@{
+    var type = Model.RepairType;
+    var prefix = type == "CM" ? "cm" : "mf";
+}
+<div class="dmo-page-head">
+    <div>
+        <h2>@Model.Title</h2>
+        <p>Prepara uma saída programada (lista) para reparação externa antes da produção. As ferramentas são escolhidas pelo número individual.</p>
+    </div>
+</div>
+
+<div class="dmo-card">
+    <h3>Nova lista</h3>
+    <div class="reparacao-externa-grid">
+        <div class="dmo-field">
+            <label for="@(prefix)Ref">Referência</label>
+            <input id="@(prefix)Ref" class="repex-tool-ref" type="text" autocomplete="off" />
+        </div>
+        <div class="dmo-field">
+            <label for="@(prefix)Lot">Lote</label>
+            <input id="@(prefix)Lot" class="repex-tool-lot" type="text" autocomplete="off" />
+        </div>
+        <div class="dmo-field">
+            <label for="@(prefix)Number">Número</label>
+            <input id="@(prefix)Number" class="repex-tool-number" type="text" autocomplete="off" />
+        </div>
+    </div>
+    <div class="dmo-row-actions">
+        <button type="button" class="dmo-button" data-search-tools="@type">Pesquisar ferramentas</button>
+    </div>
+    <div class="dmo-empty-state" hidden id="@(prefix)ToolsEmpty">Nenhuma ferramenta encontrada para a pesquisa.</div>
+    <div class="dmo-table-card">
+        <table class="dmo-table" data-tools-table="@type" hidden>
+            <thead>
+                <tr>
+                    <th>Referência</th>
+                    <th>Lote</th>
+                    <th>Número</th>
+                    <th>Nome técnico</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="@(prefix)ToolsBody"></tbody>
+        </table>
+    </div>
+    <div class="reparacao-externa-grid">
+        <div class="dmo-field">
+            <label for="@(prefix)Repairer">Reparador</label>
+            <select id="@(prefix)Repairer" class="repex-repairer" data-repairer-for="@type"></select>
+        </div>
+        <div class="dmo-field">
+            <label for="@(prefix)PlannedDate">Data prevista</label>
+            <input id="@(prefix)PlannedDate" class="repex-planned" type="date" />
+        </div>
+    </div>
+    <div class="dmo-skeleton dmo-empty-state" hidden id="@(prefix)ItemsEmpty">Lista sem itens. Adicione ferramentas acima.</div>
+    <div class="dmo-table-card">
+        <table class="dmo-table" data-items-table="@type" hidden>
+            <thead>
+                <tr><th>Referência</th><th>Lote</th><th>Número</th><th></th></tr>
+            </thead>
+            <tbody id="@(prefix)ItemsBody"></tbody>
+        </table>
+    </div>
+    <div class="dmo-row-actions">
+        <button type="button" class="dmo-button success" data-create-list="@type">Criar lista</button>
+    </div>
+</div>

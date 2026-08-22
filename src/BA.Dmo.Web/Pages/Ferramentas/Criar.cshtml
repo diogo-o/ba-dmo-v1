@@ -1,0 +1,59 @@
+@page "/ferramentas/criar"
+@model BA.Dmo.Web.Pages.Ferramentas.CriarModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.ModulePolicies.Ferramentas)]
+@{
+    ViewData["Title"] = "Criar novo registo";
+}
+<link rel="stylesheet" href="~/styles/modules/ferramentas-layout.css" />
+
+<main data-testid="page-ferramentas-criar" class="ferramentas-page">
+    <input type="hidden" id="toolType" value="@Model.ToolType">
+
+    <div class="dmo-page-head">
+        <div>
+            <h2>Criar novo registo</h2>
+            <p>Define a referência mestra da ferramenta e o primeiro lote. A criação é uma operação consistente.</p>
+        </div>
+    </div>
+
+    <div class="dmo-card">
+        <div class="ferramentas-section-head"><h3>Identificação da referência</h3></div>
+        <div class="ferramentas-create-grid">
+            <div class="dmo-field"><label>Tipo</label><select id="fType"><option value="CM">CM</option><option value="MF">MF</option><option value="BQ">BQ</option><option value="PU">PU</option><option value="CS">CS</option></select></div>
+            <div class="dmo-field dmo-field--compact"><label>Referência</label><input id="fRefCode" placeholder="Ex.: CM-01"></div>
+            <div class="dmo-field" data-span="2"><label>Nome técnico</label><input id="fTechnicalName" class="ferramentas-primary" placeholder="Nome técnico da ferramenta"></div>
+            <div class="dmo-field"><label>Owner plant</label><input id="fOwnerPlant" value="MG — Marinha Grande"></div>
+        </div>
+    </div>
+
+    <div class="dmo-card">
+        <div class="ferramentas-section-head"><h3>Compatibilidade</h3></div>
+        <p class="ferramentas-hint">Máquinas/Linhas onde a ferramenta pode trabalhar. A relação é guardada explicitamente.</p>
+        <div class="ferramentas-machine-grid" id="fLines">
+            <button type="button" class="ferramentas-machine-choice" data-line="B1">B1</button>
+            <button type="button" class="ferramentas-machine-choice" data-line="B2">B2</button>
+            <button type="button" class="ferramentas-machine-choice" data-line="B3">B3</button>
+            <button type="button" class="ferramentas-machine-choice" data-line="C1">C1</button>
+            <button type="button" class="ferramentas-machine-choice" data-line="C2">C2</button>
+            <button type="button" class="ferramentas-machine-choice" data-line="C3">C3</button>
+        </div>
+    </div>
+
+    <div class="dmo-card">
+        <div class="ferramentas-section-head"><h3>Primeiro lote</h3></div>
+        <div class="ferramentas-create-grid">
+            <div class="dmo-field dmo-field--compact"><label>Lote</label><input id="fLote" placeholder="Ex.: 4"></div>
+            <div class="dmo-field"><label>Processo do lote</label><select id="fProcesso"><option value="">—</option><option>NNPB</option><option>PS</option></select></div>
+            <div class="dmo-field dmo-field--compact"><label>Quantidade</label><input id="fQty" type="number" min="0" step="1"></div>
+            <div class="dmo-field" data-span="2"><label>Nome/número do desenho</label><input id="fDrawing" placeholder="Não definido"></div>
+            <div class="dmo-field dmo-field--compact"><label>Revisão do desenho</label><input id="fDrawingRevision" placeholder="Ex.: A"></div>
+        </div>
+        <div class="ferramentas-actions">
+            <a class="dmo-button ghost" href="/ferramentas" data-ghost type="button">Cancelar</a>
+            <button class="dmo-button success" id="fSave" type="button">Criar registo</button>
+        </div>
+    </div>
+</main>
+
+<div class="dmo-toast" role="status" id="toast"></div>
+<script src="~/scripts/ferramentas.js" defer></script>

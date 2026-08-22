@@ -1,0 +1,153 @@
+@page "/pegamentos"
+@model BA.Dmo.Web.Pages.Pegamentos.IndexModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.ModulePolicies.Pegamentos)]
+@{
+    ViewData["Title"] = "Pegamentos";
+}
+<link rel="stylesheet" href="~/styles/modules/pegamentos-layout.css" />
+
+<nav class="pegamentos-tabs" aria-label="Navegação Pegamentos">
+    <button class="tab active" data-view="historicos" type="button">Históricos</button>
+    <button class="tab" data-view="nova" type="button">Nova folha</button>
+    <button class="tab right" data-view="configuracao" type="button">Configuração</button>
+</nav>
+
+<main data-testid="page-pegamentos" class="pegamentos-page">
+
+    @* ======== HISTÓRICOS / CONSULTA ======== *@
+    <section class="pegamentos-view active" id="historicos">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Controlos de Pegamentos</h2>
+                <p>Consulte controlos por referência, produção ou máquina.</p>
+            </div>
+        </div>
+
+        <div class="dmo-card">
+            <div class="pegamentos-filters">
+                <div class="dmo-field">
+                    <label>Referência</label>
+                    <input id="searchReference" placeholder="Ex.: 5447T173">
+                </div>
+                <div class="dmo-field">
+                    <label>Produção</label>
+                    <input id="searchProduction" placeholder="Ex.: 202601">
+                </div>
+                <div class="dmo-field">
+                    <label>Máquina</label>
+                    <input id="searchMachine" placeholder="Ex.: B1">
+                </div>
+                <div class="dmo-field">
+                    <label>Desde</label>
+                    <input type="date" id="searchFrom">
+                </div>
+                <div class="dmo-field">
+                    <label>Até</label>
+                    <input type="date" id="searchTo">
+                </div>
+                <button class="dmo-button" id="btnSearch" type="button">Pesquisar</button>
+            </div>
+
+            <div class="dmo-table-wrap">
+                <table class="dmo-table select-table">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Referência</th>
+                            <th>Produção</th>
+                            <th>Máquina</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody data-dmo-list id="controlList">
+                        <tr><td colspan="5" class="empty">Sem controlos. Pesquise para consultar registos.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pegamentos-actions">
+                <button class="dmo-button" id="btnOpen" disabled type="button">Abrir folha</button>
+                <button class="dmo-button" id="btnHistory" disabled type="button">Histórico</button>
+            </div>
+        </div>
+    </section>
+
+    @* ======== CONFIGURAÇÃO ======== *@
+    <section class="pegamentos-view" id="configuracao">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Configuração de Pegamentos</h2>
+                <p>Tolerância padrão e componentes permitidos nas folhas de medição.</p>
+            </div>
+        </div>
+        <div class="dmo-card">
+            <div class="pegamentos-section-head"><h3>Tolerância padrão (± mm)</h3></div>
+            <div class="dmo-field">
+                <label for="cfgTolerance">Tolerância</label>
+                <input id="cfgTolerance" type="number" step="0.01" min="0" value="0.50">
+            </div>
+            <div class="pegamentos-actions">
+                <button class="dmo-button" type="button" id="saveConfig">Guardar configuração</button>
+            </div>
+        </div>
+        <div class="dmo-card">
+            <div class="pegamentos-section-head">
+                <div><h3>Componentes permitidos</h3><p>Componentes que aparecem nos dropdowns de medição.</p></div>
+                <button class="dmo-button" type="button" id="addComponent">Adicionar componente</button>
+            </div>
+            <div class="dmo-table-wrap">
+                <table class="dmo-table">
+                    <thead><tr><th>Componente</th><th>Ativo</th><th>Ordem</th></tr></thead>
+                    <tbody id="componentList">
+                        <tr data-row data-id="CM"><td><strong>CM</strong></td><td><span class="dmo-pill active">Ativo</span></td><td>1</td></tr>
+                        <tr data-row data-id="BQ"><td><strong>BQ</strong></td><td><span class="dmo-pill active">Ativo</span></td><td>2</td></tr>
+                        <tr data-row data-id="MF"><td><strong>MF</strong></td><td><span class="dmo-pill active">Ativo</span></td><td>3</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    @* ======== NOVA FOLHA ======== *@
+    <section class="pegamentos-view" id="nova">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Nova folha de Pegamentos</h2>
+                <p>O contexto de produção é herdado da revisão exata do Job On — não é selecionável aqui (DS-05).</p>
+            </div>
+        </div>
+
+        <div class="dmo-card" id="contextCard">
+            <div class="pegamentos-section-head">
+                <h3>Contexto de produção</h3>
+            </div>
+            <div class="dmo-field">
+                <label>Revisão do Job On (ID)</label>
+                <input id="revisionId" placeholder="Identificador da revisão exata do Job On">
+            </div>
+
+            <div class="pegamentos-context-grid">
+                <div><span>Referência</span><strong data-node="ctxReferencia">—</strong></div>
+                <div><span>Produção</span><strong data-node="ctxProducao">—</strong></div>
+                <div><span>Máquina</span><strong data-node="ctxMaquina">—</strong></div>
+                <div><span>CM</span><strong data-node="ctxCm">—</strong></div>
+                <div><span>BQ</span><strong data-node="ctxBq">—</strong></div>
+                <div><span>MF</span><strong data-node="ctxMf">—</strong></div>
+            </div>
+
+            @* Incomplete-context blocking state (DS-05, GLM-PEG-06) *@
+            <div class="pegamentos-blocking" id="incompleteBlock" hidden>
+                <span class="dmo-pill warning">Contexto incompleto</span>
+                <p>O Job On selecionado não tem CM, BQ e MF completos. Corrija as ferramentas no Job On antes de criar a folha.</p>
+                <button class="dmo-button" id="btnFixTools" type="button">Corrigir ferramentas no Job On</button>
+            </div>
+
+            <div class="pegamentos-actions">
+                <button class="dmo-button" id="btnResolve" type="button">Resolver contexto</button>
+                <button class="dmo-button success" id="btnCreate" type="button">Abrir folha</button>
+            </div>
+        </div>
+    </section>
+</main>
+
+<div class="dmo-toast" role="status" id="toast"></div>
+<script src="~/scripts/pegamentos.js" defer></script>

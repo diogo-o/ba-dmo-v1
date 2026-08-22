@@ -1,0 +1,40 @@
+@page "/ferramentas"
+@model BA.Dmo.Web.Pages.Ferramentas.IndexModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.ModulePolicies.Ferramentas)]
+@{
+    ViewData["Title"] = "Ferramentas";
+}
+<link rel="stylesheet" href="~/styles/modules/ferramentas-layout.css" />
+
+<nav class="ferramentas-tabs" aria-label="Navegação Ferramentas">
+    <button class="tab active" data-view="cm" type="button">Contra moldes (CM)</button>
+    <button class="tab" data-view="mf" type="button">Moldes finais (MF)</button>
+</nav>
+
+<main data-testid="page-ferramentas" class="ferramentas-page">
+    <input type="hidden" id="ferramentasView" value="cm">
+    <input type="hidden" id="canConfigure" value="@(Model.CanConfigure ? "true" : "false")">
+
+    <section class="ferramentas-view active" id="cm">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Contra moldes (CM)</h2>
+                <p>Referências e lotes de contra moldes. Os moldes finais (MF) permanecem um domínio separado.</p>
+            </div>
+        </div>
+        @await Html.PartialAsync("_ReferenceList", new FerramentasListModel("CM"))
+    </section>
+
+    <section class="ferramentas-view" id="mf">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Moldes finais (MF)</h2>
+                <p>Referências e lotes de moldes finais. Os contra moldes (CM) permanecem um domínio separado.</p>
+            </div>
+        </div>
+        @await Html.PartialAsync("_ReferenceList", new FerramentasListModel("MF"))
+    </section>
+</main>
+
+<div class="dmo-toast" role="status" id="toast"></div>
+<script src="~/scripts/ferramentas.js" defer></script>

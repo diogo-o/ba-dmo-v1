@@ -1,0 +1,8 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- BA DMO application layer: use cases, DTOs, ports, module catalog services. -->
+  <ItemGroup>
+    <ProjectReference Include="..\BA.Dmo.Domain\BA.Dmo.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

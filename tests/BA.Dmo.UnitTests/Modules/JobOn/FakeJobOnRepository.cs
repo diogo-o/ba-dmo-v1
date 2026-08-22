@@ -1,0 +1,275 @@
+using BA.Dmo.Application.Modules.JobOn;
+using BA.Dmo.Domain.Modules.JobOn;
+
+using JobOnEntity = BA.Dmo.Domain.Modules.JobOn.JobOn;
+
+namespace BA.Dmo.UnitTests.Modules.JobOn;
+
+/// <summary>
+/// In-memory fake of the Job On persistence port (confined to tests/*).
+/// Tracks created ids, revisions, components, verifications and audit events
+/// so use-case tests can assert persistence behavior without a live DB.
+/// </summary>
+public sealed class FakeJobOnRepository : IJobOnRepository
+{
+    public Dictionary<Guid, JobOnEntity> JobOns { get; } = new();
+
+    public List<JobOnRevision> Revisions { get; } = [];
+
+    public List<JobOnComponent> Components { get; } = [];
+
+    public List<JobOnComponentField> Fields { get; } = [];
+
+    public List<JobOnComponentRow> Rows { get; } = [];
+
+    public List<JobOnVerificationOccurrence> Verifications { get; } = [];
+
+    public List<(Guid JobId, Guid? RevisionId, string EventType, string? Before, string? After, string ActorId)> AuditEvents { get; } = [];
+
+    public List<JobOnLifecycleState> LifecycleUpdates { get; } = [];
+
+    public List<(Guid JobOnId, Guid RevisionId)> CurrentRevisionUpdates { get; } = [];
+
+    public List<(Guid OccurrenceId, string Status, string? CompletedBy, DateTime? CompletedAt)> VerificationUpdates { get; } = [];
+
+    public Task<Guid> CreateAsync(JobOnEntity jobOn, CancellationToken cancellationToken = default)
+    {
+        var id = Guid.NewGuid();
+        jobOn.SetId(id);
+        JobOns[id] = jobOn;
+        return Task.FromResult(id);
+    }
+
+    public Task<JobOnEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        JobOns.TryGetValue(id, out var stored);
+        return Task.FromResult(stored is null ? null : Reconstruct(stored));
+    }
+
+    public Task<IReadOnlyList<JobOnEntity>> GetActiveAsync(
+        string machineCode, DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default)
+    {
+        var rows = JobOns.Values
+            .Where(j => j.MachineCode == machineCode && j.IsActive)
+            .Select(Reconstruct)
+            .ToList();
+        return Task.FromResult<IReadOnlyList<JobOnEntity>>(rows);
+    }
+
+    public Task<JobOnEntity?> GetByProductionCodeAsync(string productionCode, CancellationToken cancellationToken = default)
+    {
+        var stored = JobOns.Values.FirstOrDefault(j => j.ProductionCode == productionCode);
+        return Task.FromResult(stored is null ? null : Reconstruct(stored));
+    }
+
+    public Task UpdateLifecycleStateAsync(Guid id, JobOnLifecycleState newState, string actorId, CancellationToken cancellationToken = default)
+    {
+        LifecycleUpdates.Add(newState);
+        if (JobOns.TryGetValue(id, out var jobOn))
+            jobOn.TransitionTo(newState);
+        return Task.CompletedTask;
+    }
+
+    public Task InsertRevisionAsync(JobOnRevision revision, CancellationToken cancellationToken = default)
+    {
+        Revisions.Add(revision);
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<JobOnRevision>> GetRevisionsAsync(Guid jobOnId, CancellationToken cancellationToken = default)
+    {
+        var rows = Revisions.Where(r => r.JobOnId == jobOnId).OrderBy(r => r.RevisionNumber).ToList();
+        return Task.FromResult<IReadOnlyList<JobOnRevision>>(rows);
+    }
+
+    public Task InsertComponentsAsync(IEnumerable<JobOnComponent> components, CancellationToken cancellationToken = default)
+    {
+        Components.AddRange(components);
+        return Task.CompletedTask;
+    }
+
+    public Task InsertFieldsAsync(IEnumerable<JobOnComponentField> fields, CancellationToken cancellationToken = default)
+    {
+        Fields.AddRange(fields);
+        return Task.CompletedTask;
+    }
+
+    public Task InsertRowsAsync(IEnumerable<JobOnComponentRow> rows, CancellationToken cancellationToken = default)
+    {
+        Rows.AddRange(rows);
+        return Task.CompletedTask;
+    }
+
+    public Task InsertVerificationsAsync(IEnumerable<JobOnVerificationOccurrence> verifications, CancellationToken cancellationToken = default)
+    {
+        Verifications.AddRange(verifications);
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateVerificationStatusAsync(Guid occurrenceId, string status, string? completedBy, DateTime? completedAtUtc, CancellationToken cancellationToken = default)
+    {
+        VerificationUpdates.Add((occurrenceId, status, completedBy, completedAtUtc));
+        return Task.CompletedTask;
+    }
+
+    public Task<Guid?> GetCurrentRevisionIdAsync(Guid jobOnId, CancellationToken cancellationToken = default)
+    {
+        JobOns.TryGetValue(jobOnId, out var jobOn);
+        return Task.FromResult(jobOn?.CurrentRevisionId);
+    }
+
+    public Task UpdateCurrentRevisionAsync(Guid jobOnId, Guid revisionId, CancellationToken cancellationToken = default)
+    {
+        CurrentRevisionUpdates.Add((jobOnId, revisionId));
+        return Task.CompletedTask;
+    }
+
+    public Task InsertAuditEventAsync(Guid jobId, Guid? revisionId, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken cancellationToken = default)
+    {
+        AuditEvents.Add((jobId, revisionId, eventType, beforeSnapshot, afterSnapshot, actorId));
+        return Task.CompletedTask;
+    }
+
+    public Task InsertImageMutationAsync(
+        JobOnRevision newRevision,
+        Guid jobOnId,
+        string eventType,
+        string? beforeImageAssetId,
+        string? afterImageAssetId,
+        string actorId,
+        CancellationToken cancellationToken = default)
+    {
+        Revisions.Add(newRevision);
+        CurrentRevisionUpdates.Add((jobOnId, newRevision.JobOnRevisionId));
+        AuditEvents.Add((jobOnId, newRevision.JobOnRevisionId, eventType, beforeImageAssetId, afterImageAssetId, actorId));
+        return Task.CompletedTask;
+    }
+
+    public Task SaveRevisionGraphAsync(
+        JobOnRevision revision,
+        string eventType,
+        string actorId,
+        CancellationToken cancellationToken = default)
+    {
+        Revisions.Add(revision);
+        PersistRevisionGraph(revision);
+        CurrentRevisionUpdates.Add((revision.JobOnId, revision.JobOnRevisionId));
+        AuditEvents.Add((revision.JobOnId, revision.JobOnRevisionId, eventType, null, null, actorId));
+        return Task.CompletedTask;
+    }
+
+    public Task<Guid> DuplicateAtomicallyAsync(
+        JobOnEntity newJobOn,
+        JobOnRevision revision,
+        Guid sourceJobOnId,
+        string actorId,
+        CancellationToken cancellationToken = default)
+    {
+        var newId = Guid.NewGuid();
+
+        var header = new JobOnEntity(
+            newJobOn.ProductionCode,
+            newJobOn.MachineCode,
+            newJobOn.PlannedStartAt,
+            newJobOn.PlannedEndAt,
+            Array.Empty<JobOnRevision>())
+        {
+            CopiedFromJobOnId = sourceJobOnId,
+            CreatedAtUtc = DateTime.UtcNow,
+            ArticleReferenceId = newJobOn.ArticleReferenceId
+        };
+        header.SetId(newId);
+        JobOns[newId] = header;
+
+        var pinnedRevision = revision with { JobOnId = newId };
+        Revisions.Add(pinnedRevision);
+        PersistRevisionGraph(pinnedRevision);
+        CurrentRevisionUpdates.Add((newId, pinnedRevision.JobOnRevisionId));
+        AuditEvents.Add((newId, null, "jobon.duplicar", null, sourceJobOnId.ToString(), actorId));
+
+        return Task.FromResult(newId);
+    }
+
+    /// <summary>Persists a revision's component/field/CAL-row/verification graph (atomic fake).</summary>
+    private void PersistRevisionGraph(JobOnRevision revision)
+    {
+        foreach (var component in revision.Components ?? Array.Empty<JobOnComponent>())
+        {
+            var storedComponent = component with { JobOnRevisionId = revision.JobOnRevisionId };
+            Components.Add(storedComponent);
+            Fields.AddRange(storedComponent.Fields ?? Array.Empty<JobOnComponentField>());
+            Rows.AddRange(storedComponent.Rows ?? Array.Empty<JobOnComponentRow>());
+            Verifications.AddRange(storedComponent.Verifications ?? Array.Empty<JobOnVerificationOccurrence>());
+        }
+    }
+
+    public Task<IReadOnlyList<HistoricalProductionSummary>> GetHistoricalProductionsAsync(
+        string? referenceFilter, string? machineFilter, DateTime? from, DateTime? to, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<IReadOnlyList<HistoricalProductionSummary>>(Array.Empty<HistoricalProductionSummary>());
+    }
+
+    private JobOnEntity Reconstruct(JobOnEntity stored)
+    {
+        var revisions = Revisions
+            .Where(r => r.JobOnId == stored.Id)
+            .OrderBy(r => r.RevisionNumber)
+            .ToList();
+        var currentRevisionId = stored.CurrentRevisionId
+            ?? revisions.OrderByDescending(r => r.RevisionNumber).FirstOrDefault()?.JobOnRevisionId;
+
+        var jobOn = new JobOnEntity(
+            stored.ProductionCode,
+            stored.MachineCode,
+            stored.PlannedStartAt,
+            stored.PlannedEndAt,
+            revisions.Select(HydrateRevision).ToList());
+
+        dynamic row = new System.Dynamic.ExpandoObject();
+        row.job_on_id = stored.Id;
+        row.current_revision_id = currentRevisionId;
+        row.copied_from_job_on_id = stored.CopiedFromJobOnId;
+        row.article_reference_id = stored.ArticleReferenceId;
+        row.created_at_utc = stored.CreatedAtUtc;
+        row.status = JobOnLifecycleStateCodec.ToStorage(stored.LifecycleState);
+        row.closed_at_utc = stored.ClosedAtUtc;
+        row.canceled_at_utc = stored.CancelledAtUtc;
+        row.canceled_by = stored.CancelledBy;
+        row.cancel_reason = stored.CancelReason;
+        row.production_folder = stored.ProductionFolder;
+        jobOn.FromRow(row);
+        return jobOn;
+    }
+
+    /// <summary>Re-attaches each revision's components (with fields/rows/verifications) and
+    /// flattened verifications, mirroring the real repository's aggregate hydration.</summary>
+    private JobOnRevision HydrateRevision(JobOnRevision revision)
+    {
+        var components = Components
+            .Where(c => c.JobOnRevisionId == revision.JobOnRevisionId)
+            .OrderBy(c => c.DisplayOrder)
+            .Select(c =>
+            {
+                var verifications = Verifications
+                    .Where(v => v.JobOnComponentId == c.JobOnComponentId)
+                    .ToList();
+                return c with
+                {
+                    Fields = Fields.Where(f => f.JobOnComponentId == c.JobOnComponentId).ToList(),
+                    Rows = Rows.Where(r => r.JobOnComponentId == c.JobOnComponentId).ToList(),
+                    Verifications = verifications
+                };
+            })
+            .ToList();
+
+        var allVerifications = components
+            .SelectMany(c => c.Verifications ?? Array.Empty<JobOnVerificationOccurrence>())
+            .ToList();
+
+        return revision with
+        {
+            Components = components,
+            Verifications = allVerifications
+        };
+    }
+}

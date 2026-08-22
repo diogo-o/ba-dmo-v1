@@ -1,0 +1,169 @@
+@page "/peso/responsavel"
+@model BA.Dmo.Web.Pages.Peso.ResponsavelModel
+@using BA.Dmo.Domain.Modules.Peso
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.ModulePolicies.Peso)]
+@{
+    ViewData["Title"] = "Controlo de Peso e Volume";
+}
+@* ============================================================
+   Peso — Responsável (U-10)
+   Structure transcribed from authoritative Design-Reference:
+   portal-dmo-design-final/peso-responsavel.html + PESO_INTERFACE_HANDOFF.
+   ONE approval page: calendar + day list + detail. Decisions per CM
+   in comparisons; reject requires a note; approved control remains
+   immutable. "Comparações" é tipo de registo, nunca um estado.
+   ============================================================ *@
+<link rel="stylesheet" href="~/styles/modules/peso-layout.css" />
+
+<nav class="peso-tabs" aria-label="Navegação Peso">
+    <button class="tab active" data-view="approvals" type="button">Aprovações</button>
+    <button class="tab settings" data-view="settings" type="button">Definições</button>
+</nav>
+
+<main data-testid="page-peso-responsavel" class="peso-page">
+    <div class="dmo-page-head">
+        <div><h2>Aprovações</h2><p>Controlos recebidos para decisão.</p></div>
+    </div>
+
+    <section class="peso-metrics" id="approvalMetrics">
+        <div class="dmo-card peso-metric"><span>Pendentes</span><strong id="mPendentes">@Model.Pending.Count</strong></div>
+        <div class="dmo-card peso-metric"><span>Aprovados</span><strong id="mAprovados">0</strong></div>
+        <div class="dmo-card peso-metric"><span>Não aprovados</span><strong id="mNaoAprovados">0</strong></div>
+    </section>
+
+    <section class="peso-approval-layout">
+        <aside>
+            <div class="dmo-card peso-approval-cal">
+                <section data-dmo-calendar data-month="@Model.MonthValue" data-record-dates="@Model.RecordDatesCsv">
+                    <div class="dmo-calendar__head">
+                        <button type="button" class="dmo-button dmo-icon-button" data-calendar-prev aria-label="Mês anterior">&lsaquo;</button>
+                        <strong data-calendar-label></strong>
+                        <button type="button" class="dmo-button dmo-icon-button" data-calendar-next aria-label="Mês seguinte">&rsaquo;</button>
+                    </div>
+                    <div class="dmo-calendar__week"><span>SEG</span><span>TER</span><span>QUA</span><span>QUI</span><span>SEX</span><span>SÁB</span><span>DOM</span></div>
+                    <div class="dmo-calendar__grid" data-calendar-grid></div>
+                    <button class="dmo-button peso-mt-sm" data-calendar-clear type="button">Mostrar todas as datas</button>
+                </section>
+            </div>
+            <div class="dmo-card peso-queue">
+                <h3>Controlos de <span id="selectedDate">todas as datas</span></h3>
+                <p class="peso-hint">Pesquise ou filtre os controlos recebidos.</p>
+                <div class="dmo-field dmo-field--compact"><label>Pesquisar</label><input id="approvalSearch" placeholder="Referência, CM, boquilha, lote ou máquina"></div>
+                <div class="peso-queue-filters">
+                    <div class="dmo-field"><label>Estado</label><select id="approvalStatus"><option value="">Todos</option><option value="pendente">Pendentes</option><option value="aprovado">Aprovados</option><option value="nao_aprovado">Não aprovados</option></select></div>
+                    <div class="dmo-field"><label>Tipo</label><select id="approvalType"><option value="">Todos</option><option value="novo_controlo">Registo de peso</option><option value="comparacao">Comparação</option></select></div>
+                </div>
+                <div data-dmo-list id="approvalList">
+                    @if (Model.Pending.Count == 0)
+                    {
+                        <p class="peso-hint" id="approvalEmpty">Sem controlos pendentes.</p>
+                    }
+                    else
+                    {
+                        @foreach (var c in Model.Pending)
+                        {
+                            <article class="peso-queue-item" data-dmo-row data-id="@c.ControlId"
+                                     data-kind="@PesoRecordTypeCodecDisplay(c.Type)" data-status="@PesoControlStateCodecDisplay(c.Status)">
+                                <strong>@c.Reference · @c.Production</strong>
+                                <small>@c.Machine · L@c.Lote · Revisão @c.Revision · Peso @(c.Peso?.ToString("0.##") ?? "—") g</small>
+                                <span class="dmo-pill pending">@PesoControlStateCodecDisplay(c.Status)</span>
+                            </article>
+                        }
+                    }
+                </div>
+            </div>
+        </aside>
+
+        @* detail area: control OR comparison *@
+        <div class="peso-page">
+            <section class="dmo-card" id="controlDetail">
+                <div class="peso-section-head">
+                    <div><h3 id="dRef">Controlo de peso</h3><p id="dSub">Selecione um controlo na lista para o decidir.</p></div>
+                    <span class="dmo-pill pending" id="dState">Pendente</span>
+                </div>
+
+                <h3 class="peso-section-title">Identificação da produção</h3>
+                <div class="peso-identity" id="dIdentity"></div>
+
+                <h3 class="peso-section-title">Comparação global de peso</h3>
+                <div class="peso-summary-4col" id="dSummary"></div>
+
+                <h3 class="peso-section-title">Comparação com novo molde (nominal)</h3>
+                <div class="peso-summary-4col" id="dNominal"></div>
+
+                <h3 class="peso-section-title">Comparação por CM — peso do vidro e volume</h3>
+                <div class="dmo-table-wrap"><table class="dmo-table"><thead><tr><th>CM</th><th>Peso atual</th><th>Peso anterior</th><th>Diferença</th><th>Volume atual</th><th>Volume anterior</th><th>Diferença volume</th></tr></thead><tbody id="dCmTable"></tbody></table></div>
+
+                <h3 class="peso-section-title">Referências e observações</h3>
+                <div class="dmo-field"><label>Observações do operador</label><div id="dObservacoes" class="dmo-card">—</div></div>
+
+                <div class="peso-decision">
+                    <div class="dmo-field"><label>Responsável</label><input id="dResponsavel" readonly value="—"></div>
+                    <div class="dmo-field"><label>Nota / alterações necessárias</label><textarea id="dNota" rows="2" placeholder="Obrigatória quando o controlo não é aprovado."></textarea></div>
+                    <div class="peso-actions">
+                        <button class="dmo-button danger" id="reject" type="button" disabled>Não aprovar</button>
+                        <button class="dmo-button success" id="approve" type="button" disabled>Aprovar</button>
+                    </div>
+                    <div class="peso-email-preview" id="emailPreview">
+                        <strong>Relatório aprovado — envio para produção</strong>
+                        <p class="peso-hint">A máquina seleciona automaticamente o grupo de linhas. Confirme antes de enviar.</p>
+                        <div class="peso-context-grid" id="emailGrid"></div>
+                        <div class="peso-actions"><span class="dmo-u-strong dmo-u-muted" id="approvedMsg"></span><button class="dmo-button success" id="sendApproved" type="button">Enviar para produção</button></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="dmo-card" id="comparisonDetail" hidden>
+                <div class="peso-section-head">
+                    <div><h3>Comparação · <span id="cRef"></span></h3><p id="cSub">CM em produção comparados com o controlo aprovado usado como base.</p></div>
+                    <span class="dmo-pill pending">Pendente</span>
+                </div>
+                <div class="dmo-card peso-hint"><strong>Registo complementar</strong><div>Esta decisão não altera o controlo aprovado usado como base. Cria um registo adicional ligado à revisão aprovada.</div></div>
+                <h3 class="peso-section-title">Base aprovada</h3>
+                <div class="peso-identity" id="cBase"></div>
+                <h3 class="peso-section-title">Decisão individual por CM</h3>
+                <div class="dmo-table-wrap"><table class="dmo-table"><thead><tr><th>CM</th><th>Peso atual</th><th>Capacidade atual</th><th>Peso aprovado</th><th>Capacidade aprovada</th><th>Diferença peso</th><th>Diferença capacidade</th><th>Decisão</th></tr></thead><tbody id="cDecisionTable"></tbody></table></div>
+                <div class="peso-summary-3col" id="cCounters"></div>
+                <div class="dmo-field"><label>Justificação</label><textarea id="cJustification" rows="2" placeholder="Obrigatória quando pelo menos um CM é colocado de parte."></textarea></div>
+                <div class="peso-actions"><button class="dmo-button" id="confirmComparison" disabled type="button">Confirmar decisões</button></div>
+            </section>
+        </div>
+    </section>
+
+    <input type="hidden" id="activeControlId" value="">
+
+    <section class="peso-view" id="settings">
+        <div class="peso-page">
+            <div class="dmo-card">
+                <h2>Configurações Peso</h2>
+                <p class="peso-hint">Destinatários por grupo de linha, densidades de vidro (NNPB/PS) e diretório principal. As alterações afetam apenas cálculos futuros — nunca reescrevem histórico.</p>
+                <h3 class="peso-section-title">Densidades do vidro (NNPB / PS)</h3>
+                <p class="peso-hint">Valores usados em novos cálculos do processo correspondente. A densidade efetivamente usada é preservada em cada controlo (histórico imutável).</p>
+                <div class="peso-grid3">
+                    <div class="dmo-field dmo-field--compact"><label>Constante NNPB</label><input id="setNnpb" class="decimal-2" type="number" step="0.0001" placeholder="2,4027"></div>
+                    <div class="dmo-field dmo-field--compact"><label>Constante PS</label><input id="setPs" class="decimal-2" type="number" step="0.0001" placeholder="2,4231"></div>
+                    <div class="dmo-field dmo-field--compact"><label>Destinatários Linha B</label><input id="setRecipB" placeholder="linha@baglass.com"></div>
+                </div>
+                <div class="dmo-field dmo-field--compact"><label>Destinatários Linha C</label><input id="setRecipC" placeholder="linha@baglass.com"></div>
+                <div class="peso-actions"><button class="dmo-button" id="saveSettings" type="button">Guardar configurações</button></div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<div class="dmo-toast" role="status" id="toast"></div>
+<script src="~/scripts/peso.js" defer></script>
+
+@functions {
+    private static string PesoRecordTypeCodecDisplay(PesoRecordType t) => t switch
+    {
+        PesoRecordType.NovoControlo => "novo_controlo",
+        _ => "comparacao"
+    };
+    private static string PesoControlStateCodecDisplay(PesoControlState s) => s switch
+    {
+        PesoControlState.Pendente => "pendente",
+        PesoControlState.Aprovado => "aprovado",
+        _ => "nao_aprovado"
+    };
+}

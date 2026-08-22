@@ -1,0 +1,351 @@
+@page "/peso"
+@model BA.Dmo.Web.Pages.Peso.IndexModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.ModulePolicies.Peso)]
+@{
+    ViewData["Title"] = "Controlo de Peso e Volume";
+}
+@* ============================================================
+   Peso — Operador (U-10)
+   Structure transcribed from authoritative Design-Reference:
+   portal-dmo-design-final/peso-operador.html + PESO_INTERFACE_HANDOFF.
+   Novo controlo / Referências / Histórico / Configurações.
+   Novo controlo e Comparação iniciam no contexto do Job On; CM e
+   lote são herdados (sem segunda seleção). Cálculos são C#-only
+   (peso.js não duplica fórmulas; constantes injetadas no server).
+   ============================================================ *@
+<link rel="stylesheet" href="~/styles/modules/peso-layout.css" />
+
+<nav class="peso-tabs" aria-label="Navegação Peso">
+    <button class="tab active" data-view="new" type="button">Novo controlo</button>
+    <button class="tab" data-view="refs" type="button">Referências</button>
+    <button class="tab" data-view="comparacao" type="button">Comparação</button>
+    <button class="tab" data-view="history" type="button">Histórico</button>
+    <button class="tab settings" data-view="settings" type="button">Definições</button>
+</nav>
+
+<main data-testid="page-peso-operador" class="peso-page">
+    @* ======== NOVO CONTROLO ======== *@
+    <section class="peso-view active" id="new">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Novo controlo</h2>
+                <p>Preencha as leituras e envie o controlo para aprovação.</p>
+            </div>
+            <span class="dmo-pill pending">A guardar</span>
+        </div>
+
+        <div class="dmo-card">
+            <div class="peso-section-head">
+                <h3>Referência do controlo</h3>
+                <div class="peso-actions">
+                    <button class="dmo-button" id="editActiveRef" type="button">Editar referência</button>
+                    <button class="dmo-button" id="createRefFromNew" type="button">Criar referência</button>
+                </div>
+            </div>
+            <div class="peso-grid3">
+                <div class="dmo-field">
+                    <label>Procurar referência</label>
+                    <input placeholder="Ex.: 9121T173">
+                </div>
+                <div class="dmo-field">
+                    <label>Medições anteriores aprovadas</label>
+                    <select>
+                        <option>Selecionar produção…</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="dmo-card">
+            <div class="peso-section-head"><h3>Informação da produção</h3></div>
+            <div class="peso-ref-top-grid">
+                <div><span>Produção</span><strong id="ctxProducao">—</strong></div>
+                <div><span>Referência</span><strong id="ctxReferencia">—</strong></div>
+                <div><span>CM</span><strong id="ctxCm">—</strong></div>
+                <div><span>Lote</span><strong id="ctxLoteCm">—</strong></div>
+                <div><span>Estado</span><strong id="ctxEstado">—</strong></div>
+                <div><span>Processo</span><strong id="ctxProcesso">—</strong></div>
+            </div>
+        </div>
+
+        <div class="dmo-card">
+            <div class="peso-section-head"><h3>Dados do controlo</h3></div>
+            <div class="peso-control-grid">
+                <div class="dmo-field">
+                    <label>Temperatura (°C)</label>
+                    <input type="number" id="temperatura" value="20" min="0" max="99" step="1">
+                </div>
+                <div class="dmo-field">
+                    <label>Data de início da produção</label>
+                    <input type="date" id="controlDate">
+                </div>
+                <div class="dmo-field">
+                    <label>Estado do molde</label>
+                    <select id="estadoMolde"><option>Novo</option><option>Reparado</option></select>
+                </div>
+            </div>
+
+            <hr class="peso-hr">
+            <div class="peso-section-head">
+                <h3>Leituras por CM</h3>
+                <div class="peso-actions">
+                    <button class="dmo-button" id="removeReading" type="button">Remover leitura</button>
+                    <button class="dmo-button" id="addReading" type="button">Adicionar leitura</button>
+                </div>
+            </div>
+            <div class="peso-readings" id="readings">
+                <div class="peso-reading">
+                    <div class="dmo-field dmo-field--compact"><label>CM</label><input class="cm" type="number" value="12" step="1"></div>
+                    <div class="dmo-field dmo-field--compact"><label>Peso (g)</label><input class="peso decimal-2" type="number" step="0.01" value="152.43"></div>
+                    <small class="peso-reading-result pending">Peso do vidro: —</small>
+                </div>
+            </div>
+            <div class="peso-live">
+                <div><span>Leituras válidas</span><strong id="readingCount">1</strong></div>
+                <div><span>Média em água</span><strong id="mediaAgua">—</strong></div>
+                <div><span>Peso estimado em vidro</span><strong id="pesoVidro">—</strong></div>
+                <div><span>Diferença anterior</span><strong id="diferencaAnterior">—</strong></div>
+            </div>
+
+            <hr class="peso-hr">
+            <div class="peso-sap-grid">
+                <div class="dmo-field"><label>Fim da produção anterior (SAP)</label><input type="date"></div>
+                <div class="dmo-field dmo-field--compact"><label>Peso médio anterior (SAP)</label><input class="decimal-2" type="number" step="0.01"></div>
+                <div class="dmo-field"><label>Notas</label><input id="notas" placeholder="Informação adicional relevante para este controlo"></div>
+            </div>
+        </div>
+
+        <div class="dmo-card">
+            <input type="hidden" id="activeControlId" value="">
+            <div class="peso-section-head">
+                <div><h3>Resultados</h3><p class="peso-hint">A mesma estrutura é guardada e enviada para aprovação.</p></div>
+            </div>
+            <div class="peso-result-summary">
+                <div class="peso-summary-item"><span>Densidade</span><strong id="resDensidade">—</strong></div>
+                <div class="peso-summary-item"><span>Capacidade média</span><strong id="resCapacidade">—</strong></div>
+                <div class="peso-summary-item"><span>Peso médio</span><strong id="resPesoMedio">—</strong></div>
+                <div class="peso-summary-item"><span>Peso nominal</span><strong data-node="resPesoNominal">—</strong></div>
+                <div class="peso-summary-item"><span>Diferença</span><strong id="resDiferenca">—</strong></div>
+                <div class="peso-summary-item"><span>Diferença %</span><strong id="resDiferencaPct">—</strong></div>
+            </div>
+            <div class="dmo-table-wrap">
+                <table class="dmo-table">
+                    <thead><tr><th>CM</th><th>Peso em água</th><th>Capacidade</th><th>Desvio cm³</th><th>Desvio %</th><th>Peso estimado</th><th>Diferença anterior</th></tr></thead>
+                    <tbody id="resultTable"><tr><td colspan="7" class="empty">Calcule para ver os resultados.</td></tr></tbody>
+                </table>
+            </div>
+            <div class="peso-actions">
+                <button class="dmo-button" id="calculate" type="button">Calcular</button>
+                <button class="dmo-button success" id="sendApproval" type="button">Enviar para aprovação</button>
+            </div>
+        </div>
+    </section>
+
+    @* ======== REFERÊNCIAS ======== *@
+    <section class="peso-view" id="refs">
+        <div class="dmo-page-head">
+            <div><h2>Referências</h2><p>Configuração e controlos associados a cada referência.</p></div>
+        </div>
+        <div class="peso-approval-layout">
+            <div class="dmo-card">
+                <div class="peso-section-head"><h3>Lista de referências</h3><button class="dmo-button" id="newRef" type="button">Nova referência</button></div>
+                <div class="dmo-field dmo-field--compact"><label>Pesquisar</label><input id="referenceSearch" placeholder="Referência, CM, boquilha ou máquina"></div>
+                <div class="dmo-table-wrap">
+                    <table class="dmo-table select-table compact-table">
+                        <thead><tr><th>Referência</th><th>CM</th><th>Boquilha</th><th>Processo</th><th>Peso nominal</th></tr></thead>
+                        <tbody data-dmo-list id="referenceList">
+                            @if (Model.References.Count == 0)
+                            {
+                                <tr><td colspan="5" class="empty">Nenhuma referência registada.</td></tr>
+                            }
+                            else
+                            {
+                                var first = true;
+                                @foreach (var r in Model.References)
+                                {
+                                    var isFirst = first; first = false;
+                                    <tr class="@(isFirst ? "selected" : "")" data-dmo-row data-id="@r.PesoReferenceId" aria-selected="@(isFirst ? "true" : "false")">
+                                        <td><strong>@r.MoldNumber@r.NeckringNumber</strong></td>
+                                        <td>@r.MoldNumber</td>
+                                        <td>@r.NeckringNumber</td>
+                                        <td>—</td>
+                                        <td>@(string.IsNullOrWhiteSpace(r.CounterMold) ? "—" : r.CounterMold)</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="peso-page">
+                <div class="dmo-card">
+                    <div class="peso-section-head"><div><h3>Controlos da referência ativa</h3><p class="peso-hint">Um clique seleciona; duplo clique abre a folha.</p></div></div>
+                    <div class="dmo-table-wrap">
+                        <table class="dmo-table select-table compact-table" id="refControls">
+                            <thead><tr><th>Data</th><th>Produção</th><th>Máquina</th><th>Lote</th><th>Peso</th><th>Revisão</th><th>Estado</th></tr></thead>
+                            <tbody><tr><td colspan="7" class="empty">Sem controlos para a referência selecionada.</td></tr></tbody>
+                        </table>
+                    </div>
+                    <div class="peso-actions">
+                        <button class="dmo-button" id="editControl" disabled type="button">Editar controlo</button>
+                        <button class="dmo-button" id="compareControl" disabled type="button">Comparar</button>
+                        <button class="dmo-button" id="newControlRef" type="button">Novo controlo deste Job On</button>
+                        <button class="dmo-button" id="btnFolhaControlo" type="button">Controlo</button>
+                    </div>
+                </div>
+                <div class="dmo-card" id="refEditor">
+                    <div class="peso-section-head"><h3 id="editorTitle">Criar nova referência e primeiro lote</h3><button class="dmo-button" id="closeEditor" type="button">Fechar edição</button></div>
+                    <div class="peso-grid3">
+                        <div class="dmo-field dmo-field--compact"><label>Referência base</label><input id="refMold"></div>
+                        <div class="dmo-field dmo-field--compact"><label>Número CM</label><input id="refCm"></div>
+                        <div class="dmo-field dmo-field--compact"><label>Neckring</label><input id="refNeck"></div>
+                    </div>
+                    <div><h4>Dados do primeiro lote</h4><p class="peso-hint">Processo e máquinas permitidas são definidos no lote do Peso e herdados pelo Job On, Novo controlo e Comparação.</p></div>
+                    <div class="peso-grid3">
+                        <div class="dmo-field dmo-field--compact"><label>Nº do lote</label><input type="number" id="loteNome" value="1" min="1"></div>
+                        <div class="dmo-field"><label>Processo do lote</label><select id="loteProcesso"><option>NNPB</option><option>PS</option></select></div>
+                        <div class="dmo-field dmo-field--compact"><label>Peso nominal</label><input type="number" id="lotePesoNominal" value="200"></div>
+                    </div>
+                    <div class="peso-grid3">
+                        <div class="dmo-field" data-span="2"><label>Subpasta dos relatórios</label><input id="reportSubfolder" placeholder="Ex.: 5447T173"><small class="peso-hint">Nome relativo dentro do diretório principal; não introduza caminho absoluto.</small></div>
+                        <div class="dmo-field dmo-field--compact"><label>Caminho resolvido</label><input id="resolvedPath" readonly value="Capacidades / "></div>
+                    </div>
+                    <div class="dmo-field">
+                        <label>Máquinas permitidas</label>
+                        <p class="peso-hint">Associe este lote às máquinas/linhas onde pode trabalhar. Esta associação já faz parte do registo operacional.</p>
+                        <div class="peso-machine-grid" id="machineGrid">
+                            <button type="button" class="peso-machine-choice" data-line="B1">B1</button>
+                            <button type="button" class="peso-machine-choice" data-line="B2">B2</button>
+                            <button type="button" class="peso-machine-choice selected" data-line="B3">B3</button>
+                            <button type="button" class="peso-machine-choice" data-line="C1">C1</button>
+                            <button type="button" class="peso-machine-choice" data-line="C2">C2</button>
+                            <button type="button" class="peso-machine-choice" data-line="C3">C3</button>
+                        </div>
+                    </div>
+                    <div class="peso-grid3">
+                        <div class="dmo-field dmo-field--compact"><label>Volume do punção</label><input type="number" id="refVolPu"></div>
+                        <div class="dmo-field dmo-field--compact"><label>Volume da marisa</label><input type="number" id="refVolNeck"></div>
+                        <div class="dmo-field dmo-field--compact"><label>Volume do tampão</label><input type="number" id="refVolTampao" readonly value="0"></div>
+                    </div>
+                    <div class="dmo-field"><label>Nota da alteração</label><input id="changeReason" placeholder="Obrigatória ao alterar uma referência existente"></div>
+                    <div class="peso-actions">
+                        <button class="dmo-button" id="saveReference" type="button">Guardar referência</button>
+                        <button class="dmo-button" type="button">Ver histórico de alterações</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    @* ======== COMPARAÇÃO ======== *@
+    <section class="peso-view" id="comparacao">
+        <div class="dmo-page-head"><div><h2>Comparação</h2><p>Comparações criadas a partir de controlos aprovados — decisões individuais por CM.</p></div></div>
+        <div class="dmo-card">
+            <div class="dmo-field dmo-field--compact"><label>Pesquisar</label><input id="comparacaoSearch" placeholder="Referência, lote ou máquina"></div>
+            <div class="dmo-table-wrap">
+                <table class="dmo-table select-table" id="comparacaoTable">
+                    <thead><tr><th>Data</th><th>Referência</th><th>Produção</th><th>Máquina</th><th>Lote</th><th>Peso</th><th>Base</th><th>Estado</th></tr></thead>
+                    <tbody data-dmo-list id="comparacaoList"><tr><td colspan="8" class="empty">Nenhuma comparação registada.</td></tr></tbody>
+                </table>
+            </div>
+            <p class="peso-hint">Um clique seleciona; duplo clique abre o detalhe da comparação.</p>
+        </div>
+        <div class="dmo-card" id="comparacaoDetail" hidden>
+            <div class="peso-section-head">
+                <div><h3 id="cCompRef">—</h3><p class="peso-hint">Comparação · detalhe</p></div>
+                <span class="dmo-pill pending" id="cCompState">Pendente</span>
+            </div>
+            <h3 class="peso-section-title">Base aprovada</h3>
+            <div class="peso-context-grid" id="cCompBase"></div>
+            <h3 class="peso-section-title">Decisões por CM</h3>
+            <div class="dmo-table-wrap"><table class="dmo-table"><thead><tr><th>CM</th><th>Peso atual</th><th>Decisão</th></tr></thead><tbody id="cCompCmTable"></tbody></table></div>
+            <div class="peso-summary-3col" id="cCompCounters"></div>
+            <div class="dmo-field"><label>Justificação</label><textarea id="cCompJustification" rows="2" placeholder="Obrigatória quando pelo menos um CM é colocado de parte."></textarea></div>
+            <div class="peso-actions"><button class="dmo-button" id="confirmComparacao" disabled type="button">Confirmar decisões</button></div>
+        </div>
+    </section>
+
+    @* ======== HISTÓRICO ======== *@
+    <section class="peso-view" id="history">
+        <div class="dmo-page-head"><div><h2>Histórico</h2><p>Controlos já enviados para aprovação.</p></div></div>
+
+        <div class="peso-history-layout">
+            <!-- Calendar -->
+            <aside class="peso-approval-cal">
+                <section data-dmo-calendar
+                         data-month="@DateTime.Now.ToString("yyyy-MM")"
+                         data-record-dates="">
+                    <div class="dmo-calendar__head">
+                        <button type="button" class="dmo-icon-button dmo-calendar__btn" data-calendar-prev aria-label="Mês anterior">&lsaquo;</button>
+                        <strong data-calendar-label></strong>
+                        <button type="button" class="dmo-icon-button dmo-calendar__btn" data-calendar-next aria-label="Mês seguinte">&rsaquo;</button>
+                    </div>
+                    <div class="dmo-calendar__week">
+                        <span>SEG</span><span>TER</span><span>QUA</span><span>QUI</span><span>SEX</span><span>SÁB</span><span>DOM</span>
+                    </div>
+                    <div class="dmo-calendar__grid" data-calendar-grid></div>
+                    <button class="dmo-button peso-mt-sm" data-calendar-clear type="button">Mostrar todas as datas</button>
+                </section>
+                <div class="peso-history-selected-date" id="historySelectedDate">Nenhuma data selecionada</div>
+            </aside>
+
+            <!-- Filters + Table -->
+            <div>
+                <div class="dmo-card">
+                    <div class="peso-grid3 peso-grid5">
+                        <div class="dmo-field dmo-field--compact"><label>Pesquisar</label><input id="historySearch" placeholder="Referência, produção, lote ou máquina"></div>
+                        <div class="dmo-field"><label>Estado</label><select id="historyStatus"><option value="">Todos</option><option>Pendente</option><option>Aprovado</option><option>Não aprovado</option></select></div>
+                        <div class="dmo-field"><label>Tipo</label><select id="historyType"><option value="">Todos</option><option value="novo_controlo">Registo de peso</option><option value="comparacao">Comparação</option></select></div>
+                        <div class="dmo-field"><label>Desde</label><input type="date" id="historyFrom"></div>
+                        <div class="dmo-field"><label>Até</label><input type="date" id="historyTo"></div>
+                    </div>
+                    <div class="dmo-table-wrap">
+                        <table class="dmo-table select-table" id="historyTable">
+                            <thead><tr><th>Data</th><th>Referência</th><th>Produção</th><th>Máquina</th><th>Lote</th><th>Peso</th><th>Revisão</th><th>Estado</th></tr></thead>
+                            <tbody><tr><td colspan="8" class="empty">Nenhum controlo enviado para aprovação.</td></tr></tbody>
+                        </table>
+                    </div>
+                    <div class="peso-actions">
+                        <button class="dmo-button" id="generateDoc" disabled type="button">Gerar folha de produção</button>
+                        <button class="dmo-button" id="sendMail" disabled type="button">Enviar email para produção</button>
+                        <button class="dmo-button" id="btnFolhaControloHist" type="button">Controlo</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    @* ======== CONFIGURAÇÕES ======== *@
+    <section class="peso-view" id="settings">
+        <div class="peso-page">
+            <div class="dmo-card">
+                <div class="peso-section-head"><div><h2>Diretório principal dos relatórios</h2><p class="peso-hint">Os dados numéricos e o histórico ficam no servidor. Os PDFs aprovados são guardados neste computador.</p></div><button class="dmo-button" id="selectDir" type="button">Selecionar diretório principal</button></div>
+                <div class="peso-context-grid">
+                    <div><span>Estado local</span><strong id="localDirState">Por configurar</strong></div>
+                    <div><span>Diretório</span><strong id="localDirName">—</strong></div>
+                </div>
+                <p class="peso-hint">A autorização pertence a este browser/computador e pode ter de ser renovada. A subpasta é definida quando se cria o lote.</p>
+            </div>
+        </div>
+    </section>
+</main>
+
+<div class="dmo-modal-backdrop" id="sheet">
+    <div class="dmo-modal peso-sheet">
+        <div class="dmo-modal-head">
+            <div><h2>Folha de controlo</h2><p class="peso-hint">Controlo de peso selecionado</p></div>
+            <button class="dmo-button dmo-icon-button" data-close type="button" aria-label="Fechar">&times;</button>
+        </div>
+        <div class="dmo-modal-body">
+            <div class="peso-context-grid" id="sheetContext"></div>
+            <div class="dmo-table-wrap"><table class="dmo-table"><tbody id="sheetTable"></tbody></table></div>
+        </div>
+        <div class="dmo-modal-foot">
+            <button class="dmo-button" data-close type="button">Fechar</button>
+            <button class="dmo-button" data-sheet-generate type="button">Gerar folha</button>
+            <button class="dmo-button success" data-sheet-send type="button">Enviar para produção</button>
+        </div>
+    </div>
+</div>
+<div class="dmo-toast" role="status" id="toast"></div>
+<script src="~/scripts/peso.js" defer></script>

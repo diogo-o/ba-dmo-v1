@@ -1,0 +1,82 @@
+@page "/admin/templates/edit"
+@model BA.Dmo.Web.Pages.Admin.Templates.EditModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.AdminPolicies.AdminGerir)]
+@{
+    ViewData["Title"] = "Administração";
+}
+<partial name="_AdminNav" />
+<div class="dmo-page-head">
+    <div>
+        <h2>@(Model.IsNew ? "Criar template" : "Editar template")</h2>
+        <p>Apenas entradas do catálogo canónico; capabilities fora do módulo dono são rejeitadas.</p>
+    </div>
+    <a class="dmo-button" href="/admin/templates">Voltar à lista</a>
+</div>
+<div class="dmo-card">
+    <div class="dmo-modal-body">
+        @if (ViewData.ModelState.ErrorCount > 0)
+        {
+            <div asp-validation-summary="All" class="dmo-form-message"></div>
+        }
+        <form method="post">
+            @Html.AntiForgeryToken()
+            @if (Model.IsNew)
+            {
+                <div class="dmo-field">
+                    <label for="templateId">Identificador</label>
+                    <input id="templateId" name="templateId" type="text" required value="@Model.TemplateId" />
+                </div>
+            }
+            else
+            {
+                <input type="hidden" name="templateId" value="@Model.TemplateId" />
+                <input type="hidden" name="version" value="@Model.Version.ToString("O")" />
+            }
+            <div class="dmo-modal-grid">
+                <div class="dmo-field">
+                    <label for="name">Nome</label>
+                    <input id="name" name="name" type="text" required value="@Model.Name" />
+                </div>
+                <div class="dmo-field">
+                    <label for="active">Estado</label>
+                    <select id="active" name="active">
+                        <option value="true" selected="@Model.Active">Ativo</option>
+                        <option value="false" selected="@(!Model.Active)">Inativo</option>
+                    </select>
+                </div>
+            </div>
+            <div class="dmo-table-title">
+                <h3>Módulos e capabilities</h3>
+            </div>
+            <div class="dmo-table-wrap">
+                <table class="dmo-table">
+                    <thead>
+                        <tr>
+                            <th>Módulo</th>
+                            <th>Conceder</th>
+                            <th>Capabilities (separadas por vírgula)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var i = 0; i < Model.Lines.Count; i++)
+                        {
+                            <tr>
+                                <td>
+                                    @Model.Lines[i].DisplayName
+                                    <input type="hidden" name="lines[@i].ModuleId" value="@Model.Lines[i].ModuleId" />
+                                    <input type="hidden" name="lines[@i].DisplayName" value="@Model.Lines[i].DisplayName" />
+                                </td>
+                                <td><input type="checkbox" name="lines[@i].Granted" value="true" checked="@Model.Lines[i].Granted" /></td>
+                                <td><div class="dmo-field"><input type="text" name="lines[@i].Capabilities" value="@Model.Lines[i].Capabilities" placeholder="Ex.: jobon.view, jobon.edit" /></div></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="dmo-modal-foot">
+                <a class="dmo-button" href="/admin/templates">Cancelar</a>
+                <button type="submit" class="dmo-button"><span class="dmo-button__label">Guardar</span></button>
+            </div>
+        </form>
+    </div>
+</div>

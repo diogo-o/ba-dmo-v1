@@ -1,0 +1,234 @@
+/* ============================================================
+   Tampões — module layout (U-17)
+   Composition / layout ONLY (GLM-DSN-03, DESIGN_IMPLEMENTATION_CONTRACT §3.3).
+   Organizes tabs, mobile-first balance blocks and the inline action cards.
+   Does NOT redefine colour/radius/shadow/typography nor the canonical dmo-*
+   components — those live in the shared layer.
+   ============================================================ */
+
+.tampoes-page {
+  max-width: var(--dmo-page-max-width);
+  margin: 0 auto;
+  padding: var(--dmo-space-6) var(--dmo-page-gutter-desktop);
+}
+
+.tampoes-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dmo-space-6);
+  padding: 0 2px;
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+}
+.tampoes-tabs .tab {
+  background: none;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  padding: 12px 2px;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-md);
+  font-weight: var(--dmo-font-weight-extrabold);
+  line-height: 1;
+}
+.tampoes-tabs .tab.active {
+  color: var(--dmo-brand-600);
+  border-bottom-color: var(--dmo-brand-600);
+}
+.tampoes-tabs .tab.right {
+  margin-left: auto;
+}
+
+.tampoes-view {
+  display: none;
+}
+.tampoes-view.active {
+  display: block;
+}
+
+/* Filters / inline cards */
+.tampoes-filter-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--dmo-space-3);
+  align-items: end;
+  margin-bottom: var(--dmo-space-4);
+}
+
+.tampoes-action-row {
+  display: flex;
+  gap: var(--dmo-space-2);
+  align-items: center;
+}
+
+.tampoes-inline-card {
+  padding: var(--dmo-space-4);
+  margin-bottom: var(--dmo-space-4);
+  max-width: 960px;
+}
+
+.tampoes-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dmo-space-2);
+}
+
+/* Mobile-first balance blocks with dominant digits (brief §12). */
+.tampoes-saldos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--dmo-space-3);
+  margin: var(--dmo-space-4) 0;
+  max-width: 960px;
+}
+.tampoes-saldo-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--dmo-space-4);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-radius-card);
+  background: var(--dmo-surface-card);
+  text-align: center;
+}
+.saldo-label {
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-sm);
+}
+.saldo-value {
+  font-size: 2rem;
+  font-weight: var(--dmo-font-weight-extrabold);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.tampoes-numeric {
+  text-align: right;
+}
+
+.tampoes-compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--dmo-space-3);
+  align-items: end;
+}
+
+.tampoes-source-readonly {
+  color: var(--dmo-muted);
+  margin-bottom: var(--dmo-space-3);
+}
+
+#consultaTable tbody tr.selected,
+#planosTable tbody tr.selected {
+  background: var(--dmo-brand-100);
+}
+
+.tampoes-actions {
+  margin-top: var(--dmo-space-3);
+}
+
+.tampoes-detail {
+  margin-top: var(--dmo-space-4);
+  max-width: 720px;
+}
+
+/* ============================================================
+   Responsive / mobile (GLM-TP-10): no horizontal scroll; transform stacks.
+   ============================================================ */
+@media (max-width: 720px) {
+  .tampoes-page {
+    padding: var(--dmo-space-4) var(--dmo-page-gutter-mobile);
+  }
+  .tampoes-tabs {
+    gap: var(--dmo-space-4);
+  }
+  .tampoes-tabs .tab.right {
+    margin-left: 0;
+  }
+  .tampoes-compare {
+    grid-template-columns: 1fr;
+  }
+  .tampoes-action-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .tampoes-saldos .saldo-value {
+    font-size: 1.6rem;
+  }
+}
+
+/* ============================================================
+   Linhas e Máquinas — module layout
+   ============================================================ */
+
+.tampoes-lines-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--dmo-space-4);
+  margin-bottom: var(--dmo-space-4);
+}
+
+.tampoes-line-card {
+  padding: var(--dmo-space-4);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-radius-card);
+  background: var(--dmo-surface-card);
+}
+
+.tampoes-line-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--dmo-space-3);
+}
+
+.tampoes-line-machines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dmo-space-2);
+  margin-bottom: var(--dmo-space-3);
+}
+
+.tampoes-machine-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: var(--dmo-brand-100);
+  color: var(--dmo-brand-600);
+  border-radius: var(--dmo-radius-sm);
+  font-size: var(--dmo-font-size-sm);
+  font-weight: var(--dmo-font-weight-semibold);
+}
+
+.tampoes-machine-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--dmo-space-2) 0;
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+}
+
+.tampoes-machine-item:last-child {
+  border-bottom: none;
+}
+
+.tampoes-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--dmo-space-4);
+}
+
+.tampoes-comments-list {
+  margin-bottom: var(--dmo-space-3);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.tampoes-comment-item {
+  padding: var(--dmo-space-2) 0;
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+}
+
+.tampoes-comment-item:last-child {
+  border-bottom: none;
+}

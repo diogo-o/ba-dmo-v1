@@ -1,0 +1,281 @@
+@page "/admin/audit"
+@model BA.Dmo.Web.Pages.Admin.Audit.IndexModel
+@using System.Linq
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.AdminPolicies.AuditView)]
+@{
+    ViewData["Title"] = "Administração";
+
+    string PillForResult(string result) => result switch
+    {
+        "succeeded" => "dmo-pill active",
+        "corrected" => "dmo-pill",
+        _ => "dmo-pill rejected"
+    };
+
+    string LabelForResult(string result) => result switch
+    {
+        "succeeded" => "Sucesso",
+        "failed" => "Falha",
+        "denied" => "Negado",
+        "corrected" => "Corrigida",
+        _ => result
+    };
+}
+<partial name="_AdminNav" />
+<div class="dmo-page-head">
+    <div>
+        <h2>Auditoria de ações</h2>
+        <p>Histórico anual de ações executadas pelos utilizadores em todos os módulos.</p>
+    </div>
+    @* Export POSTs the current filter values (hidden mirror) to the Export
+       handler. Requires audit.export (re-checked server-side). *@
+    <form method="post" asp-page-handler="Export" class="audit-export-form">
+        <input type="hidden" name="year" value="@Model.Year" />
+        <input type="hidden" name="actor" value="@Model.Actor" />
+        <input type="hidden" name="module" value="@Model.Module" />
+        <input type="hidden" name="action" value="@Model.Action" />
+        <input type="hidden" name="result" value="@Model.Result" />
+        <input type="hidden" name="from" value="@Model.From" />
+        <input type="hidden" name="to" value="@Model.To" />
+        <input type="hidden" name="pageSize" value="@Model.PageSize" />
+        <button type="submit" class="dmo-button" title="Requer audit.export">Exportar registo anual</button>
+    </form>
+</div>
+@if (ViewData.ModelState.ErrorCount > 0)
+{
+    <div asp-validation-summary="All" class="dmo-form-message"></div>
+}
+<form method="get" class="audit-filters audit-filters--auto dmo-card">
+    <div class="dmo-field">
+        <label for="year">Ano</label>
+        <select id="year" name="year">
+            @foreach (var y in Model.Years)
+            {
+                <option value="@y" selected="@(Model.Year == y)">@y</option>
+            }
+            @if (Model.Year.HasValue && !Model.Years.Contains(Model.Year.Value))
+            {
+                <option value="@Model.Year" selected="true">@Model.Year</option>
+            }
+        </select>
+    </div>
+    @if (Model.Users.Count > 0)
+    {
+        <div class="dmo-field">
+            <label for="actor">Utilizador</label>
+            <select id="actor" name="actor">
+                <option value="">Todos</option>
+                @* Every internal_user carries an AuthUserId (auth_user_id is
+                   NOT NULL, enforced by migration N25), but the AdminUserRow
+                   type keeps it Guid? — so guard with a pattern match rather
+                   than dereference .Value unguarded. A row lacking an auth id
+                   is simply skipped (it cannot form a valid actor filter). *@
+                @foreach (var u in Model.Users)
+                {
+                    if (u.AuthUserId is not Guid auid)
+                    {
+                        continue;
+                    }
+                    <option value="@auid" selected="@(Model.Actor == auid.ToString())">@u.DisplayName</option>
+                }
+            </select>
+        </div>
+    }
+    else
+    {
+        <div class="dmo-field">
+            <label for="actor">Utilizador</label>
+            <input id="actor" name="actor" type="text" value="@Model.Actor" />
+        </div>
+    }
+    <div class="dmo-field">
+        <label for="module">Módulo</label>
+        <select id="module" name="module">
+            <option value="">Todos</option>
+            @foreach (var m in Model.Modules)
+            {
+                <option value="@m.ModuleId" selected="@(Model.Module == m.ModuleId)">@m.DisplayName</option>
+            }
+        </select>
+    </div>
+    <div class="dmo-field">
+        <label for="action">Ação</label>
+        <input id="action" name="action" type="text" value="@Model.Action" placeholder="Ex.: create, update" />
+    </div>
+    <div class="dmo-field">
+        <label for="result">Resultado</label>
+        <select id="result" name="result">
+            <option value="">Todos</option>
+            @foreach (var option in new[] { "succeeded", "failed", "denied", "corrected" })
+            {
+                <option value="@option" selected="@(Model.Result == option)">@LabelForResult(option)</option>
+            }
+        </select>
+    </div>
+    <div class="dmo-field">
+        <label for="from">Desde</label>
+        <input id="from" name="from" type="date" value="@Model.From" />
+    </div>
+    <div class="dmo-field">
+        <label for="to">Até</label>
+        <input id="to" name="to" type="date" value="@Model.To" />
+    </div>
+    <div class="dmo-field">
+        <label for="pageSize">Linhas</label>
+        <select id="pageSize" name="pageSize">
+            @foreach (var size in new[] { 20, 40, 60 })
+            {
+                <option value="@size" selected="@(Model.PageSize == size)">@size</option>
+            }
+        </select>
+    </div>
+    <a class="dmo-button" href="/admin/audit">Limpar</a>
+    <button type="submit" class="dmo-button">Filtrar</button>
+</form>
+@if (Model.Events is not null)
+{
+    var totalPages = Math.Max(1, (int)Math.Ceiling(Model.Events.TotalCount / (double)Model.Events.PageSize));
+    var query = $"year={Model.Year}&actor={Uri.EscapeDataString(Model.Actor ?? string.Empty)}&module={Uri.EscapeDataString(Model.Module ?? string.Empty)}&action={Uri.EscapeDataString(Model.Action ?? string.Empty)}&result={Uri.EscapeDataString(Model.Result ?? string.Empty)}&from={Uri.EscapeDataString(Model.From ?? string.Empty)}&to={Uri.EscapeDataString(Model.To ?? string.Empty)}&pageSize={Model.PageSize}";
+    <div class="dmo-card dmo-table-card">
+        <div class="dmo-table-title">
+            <div>
+                <h3>Registo de @(Model.Year ?? 0)</h3>
+                <p class="dmo-field__helper">Um clique seleciona; duplo clique abre o detalhe da ação.</p>
+            </div>
+            <span class="dmo-pill">@Model.Events.TotalCount ação(ões)</span>
+        </div>
+        <div class="dmo-table-wrap">
+            <table class="dmo-table">
+                <thead>
+                    <tr>
+                        <th>Data/hora</th>
+                        <th>Utilizador</th>
+                        <th>Módulo</th>
+                        <th>Ação</th>
+                        <th>Registo</th>
+                        <th>Resultado</th>
+                    </tr>
+                </thead>
+                <tbody id="auditRows" data-dmo-list>
+                    @if (Model.Events.Rows.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6" class="empty">
+                                Sem ações no período selecionado.
+                                <a href="/admin/audit">Limpar filtros</a>
+                            </td>
+                        </tr>
+                    }
+                    @foreach (var row in Model.Events.Rows)
+                    {
+                        <tr data-dmo-row
+                            data-id="@row.EntityId"
+                            data-actor="@(row.ActorNameSnapshot ?? row.ActorUserId)"
+                            data-module="@row.ModuleId"
+                            data-action="@row.ActionCode"
+                            data-result="@LabelForResult(row.Result)"
+                            data-entity="@(row.EntityType) · @(row.EntityId)"
+                            data-ref="@(row.EntityLabelSnapshot ?? row.EntityId)"
+                            data-time="@row.OccurredAtUtc.UtcDateTime.ToString("dd/MM/yyyy · HH:mm")"
+                            aria-selected="false">
+                            <td>@row.OccurredAtUtc.UtcDateTime.ToString("dd/MM/yyyy · HH:mm")</td>
+                            <td>@(row.ActorNameSnapshot ?? row.ActorUserId ?? "—")</td>
+                            <td>@row.ModuleId</td>
+                            <td>@row.ActionCode</td>
+                            <td>@row.EntityType · @row.EntityId</td>
+                            <td><span class="@PillForResult(row.Result)">@LabelForResult(row.Result)</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="dmo-pagination">
+            <span>@Model.Events.TotalCount ação(ões) · Página @Model.Events.Page de @totalPages</span>
+            @if (Model.Events.Page > 1)
+            {
+                <a class="dmo-button dmo-icon-button" href="/admin/audit?@query&p=@(Model.Events.Page - 1)" aria-label="Página anterior">‹</a>
+            }
+            else
+            {
+                <button class="dmo-button dmo-icon-button" disabled aria-label="Página anterior">‹</button>
+            }
+            <span class="dmo-field__helper">@Model.Events.Page / @totalPages</span>
+            @if (Model.Events.Page * Model.Events.PageSize < Model.Events.TotalCount)
+            {
+                <a class="dmo-button dmo-icon-button" href="/admin/audit?@query&p=@(Model.Events.Page + 1)" aria-label="Página seguinte">›</a>
+            }
+            else
+            {
+                <button class="dmo-button dmo-icon-button" disabled aria-label="Página seguinte">›</button>
+            }
+        </div>
+    </div>
+    <div class="dmo-card audit-detail" data-dmo-detail-for="auditRows">
+        <div class="dmo-table-title">
+            <h3>Detalhe do evento selecionado</h3>
+            <span class="dmo-pill">Registo imutável</span>
+        </div>
+        <div class="audit-detail-grid" id="auditDetailGrid"></div>
+    </div>
+}
+<script>
+    (function () {
+        // Fills the detail card from the selected row's data-* payload.
+        // Works via the shared selection event (dmo:list-select) AND via
+        // direct row listeners, so the detail survives either wiring.
+        var card = document.querySelector('[data-dmo-detail-for="auditRows"]');
+        var tbody = document.getElementById('auditRows');
+        if (!card || !tbody) return;
+        var grid = card.querySelector('.audit-detail-grid');
+
+        var pairs = [
+            ['Utilizador', 'actor'],
+            ['Módulo', 'module'],
+            ['Ação', 'action'],
+            ['Resultado', 'result'],
+            ['Entidade', 'entity'],
+            ['Referência', 'ref'],
+            ['Data/hora', 'time']
+        ];
+
+        function fill(row) {
+            grid.textContent = '';
+            pairs.forEach(function (p) {
+                var value = row.dataset[p[1]];
+                if (!value) return;
+                var cell = document.createElement('div');
+                var label = document.createElement('span');
+                label.textContent = p[0];
+                var valueEl = document.createElement('strong');
+                valueEl.textContent = value;
+                cell.appendChild(label);
+                cell.appendChild(valueEl);
+                grid.appendChild(cell);
+            });
+        }
+
+        function select(row) {
+            tbody.querySelectorAll('[data-dmo-row]').forEach(function (r) {
+                var is = r === row;
+                r.classList.toggle('selected', is);
+                r.setAttribute('aria-selected', is ? 'true' : 'false');
+            });
+            if (row) fill(row);
+        }
+
+        card.addEventListener('dmo:list-select', function (e) {
+            if (e.detail && e.detail.row) select(e.detail.row);
+        });
+        tbody.addEventListener('click', function (e) {
+            var row = e.target.closest('[data-dmo-row]');
+            if (row) select(row);
+        });
+        tbody.addEventListener('dblclick', function (e) {
+            var row = e.target.closest('[data-dmo-row]');
+            if (row) select(row);
+        });
+
+        var first = tbody.querySelector('[data-dmo-row]');
+        if (first) select(first);
+    })();
+</script>

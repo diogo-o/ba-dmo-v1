@@ -1,0 +1,99 @@
+@page "/pegamentos/{id:guid}"
+@model BA.Dmo.Web.Pages.Pegamentos.DetailModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.ModulePolicies.Pegamentos)]
+@{
+    ViewData["Title"] = "Folha de Pegamentos";
+}
+<link rel="stylesheet" href="~/styles/modules/pegamentos-layout.css" />
+
+<main data-testid="page-pegamentos-detail" class="pegamentos-page">
+    <input type="hidden" id="controloId" value="@Model.ControloId">
+
+    <div class="dmo-page-head">
+        <div>
+            <h2>Folha de Pegamentos</h2>
+            <p id="sheetSubtitle"></p>
+        </div>
+        <span class="dmo-pill pending" id="statusPill">Aberto</span>
+    </div>
+
+    @* Historical inherited context *@
+    <div class="dmo-card">
+        <div class="pegamentos-section-head"><h3>Contexto de produção</h3></div>
+        <div class="pegamentos-context-grid">
+            <div><span>Referência</span><strong data-node="ctxReferencia">—</strong></div>
+            <div><span>Produção</span><strong data-node="ctxProducao">—</strong></div>
+            <div><span>Máquina</span><strong data-node="ctxMaquina">—</strong></div>
+            <div><span>CM</span><strong data-node="ctxCm">—</strong></div>
+            <div><span>BQ</span><strong data-node="ctxBq">—</strong></div>
+            <div><span>MF</span><strong data-node="ctxMf">—</strong></div>
+        </div>
+    </div>
+
+    @* Component summary + measurement entry *@
+    <div class="dmo-card">
+        <div class="pegamentos-section-head">
+            <div><h3>Medições</h3><p>Adicione medições por componente. Ovalização e média são calculadas no servidor.</p></div>
+        </div>
+
+        <div class="dmo-field">
+            <label>Tolerância (± mm)</label>
+            <input type="number" id="tolerance" step="0.01" min="0">
+        </div>
+
+        <div class="dmo-table-wrap">
+            <table class="dmo-table">
+                <thead>
+                    <tr>
+                        <th>N.º</th>
+                        <th>Componente</th>
+                        <th>COSTURA</th>
+                        <th>CONTRA COSTURA</th>
+                        <th>OVALIZAÇÃO</th>
+                        <th>MÉDIA</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody data-dmo-list id="measureTable">
+                    <tr><td colspan="7" class="empty">Sem medições registadas.</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pegamentos-add-row">
+            <div class="dmo-field"><label>Componente</label><select id="mtComponent"><option value="CM">CM</option><option value="BQ">BQ</option><option value="MF">MF</option></select></div>
+            <div class="dmo-field dmo-field--compact"><label>N.º</label><input type="number" id="mtTool" min="1" step="1"></div>
+            <div class="dmo-field dmo-field--compact"><label>Costura (mm)</label><input type="number" id="mtCostura" step="0.01"></div>
+            <div class="dmo-field dmo-field--compact"><label>Contra costura (mm)</label><input type="number" id="mtContra" step="0.01"></div>
+            <button class="dmo-button" id="btnAddMeasurement" type="button">Adicionar medição</button>
+        </div>
+    </div>
+
+    @* Notes *@
+    <div class="dmo-card">
+        <div class="pegamentos-section-head"><h3>Notas</h3></div>
+        <div class="dmo-field">
+            <label>Notas</label>
+            <textarea id="notas" rows="3"></textarea>
+        </div>
+    </div>
+
+    @* Workflow / PDF actions *@
+    <div class="dmo-card">
+        <div class="pegamentos-section-head">
+            <div><h3>Documento</h3><p class="pegamentos-hint">O PDF é gerado no servidor e guardado localmente neste computador. Mostra-se separadamente o estado no servidor e o estado de gravação local.</p></div>
+        </div>
+        <div class="pegamentos-doc-status">
+            <div><span>Dados guardados no servidor</span><strong data-node="serverStatus">—</strong></div>
+            <div><span>PDF guardado localmente</span><strong id="localStatus">—</strong></div>
+        </div>
+        <div class="pegamentos-actions">
+            <button class="dmo-button" id="btnSave" type="button">Guardar</button>
+            <button class="dmo-button" id="btnGeneratePdf" type="button">Guardar PDF</button>
+            <button class="dmo-button success" id="btnClose" type="button">Fechar folha</button>
+        </div>
+    </div>
+</main>
+
+<div class="dmo-toast" role="status" id="toast"></div>
+<script src="~/scripts/pegamentos.js" defer></script>

@@ -1,0 +1,107 @@
+@page "/controlo"
+@model BA.Dmo.Web.Pages.Controlo.IndexModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.ModulePolicies.Peso)]
+@{
+    ViewData["Title"] = "Controlo";
+}
+@if (Model.CanEdit) { <input type="hidden" id="canEdit" value="1" /> }
+@if (Model.CanSubmit) { <input type="hidden" id="canSubmit" value="1" /> }
+@if (Model.CanReview) { <input type="hidden" id="canReview" value="1" /> }
+
+<main data-testid="page-controlo" class="controlo-page">
+
+    <div class="dmo-page-head">
+        <div>
+            <h2>Controlo</h2>
+            <p>Workspace de controlo da produção. Consome o Job On atual (universal landing) — sem segundo calendário.</p>
+        </div>
+        <div class="dmo-row-actions">
+            <button class="dmo-button" id="btnCarregarJobOn" type="button">Carregar Job On atual</button>
+        </div>
+    </div>
+
+    @* ===== Active production card (workspace context switch) ===== *@
+    <div class="dmo-card controlo-active-card" id="activeCard" hidden>
+        <div class="controlo-active-card-body">
+            <div class="controlo-card-title">Produção ativa</div>
+            <div class="controlo-card-line" id="cardDisplay">—</div>
+            <div class="controlo-card-sub" id="cardSub">—</div>
+            <div class="controlo-card-actions">
+                <span class="controlo-hint" id="cardHint">Clique para soltar a produção · Duplo clique para limpar a seleção.</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="dmo-empty-state" id="controloEmpty" hidden>Nenhum Job On selecionado. Carregue o Job On atual ou abra uma produção no calendário do Job On.</div>
+    <div class="dmo-empty-state" id="controloLoading" hidden>A carregar…</div>
+    <div class="dmo-empty-state" id="controloError" hidden></div>
+
+    @* ===== Workspace tabs (shared active context) ===== *@
+    <nav class="controlo-tabs" aria-label="Navegação Controlo" id="workTabs" hidden>
+        <button class="tab active" data-tab="resumo" type="button">Resumo</button>
+        <button class="tab" data-tab="peso" type="button">Peso</button>
+        <button class="tab" data-tab="comparacao" type="button">Comparação</button>
+        <button class="tab" data-tab="pegamentos" type="button">Pegamentos</button>
+        <button class="tab" data-tab="historico" type="button">Histórico</button>
+    </nav>
+
+    @* ===== Resumo tab ===== *@
+    <section class="controlo-tab-view active" id="view-resumo">
+        <div class="dmo-card controlo-context" hidden id="controloContext">
+            <div class="controlo-context-grid">
+                <div><span>Produção</span><strong data-ctx-producao>—</strong></div>
+                <div><span>Referência</span><strong data-ctx-referencia>—</strong></div>
+                <div><span>Máquina</span><strong data-ctx-maquina>—</strong></div>
+                <div><span>Estado</span><strong data-ctx-estado>—</strong></div>
+            </div>
+        </div>
+        <div class="dmo-empty-state" id="resumoNeedsContext" hidden>Carregue um Job On atual para criar/abrir o Resumo desta produção.</div>
+        <div class="dmo-card controlo-items-card" id="controloItemsCard" hidden>
+            <div class="dmo-section-head"><div><h3>Componentes / ferramentas da produção</h3><p class="controlo-hint">Resultado, observação e ligação MCaliper por componente (MCaliper preenchido manualmente).</p></div></div>
+            <div class="dmo-table-wrap">
+                <table class="dmo-table" id="controloItems">
+                    <thead><tr><th>Família</th><th>Referência</th><th>Lote</th><th>Nome técnico</th><th>Resultado</th><th>Observação</th><th>Ligação MCaliper</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="dmo-row-actions" id="controloActions"></div>
+        </div>
+        <div class="dmo-card controlo-history-card" id="controloHistoryCard" hidden>
+            <div class="dmo-section-head"><div><h3>Histórico do resumo</h3></div></div>
+            <div class="dmo-table-wrap">
+                <table class="dmo-table" id="controloHistory">
+                    <thead><tr><th>Data</th><th>Evento</th><th>Ator</th><th>Nota</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    @* ===== Peso / Comparação / Pegamentos tabs (reuse existing module UIs) ===== *@
+    <section class="controlo-tab-view" id="view-peso" hidden>
+        <div class="dmo-card"><div class="dmo-empty-state" id="pesoNeedsContext" hidden>Sem produção ativa. Os registos de Peso associados a esta produção aparecem aqui.</div><div id="pesoContent" class="controlo-tab-embed"></div></div>
+        <div class="controlo-tab-note">O Peso opera sob o contexto da produção ativa. Abre a página de Peso desta produção.</div>
+        <div class="dmo-row-actions"><button class="dmo-button" id="btnOpenPeso" type="button" hidden>Abrir Peso desta produção</button></div>
+    </section>
+    <section class="controlo-tab-view" id="view-comparacao" hidden>
+        <div class="dmo-card"><div class="dmo-empty-state" id="comparacaoNeedsContext" hidden>Sem produção ativa. A Comparação de Peso usa o contexto da produção ativa.</div></div>
+        <div class="dmo-row-actions"><button class="dmo-button" id="btnOpenComparacao" type="button" hidden>Abrir Comparação</button></div>
+    </section>
+    <section class="controlo-tab-view" id="view-pegamentos" hidden>
+        <div class="dmo-card"><div class="dmo-empty-state" id="pegamentosNeedsContext" hidden>Sem produção ativa. A folha de Pegamentos associa-se à produção ativa.</div></div>
+        <div class="dmo-row-actions"><button class="dmo-button" id="btnOpenPegamentos" type="button" hidden>Abrir Pegamentos desta produção</button></div>
+    </section>
+
+    @* ===== Histórico tab ===== *@
+    <section class="controlo-tab-view" id="view-historico" hidden>
+        <div class="dmo-card controlo-history-card" id="historyCard">
+            <div class="dmo-section-head"><div><h3>Histórico de Controlo</h3><p class="controlo-hint">Folhas de controlo (Resumos) já criadas.</p></div></div>
+            <div class="dmo-table-wrap"><table class="dmo-table" id="controloHistoryTable"><thead><tr><th>Data</th><th>Produção</th><th>Referência</th><th>Máquina</th><th>Estado</th></tr></thead><tbody></tbody></table></div>
+            <div class="dmo-empty-state" id="historyEmpty" hidden>Sem folhas de controlo.</div>
+        </div>
+    </section>
+
+</main>
+
+<div class="dmo-toast" role="status" id="toast"></div>
+<script src="~/scripts/controlo.js" defer></script>

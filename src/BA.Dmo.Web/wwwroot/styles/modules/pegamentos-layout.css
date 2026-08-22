@@ -1,0 +1,170 @@
+/* ============================================================
+   Pegamentos — module layout (U-11)
+   Composition / layout ONLY (GLM-DSN-03, DESIGN_IMPLEMENTATION_CONTRACT §3.3).
+   Organizes grid, order, widths and reveals for the Pegamentos surface.
+   Does NOT redefine colour/radius/shadow/typography nor the canonical
+   dmo-* components (button/field/card/pill/table) — those live in the
+   shared layer.
+   ============================================================ */
+
+.pegamentos-page {
+  max-width: var(--dmo-page-max-width);
+  margin: 0 auto;
+  padding: var(--dmo-space-6) var(--dmo-page-gutter-desktop);
+}
+
+.pegamentos-tabs {
+  display: flex;
+  gap: var(--dmo-space-6);
+  padding: 0 2px;
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+}
+.pegamentos-tabs .tab {
+  background: none;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  padding: 12px 2px;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-md);
+  font-weight: var(--dmo-font-weight-extrabold);
+  line-height: 1;
+}
+.pegamentos-tabs .tab.active {
+  color: var(--dmo-brand-600);
+  border-bottom-color: var(--dmo-brand-600);
+}
+
+.pegamentos-view {
+  display: none;
+}
+.pegamentos-view.active {
+  display: block;
+}
+
+.pegamentos-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dmo-space-3);
+  margin-bottom: var(--dmo-space-3);
+}
+.pegamentos-section-head h3 {
+  margin: 0;
+  font-size: var(--dmo-font-size-lg);
+}
+
+.pegamentos-filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.5fr) 130px 90px 130px 130px auto;
+  gap: var(--dmo-space-2);
+  align-items: end;
+  margin-bottom: var(--dmo-space-3);
+  padding: var(--dmo-space-3);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-radius-control);
+  background: var(--dmo-surface-subtle);
+}
+.pegamentos-filters > .dmo-button {
+  min-height: var(--dmo-control-height);
+}
+
+.pegamentos-context-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--dmo-space-3);
+  margin-top: var(--dmo-space-3);
+}
+.pegamentos-context-grid > div {
+  padding: 9px 10px;
+  border-left: 3px solid var(--dmo-border);
+  border-radius: var(--dmo-radius-control);
+  background: var(--dmo-surface-subtle);
+}
+.pegamentos-context-grid span {
+  display: block;
+  color: var(--dmo-text-muted);
+  font-size: var(--dmo-font-size-xs);
+  text-transform: uppercase;
+}
+.pegamentos-context-grid strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--dmo-text);
+  font-weight: var(--dmo-font-weight-extrabold);
+}
+
+.pegamentos-blocking {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dmo-space-2);
+  margin-top: var(--dmo-space-3);
+  padding: var(--dmo-space-3);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-radius-card);
+  background: var(--dmo-surface-card);
+}
+
+.pegamentos-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--dmo-space-2);
+  margin-top: var(--dmo-space-3);
+}
+
+.pegamentos-hint {
+  color: var(--dmo-text-muted);
+  font-size: var(--dmo-font-size-sm);
+}
+
+.pegamentos-add-row {
+  display: grid;
+  grid-template-columns: 110px 80px 130px 150px auto;
+  gap: var(--dmo-space-2);
+  align-items: end;
+  margin-top: var(--dmo-space-3);
+  padding: var(--dmo-space-3);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-radius-control);
+  background: var(--dmo-surface-subtle);
+}
+
+.pegamentos-doc-status {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--dmo-space-3);
+}
+.pegamentos-doc-status > div {
+  padding: 9px 10px;
+  border-radius: var(--dmo-radius-control);
+  background: var(--dmo-surface-subtle);
+}
+.pegamentos-doc-status span {
+  display: block;
+  color: var(--dmo-text-muted);
+  font-size: var(--dmo-font-size-xs);
+  text-transform: uppercase;
+}
+.pegamentos-doc-status strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--dmo-text);
+}
+
+@media (max-width: 1100px) {
+  .pegamentos-filters {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .pegamentos-page {
+    padding: var(--dmo-space-4) var(--dmo-page-gutter-mobile);
+  }
+  .pegamentos-filters,
+  .pegamentos-context-grid,
+  .pegamentos-add-row,
+  .pegamentos-doc-status {
+    grid-template-columns: 1fr;
+  }
+}

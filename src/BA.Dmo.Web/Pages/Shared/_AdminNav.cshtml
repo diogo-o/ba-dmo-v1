@@ -1,0 +1,13 @@
+@{
+    // Admin sub-navigation (reference admin-nav composition, owner override):
+    // exactly three areas — Utilizadores, Aplicações, Auditoria. The Templates
+    // tab and the "Voltar ao Job On" link are removed by owner decision (the
+    // /admin/templates routes stay reachable; /jobon stays denied for Pure
+    // Admin). Links only — authorization stays server-side (GLM-ACC-04).
+    var path = Context.Request.Path.Value ?? string.Empty;
+}
+<nav class="admin-nav" aria-label="Administração">
+    <a href="/admin/users" class="@(path.StartsWith("/admin/users", StringComparison.Ordinal) ? "active" : null)">Utilizadores</a>
+    <a href="/admin/applications" class="@(path.StartsWith("/admin/applications", StringComparison.Ordinal) ? "active" : null)">Aplicações</a>
+    <a href="/admin/audit" class="@(path.StartsWith("/admin/audit", StringComparison.Ordinal) ? "active" : null)">Auditoria</a>
+</nav>

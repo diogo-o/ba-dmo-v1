@@ -1,0 +1,62 @@
+@{
+    // Single application frame (Plan-V3 GLM-SHL-01/02). Identity and tabs are
+    // DERIVED server-side from the resolved grants (GLM-SHL-03) — nothing here
+    // trusts the client. Visual foundation (U-08): dmo-design-system styles,
+    // canonical load order tokens → foundation → components → layout →
+    // utilities (contract §3.2); no page-local design CSS.
+    var title = ViewData["Title"] is string pageTitle && pageTitle.Length > 0
+        ? $"BA DMO — {pageTitle}"
+        : "BA DMO";
+
+    // Deep-link feedback (05_SHL §5): after a server-side denial the shell
+    // lands on an authorized area with a FIXED message; the query flag only
+    // selects the message — it grants nothing.
+    var accessDeniedFeedback = Context.Request.Query.ContainsKey("acesso-negado");
+
+    // Page-level gating data attributes for CSS-only reveal/hide of
+    // responsible-only / edit-only elements (R008).  Pages that need
+    // these must populate the corresponding ViewData keys; when absent
+    // the default assumes the authenticated user has edit capability.
+    var canEdit = ViewData["can-edit"]?.ToString()?.ToLower() ?? "true";
+    var canConfirm = ViewData["can-confirm-verifications"]?.ToString()?.ToLower() ?? "true";
+
+    // Admin scope (ADMIN_IMPLEMENTATION_CONTRACT §1): any route under /admin.
+    // Null-safe — Request.Path is never null on a request. Drives the header
+    // brand (Portal DMO / Administração), the body class and the narrower
+    // content wrapper. Authorization stays server-side per page.
+    var adminScope = Context.Request.Path.StartsWithSegments("/admin");
+    ViewData["AdminScope"] = adminScope;
+}
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@title</title>
+    <link rel="stylesheet" href="~/styles/dmo-tokens.css" />
+    <link rel="stylesheet" href="~/styles/dmo-foundation.css" />
+    <link rel="stylesheet" href="~/styles/dmo-components.css" />
+    <link rel="stylesheet" href="~/styles/dmo-layout.css" />
+    <link rel="stylesheet" href="~/styles/dmo-utilities.css" />
+    <link rel="stylesheet" href="~/styles/modules/admin-layout.css" />
+</head>
+<body data-can-edit-jobon="@canEdit" data-can-confirm-verifications="@canConfirm" class="@(adminScope ? "admin-scope" : null)">
+    <partial name="_Header" />
+    <partial name="_Navigation" />
+    <main class="app-work-area@(adminScope ? " admin-work-area" : "")">
+        @if (accessDeniedFeedback)
+        {
+            <p role="status" data-testid="shell-feedback">
+                Não tem acesso a esta área. Foi encaminhado para uma área autorizada.
+            </p>
+        }
+        @RenderBody()
+    </main>
+    @* Canonical interaction contract: click selects / double click opens;
+       list events; password reveal (dmo-interactions.js) + the single
+       canonical calendar behavior (dmo-calendar.js, U-09). No domain
+       logic lives in these scripts. *@
+    <script src="~/scripts/dmo-interactions.js" defer></script>
+    <script src="~/scripts/dmo-calendar.js" defer></script>
+</body>
+</html>

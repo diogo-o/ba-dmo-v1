@@ -1,0 +1,225 @@
+/* ============================================================
+   BA DMO — dmo-tokens.css (U-08)
+   The SINGLE source of visual values. Values are transcribed
+   from the Design-Reference, not derived from summaries:
+   - portal-dmo-design-final/dmo-design-system.css (canonical CSS)
+   - portal-dmo-design-final docs DMO_DESIGN_SYSTEM v2.7 +
+     DESIGN_IMPLEMENTATION_CONTRACT (P0 closures where the CSS is
+     silent: typography scale, layers, gutters, border widths)
+   Load order (contract §3.2): tokens → foundation → components →
+   layout → utilities → module composition.
+   ============================================================ */
+
+:root {
+  /* ---------- Brand scale (reference dmo-design-system.css :root) ---------- */
+  --dmo-brand-950: #0f1d2a;
+  --dmo-brand-900: #193046;
+  --dmo-brand-800: #234463;
+  --dmo-brand-700: #315d88;
+  --dmo-brand-600: #3c73a8;
+  --dmo-brand-500: #568dc3;
+  --dmo-brand-300: #98b9da;
+  --dmo-brand-200: #bdd3e8;
+  --dmo-brand-100: #d9e6f2;
+  --dmo-brand-050: #e8eff7;
+
+  /* ---------- Surfaces / text (reference :root names + aliases) ---------- */
+  --dmo-page: #f6f9fc;
+  --dmo-card: #ffffff;
+  --dmo-subtle: #f1f6fa;
+  --dmo-surface-page: var(--dmo-page);
+  --dmo-surface-card: var(--dmo-card);
+  --dmo-surface-subtle: var(--dmo-subtle);
+  --dmo-border: #d9e6f2;
+  --dmo-text: #172d42;
+  --dmo-muted: #64778a;
+  --dmo-text-muted: var(--dmo-muted);
+  --dmo-text-on-color: #ffffff;
+  --dmo-disabled: #cbd5df;
+  /* Reference pill.inactive surface (admin.css pattern). */
+  --dmo-surface-inactive: #eef1f4;
+  /* Reference pill.record-type pair (exact). */
+  --dmo-pill-record-type-bg: #edf2f6;
+  --dmo-pill-record-type-text: #536b80;
+  /* Reference .dmo-pill.approved text color — distinct from --dmo-success
+     in the reference (exact transcription). */
+  --dmo-pill-approved-text: #3f7765;
+
+  /* ---------- Semantic states — Design-Reference values, exact ----------
+     Owner instruction (U-08 correction pass): the Design-Reference is
+     followed 100%; these are the reference dmo-design-system.css values
+     with no substitution. (An earlier AA-adjusted variant was reverted on
+     that instruction; the automated guard now locks these exact values.) */
+  --dmo-success: #527c72;
+  --dmo-success-soft: #e5f0eb;
+  --dmo-warning: #a97943;
+  --dmo-warning-soft: #f7f0e7;
+  --dmo-danger: #9a625d;
+  --dmo-danger-soft: #f3e9e7;
+  --dmo-pending: #315d88;
+  --dmo-pending-soft: #e7eef5;
+  --dmo-info: #315d88;
+  --dmo-info-soft: #e7eef5;
+
+  /* ---------- Production lines — deterministic machine/line mapping (R011) ----------
+     Owner rule (Universal Landing calendar + production list): each of the six lines
+     B1..C3 receives ONE stable visual color. The color identifies the MACHINE/LINE,
+     NEVER a semantic status (error/NOK/warning/approval). These are PLACEHOLDER values
+     for the later dedicated CSS/visual pass — the mapping (line -> token) is fixed and
+     deterministic now; only the exact hues are refined later. */
+  --dmo-line-b1: #3c73a8;   /* B1 — brand blue (placeholder) */
+  --dmo-line-b2: #527c72;   /* B2 — green   (placeholder) */
+  --dmo-line-b3: #a97943;   /* B3 — amber   (placeholder) */
+  --dmo-line-c1: #9a625d;   /* C1 — red     (placeholder) */
+  --dmo-line-c2: #7a5c9a;   /* C2 — purple  (placeholder) */
+  --dmo-line-c3: #4f7a9a;   /* C3 — teal    (placeholder) */
+
+  /* ---------- Radius (reference CSS exact values) ---------- */
+  --dmo-r-control: 8px;
+  --dmo-r-card: 12px;
+  --dmo-r-modal: 16px;
+  --dmo-radius-control: var(--dmo-r-control);
+  --dmo-radius-card: var(--dmo-r-card);
+  --dmo-radius-modal: var(--dmo-r-modal);
+  --dmo-radius-sm: 6px;     /* small elements (chips, mini inputs, table cells) */
+  --dmo-radius-pill: 999px;
+  /* Surfaces below the reference card radius (reference exact):
+     table-wrap 10px, calendar day 7px, toast/notice 9px. */
+  --dmo-r-table: 10px;
+  --dmo-r-calendar-day: 7px;
+  --dmo-r-toast: 9px;
+
+  /* ---------- Sizing (reference CSS + GLM-DSN-01 P0-4 button API) ---------- */
+  --dmo-control-height: 40px;
+  --dmo-control-height-compact: 34px;
+  --dmo-button-height: 36px;          /* reference .dmo-button min-height */
+  --dmo-button-height-compact: 34px;  /* P0-4 compact */
+  --dmo-button-height-form: 40px;     /* filter-row child rule (reference) */
+  --dmo-pagination-size: 36px;        /* reference pager rule */
+  --dmo-icon-button-size: 36px;       /* reference .dmo-icon-button */
+  --dmo-row-action-height: 30px;      /* reference admin row-actions */
+  --dmo-touch-target: 44px;           /* P0-4 */
+  --dmo-row-height: 44px;             /* DMO §13 rows 40–46 */
+  --dmo-header-height: 76px;
+  --dmo-admin-header-height: 72px; /* reference admin-header (admin.html) */
+  --dmo-admin-nav-height: 50px;    /* reference admin-nav (admin.html) */
+  --dmo-tabs-height: 52px;
+  --dmo-sidebar-width: 276px;
+  --dmo-sidebar-width-compact: 235px; /* reference sidebar at ≤980px */
+  --dmo-logo-size: 44px;
+  --dmo-logo-size-mobile: 38px;       /* reference header @600px */
+  --dmo-calendar-day-min: 38px;       /* reference calendar day */
+  --dmo-modal-width: 560px;           /* reference .dmo-modal min(560px,100%) */
+  --dmo-modal-max-height: 90vh;
+  --dmo-menu-min-width: 200px;
+  --dmo-menu-max-height: 320px;
+  --dmo-tooltip-max-width: 260px;
+  --dmo-toast-min-width: 240px;
+  --dmo-search-min-width: 240px;
+  --dmo-form-column-min: 180px;
+  --dmo-page-max-width: 1600px;       /* GLM-DSN-01 P0-3 */
+  --dmo-admin-main-max-width: 1280px; /* reference admin-main */
+  --dmo-login-shell-width: 1120px;    /* reference login-shell */
+  --dmo-login-shell-min-height: 650px;
+  --dmo-login-form-width: 410px;
+
+  /* ---------- Spacing (reference :root scale) ---------- */
+  --dmo-space-1: 4px;
+  --dmo-space-2: 8px;
+  --dmo-space-3: 12px;
+  --dmo-space-4: 16px;
+  --dmo-space-5: 20px;
+  --dmo-space-6: 24px;
+  --dmo-space-8: 32px;
+  /* Reference component paddings not on the scale (exact values):
+     button 7px 12px; field control 9px 11px; label margin 6px;
+     modal head/foot 18px 20px; modal body 20px; table cell 11px 12px;
+     header padding 10px 28px; header gap 13px; toast 11px 15px at 22px;
+     page gutters 28/16/12 (P0-3). */
+  --dmo-page-gutter-desktop: 28px;
+  --dmo-page-gutter-tablet: 16px;
+  --dmo-page-gutter-mobile: 12px;
+
+  /* ---------- Shadows (reference exact) ---------- */
+  --dmo-shadow: 0 8px 24px rgba(25, 48, 70, .06);
+  --dmo-shadow-card: var(--dmo-shadow);
+  --dmo-shadow-menu: 0 10px 24px rgba(15, 29, 42, .22);
+  --dmo-shadow-modal: 0 25px 70px rgba(15, 29, 42, .35);
+
+  /* ---------- Borders & focus (reference CSS exact) ---------- */
+  --dmo-border-width: 1px;
+  --dmo-border-width-strong: 2px;   /* GLM-DSN-01 P0-6 */
+  /* Reference field focus halo (exact): 3px rgba(60,115,168,.13).
+     Reference list-row focus outline (exact): 3px rgba(60,115,168,.2). */
+  --dmo-focus-halo: 0 0 0 3px rgba(60, 115, 168, .13);
+  --dmo-row-focus-ring: 3px solid rgba(60, 115, 168, .2);
+  /* Reference modal backdrop veil (exact, darker than docs): */
+  --dmo-overlay-veil: rgba(15, 29, 42, .68);
+  /* Reference login identity gradient end color (exact): */
+  --dmo-login-gradient-end: #c7d9eb;
+
+  /* ---------- Contextual sidebar (reference boquilhas sidebar +
+     DMO §20; one-off reference values transcribed as tokens) ---------- */
+  --dmo-sidebar-gradient: linear-gradient(180deg, var(--dmo-brand-900), var(--dmo-brand-950));
+  --dmo-sidebar-card-bg: rgba(255, 255, 255, .05);   /* reference #ffffff0c */
+  --dmo-sidebar-card-border: rgba(255, 255, 255, .08); /* reference #ffffff13 */
+  --dmo-sidebar-muted: #a6c3df;                        /* reference side-head p */
+  /* Boquilhas line-card states (reference boquilhas.html exact):
+     production tint reuses brand tokens (#234463 == brand-800; border
+     #3c74a9 vs brand-600 #3c73a8 = 1/255 blue MINOR_DELTA, token wins). */
+  --dmo-sidebar-production-bg: var(--dmo-brand-800);
+  --dmo-sidebar-job: #ffffff;          /* reference job-reference white */
+  --dmo-sidebar-job-underline: #8eb5d9; /* reference job-reference border */
+  --dmo-sidebar-ref: #c5d9ec;          /* reference machine-ref */
+  --dmo-sidebar-meta: #aac6e1;         /* reference machine-meta */
+  /* Alert line state (reference .machine.alert exact) — reserved: the
+     production-context API returns one card per line, so the dual-reference
+     alert has no data source yet (W7A delta D3; tokens kept for the rule). */
+  --dmo-sidebar-alert-bg: #4a3528;
+  --dmo-sidebar-alert-border: #f0a13e;
+  --dmo-sidebar-alert-text: #ffd18a;
+
+  /* ---------- Typography (GLM-DSN-01 P0-1 exact scale; reference body
+     font shorthand 14px/1.45 Inter…) ---------- */
+  --dmo-font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --dmo-font-size-xs: 12px;
+  --dmo-font-size-sm: 13px;
+  --dmo-font-size-md: 14px;
+  --dmo-font-size-lg: 17px;
+  --dmo-font-size-xl: 22px;
+  --dmo-font-size-label: 11px;
+  --dmo-font-size-table-head: 10px;  /* reference th font-size */
+  --dmo-font-size-pill: 10px;
+  --dmo-font-size-header-title: 18px;
+  --dmo-font-size-modal-title: 18px;
+  --dmo-font-size-card-title: 15px;  /* reference table-title h3 */
+  --dmo-font-weight-normal: 400;
+  --dmo-font-weight-semibold: 600;
+  --dmo-font-weight-bold: 700;
+  --dmo-font-weight-extrabold: 800;
+  --dmo-line-height-tight: 1.2;
+  --dmo-line-height-normal: 1.45;
+  --dmo-line-height-relaxed: 1.48;
+  --dmo-letter-spacing-caps: 0.04em;
+
+  /* ---------- Layers (GLM-DSN-01 P0-2; reference CSS used local 80/100,
+     replaced by the closed canonical scale) ---------- */
+  --dmo-z-base: 0;
+  --dmo-z-sticky: 100;
+  --dmo-z-dropdown: 200;
+  --dmo-z-overlay: 300;
+  --dmo-z-modal: 400;
+  --dmo-z-toast: 500;
+
+  /* ---------- Icons (contract §2.2) ---------- */
+  --dmo-icon-sm: 16px;
+  --dmo-icon-md: 20px;
+  --dmo-icon-lg: 24px;
+
+  /* ---------- Motion (reference --dmo-fast 150ms ease; toast .2s) ---------- */
+  --dmo-duration-fast: 150ms;
+  --dmo-duration-normal: 200ms;
+  --dmo-ease-standard: ease;
+  --dmo-transition-fast: 150ms ease;
+}

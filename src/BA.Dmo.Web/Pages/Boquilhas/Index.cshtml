@@ -1,0 +1,194 @@
+@page "/boquilhas"
+@model BA.Dmo.Web.Pages.Boquilhas.IndexModel
+@using BA.Dmo.Application.Modules.Boquilhas
+@using BA.Dmo.Domain.Modules.Boquilhas
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.ModulePolicies.Boquilhas)]
+@{
+    ViewData["Title"] = "Boquilhas";
+}
+@* U-19 — canonical Boquilhas page. Reuses ONLY global design tokens/components
+   (no page-local stylesheet, GLM-DSN-09); the DesignSystemGuard allowlist stays
+   unchanged. All flows call the canonical /api/boquilhas/* endpoints via
+   boquilhas.js (wiring only, no business logic in JS). No Fabrico tab (NC-04). *@
+
+<main data-testid="page-boquilhas" class="boquilhas-page">
+    <div class="dmo-page-head">
+        <div>
+            <h2>Boquilhas</h2>
+            <p>Registo diário por referência + lote: entradas, saídas, não reparadas, saldos e histórico.</p>
+        </div>
+    </div>
+
+    <nav class="dmo-tabs boquilhas-tabs" aria-label="Navegação Boquilhas">
+        <button class="dmo-tab active" data-view="registo" type="button">Registo</button>
+        <button class="dmo-tab" data-view="boquilhas" type="button">Boquilhas</button>
+        <button class="dmo-tab" data-view="historico" type="button">Histórico</button>
+        <button class="dmo-tab right" data-view="definicoes" type="button">Definições</button>
+    </nav>
+
+    <div class="boquilhas-layout">
+        <!-- Fixed line side panel (B1–C3): active reference/lot/qty; opens Job On by id / lot by body. -->
+        <aside class="dmo-card boquilhas-side" aria-label="Linhas em produção">
+            <h3 class="boquilhas-side__title">Linhas de produção</h3>
+            <p class="boquilhas-side__sub">Estado atual em máquina</p>
+            <div id="linePanel" class="boquilhas-lines" data-testid="line-panel">
+                <p class="peso-hint dmo-u-muted" id="linePanelEmpty">A carregar estado das linhas…</p>
+            </div>
+        </aside>
+
+        <div class="boquilhas-content">
+            <!-- ===== Registo ===== -->
+            <section class="boquilhas-view active" id="registo">
+                <div class="dmo-card">
+                    <div class="boquilhas-card-head">
+                        <h3>Pesquisar lote</h3>
+                        <button type="button" class="dmo-button" id="toggleCreate">Criar novo lote</button>
+                    </div>
+                    <div class="dmo-field">
+                        <label for="searchLot">Referência ou lote</label>
+                        <input id="searchLot" type="text" autocomplete="off" />
+                    </div>
+                    <div class="dmo-empty-state" id="searchEmpty" hidden>Nenhuma boquilha encontrada.</div>
+                    <div id="searchResults" class="boquilhas-list boquilhas-list--results" data-testid="boquilhas-search-results"></div>
+                </div>
+
+                <div id="createPanel" class="dmo-card boquilhas-create" hidden>
+                    <h3>Novo lote</h3>
+                    <div class="dmo-row">
+                        <div class="dmo-field dmo-field--compact">
+                            <label for="cReference">Boquilha</label>
+                            <input id="cReference" type="text" maxlength="4" autocomplete="off" placeholder="T194" />
+                        </div>
+                        <div class="dmo-field dmo-field--compact">
+                            <label for="cBatch">Lote</label>
+                            <input id="cBatch" type="text" maxlength="6" autocomplete="off" />
+                        </div>
+                        <div class="dmo-field dmo-field--compact">
+                            <label for="cTotal">Total</label>
+                            <input id="cTotal" type="number" inputmode="numeric" min="0" max="999" step="1" autocomplete="off" placeholder="3 díg." />
+                        </div>
+                        <div class="dmo-field dmo-field--compact">
+                            <label for="cUtil">Utilização</label>
+                            <input id="cUtil" type="number" inputmode="numeric" min="0" max="100" step="0.1" autocomplete="off" placeholder="3 díg." />
+                        </div>
+                    </div>
+                    <fieldset class="dmo-field boquilhas-lines-picker">
+                        <legend>Linhas permitidas</legend>
+                        <div id="allowedLines">
+                            @foreach (var line in BoquilhasModuleCatalog.Lines)
+                            {
+                                <label class="dmo-line-chip"><input type="checkbox" value="@line" data-line /> @line</label>
+                            }
+                        </div>
+                    </fieldset>
+                    <div class="dmo-field">
+                        <label for="cNotes">Observações compactas</label>
+                        <textarea id="cNotes" rows="2"></textarea>
+                    </div>
+                    <div class="dmo-row-actions">
+                        <button type="button" class="dmo-button primary" id="saveCreate">Criar</button>
+                        <button type="button" class="dmo-button" id="cancelCreate">Cancelar</button>
+                    </div>
+                </div>
+
+                <div id="lotResumo" class="boquilhas-lot" data-testid="boquilhas-lot" hidden></div>
+            </section>
+
+            <!-- ===== Boquilhas (filtros + cards) ===== -->
+            <section class="boquilhas-view" id="boquilhas">
+                <div class="dmo-card audit-filters audit-filters--auto">
+                    <div class="dmo-field dmo-field--compact">
+                        <label for="bSearch">Referência/lote/linha</label>
+                        <input id="bSearch" type="text" autocomplete="off" />
+                    </div>
+                    <div class="dmo-field">
+                        <label for="bState">Estado</label>
+                        <select id="bState">
+                            <option value="">Todos</option>
+                            <option value="available">Atuais / ativas</option>
+                            <option value="archived">Arquivados</option>
+                            <option value="scrapped">Sucata</option>
+                        </select>
+                    </div>
+                    <div class="dmo-field">
+                        <label for="bPageSize">Linhas por página</label>
+                        <select id="bPageSize">
+                            <option>20</option><option>40</option><option>60</option>
+                        </select>
+                    </div>
+                    <button type="button" class="dmo-button" id="bSearchBtn">Filtrar</button>
+                </div>
+                <div id="boquilhasCards" class="boquilhas-cards" data-testid="boquilhas-cards"></div>
+            </section>
+
+            <!-- ===== Histórico ===== -->
+            <section class="boquilhas-view" id="historico">
+                <div class="dmo-card audit-filters audit-filters--auto boquilhas-history-filters">
+                    <div class="dmo-field dmo-field--compact">
+                        <label for="hSearch">Referência, lote ou linha</label>
+                        <input id="hSearch" type="text" autocomplete="off" />
+                    </div>
+                    <div class="dmo-field">
+                        <label for="hFrom">De</label>
+                        <input id="hFrom" type="date" autocomplete="off" />
+                    </div>
+                    <div class="dmo-field">
+                        <label for="hTo">Até</label>
+                        <input id="hTo" type="date" autocomplete="off" />
+                    </div>
+                    <div class="dmo-field">
+                        <label for="hType">Movimento</label>
+                        <select id="hType">
+                            <option value="">Todos</option>
+                            <option value="saida">Saídas</option>
+                            <option value="entrada">Entradas</option>
+                            <option value="irreparavel">Não reparadas</option>
+                            <option value="linha">Mudanças de linha</option>
+                            <option value="contagem">Correções</option>
+                        </select>
+                    </div>
+                    <div class="dmo-field">
+                        <label for="hRepairer">Reparador</label>
+                        <select id="hRepairer"><option value="">Todos</option></select>
+                    </div>
+                    <div class="dmo-field">
+                        <label for="hPageSize">Linhas por página</label>
+                        <select id="hPageSize"><option>20</option><option>40</option><option>60</option></select>
+                    </div>
+                    <button type="button" class="dmo-button" id="hSearchBtn">Filtrar</button>
+                    <button type="button" class="dmo-button" id="hClear">Limpar filtros</button>
+                </div>
+                <div class="dmo-table-card dmo-card">
+                    <div class="dmo-table-title"><div><h3>Histórico de movimentos</h3></div></div>
+                    <div class="boquilhas-history-summary" id="hSummary" data-testid="boquilhas-history-summary"></div>
+                    <div class="dmo-table-wrap">
+                        <table class="dmo-table" id="hTable">
+                            <thead>
+                                <tr>
+                                    <th>Referência</th><th>Lote</th><th>Movimento</th><th>Qtd.</th>
+                                    <th>Saldo</th><th>Reparador</th><th>Linha</th><th>Data/hora</th><th>Operador</th>
+                                </tr>
+                            </thead>
+                            <tbody id="hBody"></tbody>
+                        </table>
+                    </div>
+                    <div id="hPager" class="dmo-pagination"></div>
+                </div>
+            </section>
+
+            <!-- ===== Definições: apenas reparadores ===== -->
+            <section class="boquilhas-view" id="definicoes">
+                <div class="dmo-card">
+                    <div class="boquilhas-card-head"><h3>Reparadores</h3>
+                        <button type="button" class="dmo-button" id="addRepairer">Adicionar reparador</button>
+                    </div>
+                    <div id="repairerList" class="boquilhas-list" data-testid="boquilhas-repairers"></div>
+                </div>
+            </section>
+        </div>
+    </div>
+</main>
+
+<div class="dmo-toast" role="status" id="toast"></div>
+
+<script src="~/scripts/boquilhas.js" asp-append-version="true"></script>

@@ -1,0 +1,89 @@
+@page "/admin/applications"
+@model BA.Dmo.Web.Pages.Admin.Applications.IndexModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.AdminPolicies.AdminGerir)]
+@{
+    ViewData["Title"] = "Administração";
+}
+<partial name="_AdminNav" />
+<div class="dmo-page-head">
+    <div>
+        <h2>Aplicações</h2>
+        <p>Gerir disponibilidade, ordem e acesso aos módulos.</p>
+    </div>
+</div>
+<div class="dmo-card">
+    <div class="dmo-modal-body">
+        @if (ViewData.ModelState.ErrorCount > 0)
+        {
+            <div asp-validation-summary="All" class="dmo-form-message"></div>
+        }
+        <form method="post">
+            @Html.AntiForgeryToken()
+            <p class="admin-availability-note">
+                O interruptor global define apenas a <strong>disponibilidade</strong> do módulo — não concede acesso.
+                O acesso é atribuído por utilizador em <a href="/admin/users">Utilizadores</a>.
+                Desativar um módulo não apaga permissões nem dados.
+            </p>
+            <div class="admin-app-list">
+                @for (var i = 0; i < Model.Entries.Count; i++)
+                {
+                    var e = Model.Entries[i];
+                    <div class="admin-app-row" data-module-id="@e.ModuleId">
+                        <input type="hidden" name="entries[@i].ModuleId" value="@e.ModuleId" />
+                        <div class="admin-app-name">
+                            <strong>@e.DisplayName</strong>
+                            @if (!string.IsNullOrWhiteSpace(e.Description))
+                            {
+                                <span>@e.Description</span>
+                            }
+                        </div>
+                        <label class="admin-app-state" title="Clique para alterar o estado">
+                            <span class="@(e.Active ? "dmo-pill active" : "dmo-pill inactive")" data-state-pill>
+                                @(e.Active ? "Ativa" : "Inativa")
+                            </span>
+                            <input type="checkbox" class="visually-hidden"
+                                   name="entries[@i].Active" value="true"
+                                   checked="@e.Active" data-state-toggle />
+                        </label>
+                        <div class="dmo-field admin-app-order">
+                            <label for="admin-app-order-@i">Posição no menu</label>
+                            <select id="admin-app-order-@i" name="entries[@i].DisplayOrder">
+                                @for (var pos = 1; pos <= Model.Entries.Count; pos++)
+                                {
+                                    <option value="@pos" selected="@(pos == i + 1)">Posição @pos</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="dmo-modal-foot">
+                <a class="dmo-button" href="/admin">Cancelar</a>
+                <button type="submit" class="dmo-button"><span class="dmo-button__label">Guardar</span></button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+    (function () {
+        // Owner override: confirming before globally disabling a module.
+        // Availability only changes — no permission or module data is deleted.
+        var list = document.querySelector('.admin-app-list');
+        if (!list) return;
+        list.querySelectorAll('[data-state-toggle]').forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                var row = cb.closest('.admin-app-row');
+                var pill = row.querySelector('[data-state-pill]');
+                var name = row.querySelector('.admin-app-name strong').textContent;
+                if (!cb.checked) {
+                    var ok = window.confirm(
+                        'Desativar \u00AB' + name + '\u00BB?\n' +
+                        'A disponibilidade muda apenas; nenhuma permiss\u00E3o ou dado \u00E9 apagado.');
+                    if (!ok) { cb.checked = true; return; }
+                }
+                pill.textContent = cb.checked ? 'Ativa' : 'Inativa';
+                pill.className = cb.checked ? 'dmo-pill active' : 'dmo-pill inactive';
+            });
+        });
+    })();
+</script>

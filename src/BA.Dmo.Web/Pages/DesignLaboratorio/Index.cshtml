@@ -1,0 +1,289 @@
+@page "/design-laboratorio"
+@model BA.Dmo.Web.Pages.DesignLaboratorio.IndexModel
+@{
+    ViewData["Title"] = "Laboratório do design system";
+}
+@* U-08 mandatory gate (DESIGN_IMPLEMENTATION_CONTRACT §20): one laboratory
+   page presenting ALL universal components and states using ONLY the global
+   dmo-design-system CSS — no local style blocks, no inline design values.
+   Component names/values follow the Design-Reference exactly. *@
+<div class="dmo-page-head">
+    <div>
+        <h2>Laboratório do design system</h2>
+        <p>Catálogo de componentes universais e estados (U-08), renderizado exclusivamente com CSS global token-driven.</p>
+    </div>
+</div>
+
+<div class="dmo-card">
+    <div class="dmo-modal-body">
+        <h3>Buttons — state machine filled → inverted (reference exact)</h3>
+        <div class="dmo-u-row">
+            <button type="button" class="dmo-button"><span class="dmo-button__label">Guardar</span></button>
+            <button type="button" class="dmo-button success"><span class="dmo-button__label">Aprovar</span></button>
+            <button type="button" class="dmo-button danger"><span class="dmo-button__label">Eliminar</span></button>
+            <button type="button" class="dmo-button" disabled><span class="dmo-button__label">Desativado</span></button>
+            <button type="button" class="dmo-button is-loading" aria-disabled="true"><span class="dmo-button__label">A processar</span></button>
+            <button type="button" class="dmo-button dmo-icon-button" aria-label="Fechar">×</button>
+        </div>
+        <div class="dmo-row-actions">
+            <button type="button" class="dmo-button">Editar</button>
+            <button type="button" class="dmo-button">Reset password</button>
+            <span class="dmo-u-muted">Densidade row-actions (30px, 11px)</span>
+        </div>
+    </div>
+</div>
+
+<div class="dmo-card">
+    <div class="dmo-modal-body">
+        <h3>Fields e formulários (modal-grid)</h3>
+        <div class="dmo-modal-grid">
+            <div class="dmo-field">
+                <label for="lab-ref">Referência</label>
+                <input id="lab-ref" type="text" placeholder="ex.: 9262T288" />
+            </div>
+            <div class="dmo-field is-error">
+                <label for="lab-lote">Lote</label>
+                <input id="lab-lote" type="text" value="C3" aria-invalid="true" />
+                <p class="dmo-field__error">Lote inválido para esta referência.</p>
+            </div>
+            <div class="dmo-field span2">
+                <label for="lab-titulo">Título / função apresentado no cabeçalho</label>
+                <input id="lab-titulo" type="text" placeholder="Ex.: Chefe, Engenheiro, Metrologia" />
+                <p class="dmo-field__helper">Texto visual livre; não altera permissões.</p>
+            </div>
+            <div class="dmo-field">
+                <label for="lab-select">Estado</label>
+                <select id="lab-select">
+                    <option>Ativo</option>
+                    <option>Inativo</option>
+                </select>
+            </div>
+            <div class="dmo-field">
+                <label for="lab-data">Data</label>
+                <input id="lab-data" type="date" />
+            </div>
+        </div>
+        <div class="dmo-field">
+            <label for="lab-notas">Observações</label>
+            <textarea id="lab-notas" placeholder="Notas longas…"></textarea>
+        </div>
+        <div class="dmo-segmented" role="group" aria-label="Tipo de registo">
+            <button type="button" class="dmo-segmented__option" aria-pressed="true">Novo controlo</button>
+            <button type="button" class="dmo-segmented__option" aria-pressed="false">Comparação</button>
+        </div>
+        <div class="dmo-form-message" role="alert">Mensagem de validação junto do formulário.</div>
+    </div>
+</div>
+
+<div class="dmo-card">
+    <div class="dmo-modal-body">
+        <h3>Pills / estados (texto + cor, nunca só cor)</h3>
+        <div class="dmo-u-row">
+            <span class="dmo-pill">3 utilizadores</span>
+            <span class="dmo-pill active">Ativo</span>
+            <span class="dmo-pill inactive">Inativo</span>
+            <span class="dmo-pill pending">Pendente</span>
+            <span class="dmo-pill approved">Aprovado</span>
+            <span class="dmo-pill rejected">Não aprovado</span>
+            <span class="dmo-pill record-type">Novo controlo</span>
+        </div>
+        <h3>Alertas e feedback</h3>
+        <div class="dmo-alert" role="status"><strong>ⓘ</strong><div>Informação contextual junto do elemento.</div></div>
+        <div class="dmo-alert success" role="status">Operação concluída com sucesso.</div>
+        <div class="dmo-alert warning" role="alert">Atenção recuperável — verifique o lote.</div>
+        <div class="dmo-alert danger" role="alert">Falha de carregamento.</div>
+        <div class="dmo-skeleton" aria-hidden="true"></div>
+        <div class="dmo-empty-state">
+            <strong>Sem registos</strong>
+            Não existem registos para este filtro. Próximo passo: limpar filtros ou criar um registo.
+        </div>
+        <div class="dmo-error-state">
+            <strong>Não foi possível carregar</strong>
+            A fonte autoritativa não respondeu.
+            <button type="button" class="dmo-button"><span class="dmo-button__label">Tentar novamente</span></button>
+        </div>
+    </div>
+</div>
+
+<div class="dmo-card dmo-table-card">
+    <div class="dmo-table-title">
+        <h3>Tabela canónica</h3>
+        <span class="dmo-pill">3 registos</span>
+    </div>
+    <div class="dmo-table-wrap">
+        <table class="dmo-table">
+            <thead>
+                <tr>
+                    <th>Referência</th>
+                    <th>Lote</th>
+                    <th>Estado</th>
+                    <th>Tipo</th>
+                </tr>
+            </thead>
+            <tbody data-dmo-list>
+                <tr data-dmo-row data-id="1" aria-selected="false" class="selected">
+                    <td><strong>9262T288</strong></td>
+                    <td>C3</td>
+                    <td><span class="dmo-pill approved">Aprovado</span></td>
+                    <td><span class="dmo-pill record-type">Novo controlo</span></td>
+                </tr>
+                <tr data-dmo-row data-id="2" aria-selected="false">
+                    <td><strong>5447T173</strong></td>
+                    <td>L16</td>
+                    <td><span class="dmo-pill pending">Pendente</span></td>
+                    <td><span class="dmo-pill record-type">Comparação</span></td>
+                </tr>
+                <tr data-dmo-row data-id="3" aria-selected="false">
+                    <td><strong>7120T004</strong></td>
+                    <td>L2</td>
+                    <td><span class="dmo-pill rejected">Não aprovado</span></td>
+                    <td><span class="dmo-pill record-type">Novo controlo</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="dmo-pagination">
+        <span>3 registos · Página 1 de 1</span>
+        <button class="dmo-button dmo-icon-button" disabled aria-label="Página anterior">‹</button>
+        <button class="dmo-button dmo-icon-button" disabled aria-label="Página seguinte">›</button>
+        <label class="dmo-u-visually-hidden" for="lab-pagesize">Linhas por página</label>
+        <select id="lab-pagesize">
+            <option>20</option>
+            <option>40</option>
+            <option>60</option>
+        </select>
+    </div>
+    <p class="dmo-pagination">Um clique seleciona; duplo clique abre (sem atalhos funcionais).</p>
+</div>
+
+<div class="dmo-card">
+    <div class="dmo-modal-body">
+        <h3>Filter bar + search + dropdown</h3>
+        <div class="dmo-toolbar dmo-card filters">
+            <div class="dmo-field search">
+                <label for="lab-search">Pesquisa</label>
+                <input id="lab-search" type="search" placeholder="Referência, lote ou linha" />
+            </div>
+            <div class="dmo-field">
+                <label for="lab-estado">Estado</label>
+                <select id="lab-estado">
+                    <option>Todos</option>
+                </select>
+            </div>
+            <button type="button" class="dmo-button">Aplicar filtros</button>
+            <button type="button" class="dmo-button">Limpar filtros</button>
+        </div>
+        <div class="dmo-menu" role="listbox" aria-label="Dropdown">
+            <button type="button" class="dmo-menu__option" role="option" aria-selected="false">Lote CM — 5447T173 · L2</button>
+            <button type="button" class="dmo-menu__option is-selected" role="option" aria-selected="true">Lote CM — 9262T288 · C3</button>
+            <button type="button" class="dmo-menu__option" role="option" aria-selected="false" disabled>Indisponível</button>
+            <p class="dmo-u-muted">Sem resultados</p>
+        </div>
+        <span class="dmo-tooltip dmo-u-embedded-overlay" role="tooltip">Tooltip — ajuda curta, nunca conteúdo essencial.</span>
+    </div>
+</div>
+
+<div class="dmo-card">
+    <div class="dmo-modal-body">
+        <h3>Calendar único canónico (U-09 — comportamento real)</h3>
+        <p class="dmo-u-muted">
+            Semana começa à segunda-feira; mudar de mês nunca auto-seleciona;
+            um clique seleciona/filtra; setas do teclado percorrem os dias.
+        </p>
+        <div class="dmo-work-split">
+            <section class="dmo-card" data-dmo-calendar data-month="2026-08"
+                     data-record-dates="2026-08-04,2026-08-05,2026-08-18,2026-08-21">
+                <div class="dmo-calendar__head">
+                    <button type="button" class="dmo-button dmo-icon-button" data-calendar-prev aria-label="Mês anterior">‹</button>
+                    <strong data-calendar-label></strong>
+                    <button type="button" class="dmo-button dmo-icon-button" data-calendar-next aria-label="Mês seguinte">›</button>
+                </div>
+                <div class="dmo-calendar__week">
+                    <span>SEG</span><span>TER</span><span>QUA</span><span>QUI</span><span>SEX</span><span>SÁB</span><span>DOM</span>
+                </div>
+                <div class="dmo-calendar__grid" data-calendar-grid></div>
+                <button type="button" class="dmo-button" data-calendar-clear>Mostrar todas as datas</button>
+            </section>
+            <div class="dmo-card">
+                <div class="dmo-modal-body">
+                    <h3>Dia selecionado</h3>
+                    <p class="dmo-u-muted" id="lab-calendar-date">todas as datas</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="dmo-card">
+    <div class="dmo-modal-body">
+        <h3>Modal / Confirmation / History Entry</h3>
+        <div class="dmo-modal-backdrop open dmo-u-embedded-overlay">
+            <div class="dmo-modal">
+                <div class="dmo-modal-head">
+                    <h2>Eliminar registo?</h2>
+                    <button class="dmo-button dmo-icon-button" aria-label="Fechar">×</button>
+                </div>
+                <div class="dmo-modal-body">
+                    <p>Esta ação é difícil de reverter. O histórico preserva o registo original.</p>
+                </div>
+                <div class="dmo-modal-foot">
+                    <button type="button" class="dmo-button">Cancelar</button>
+                    <button type="button" class="dmo-button danger">Eliminar</button>
+                </div>
+            </div>
+        </div>
+        <div class="dmo-history-entry__compare">
+            <div><span class="dmo-u-caps dmo-u-muted">Anterior</span><p>Pendente</p></div>
+            <div><span class="dmo-u-caps dmo-u-muted">Novo</span><p>Aprovado</p></div>
+        </div>
+        <div class="dmo-u-row">
+            <span class="dmo-path-readonly">Capacidades / 5447T173</span>
+            <span class="dmo-path-readonly is-warning">Capacidades / 5447T173 — raiz em falta</span>
+        </div>
+    </div>
+</div>
+
+<div class="dmo-card">
+    <div class="dmo-modal-body">
+        <h3>Sidebar contextual + Toast</h3>
+        <div class="dmo-work-split">
+            <aside class="dmo-sidebar" aria-label="Contexto operacional">
+                <div class="dmo-sidebar__head">
+                    <h2>LINHAS DE PRODUÇÃO</h2>
+                    <p>Estado atual em máquina</p>
+                </div>
+                <div class="dmo-sidebar__card">
+                    <strong>B1</strong>
+                    <p>Estado operacional atual — sem analytics.</p>
+                </div>
+                <div class="dmo-sidebar__card">
+                    <strong>C3</strong>
+                    <p>Conflito apresentado no próprio cartão.</p>
+                </div>
+            </aside>
+            <div>
+                <div class="dmo-toast show dmo-u-embedded-overlay" aria-live="polite">Registo guardado.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Laboratory consumption of the canonical calendar event (reference
+    // pattern: the page listens to dmo:date-select; the component owns the
+    // interaction). Also proves the clear button resets the readout.
+    document.addEventListener("DOMContentLoaded", function () {
+        var readout = document.getElementById("lab-calendar-date");
+        var calendar = document.querySelector("[data-dmo-calendar]");
+        if (!readout || !calendar) { return; }
+        document.addEventListener("dmo:date-select", function (event) {
+            readout.textContent = event.detail.date.split("-").reverse().join("/");
+        });
+        var clear = calendar.querySelector("[data-calendar-clear]");
+        if (clear) {
+            clear.addEventListener("click", function () {
+                readout.textContent = "todas as datas";
+            });
+        }
+    });
+</script>

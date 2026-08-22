@@ -1,0 +1,252 @@
+/* ============================================================
+   BA DMO — pesо-layout.css (U-10)
+   Peso module return: COMPOSITION ONLY (GLM-DSN-03 / contract §3.2).
+   Nothing here redefines color, radius, shadow, typography, button,
+   field, table, modal, calendar or feedback — those come from the
+   shared design system. Only grid/order/widths using --dmo-* tokens.
+   ============================================================ */
+
+/* Local ribbon (Operador 4 tabs; Responsável 2) — composition of
+   the shared tab underline pattern, distinct module prefix. */
+.peso-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 26px;
+  min-height: var(--dmo-tabs-height);
+  padding-bottom: 0;
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+  margin-bottom: var(--dmo-space-4);
+  overflow-x: auto;
+}
+
+.peso-tabs .tab {
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  padding: 0 2px;
+  font-weight: var(--dmo-font-weight-bold);
+  color: var(--dmo-muted);
+  cursor: pointer;
+}
+
+.peso-tabs .tab:hover { background: var(--dmo-brand-050); }
+.peso-tabs .tab.active { color: var(--dmo-brand-600); border-bottom-color: var(--dmo-brand-600); }
+.peso-tabs .tab.settings { margin-left: auto; }
+
+.peso-view { display: none; }
+.peso-view.active { display: block; }
+
+/* Page stack */
+.peso-page { display: grid; gap: var(--dmo-space-4); }
+
+/* Fiel rows with proportional widths (DMO §10). */
+.peso-control-grid {
+  display: grid;
+  grid-template-columns: 165px 170px 95px;
+  gap: var(--dmo-space-3);
+  align-items: end;
+  margin-top: var(--dmo-space-3);
+}
+
+.peso-sap-grid {
+  display: grid;
+  grid-template-columns: 210px 175px minmax(280px, 1fr);
+  gap: var(--dmo-space-3);
+}
+
+/* Reference summary blocks */
+.peso-reference-summary,
+.peso-result-summary {
+  display: grid;
+  gap: var(--dmo-space-2);
+}
+.peso-reference-summary { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.peso-result-summary { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+
+.peso-summary-item {
+  padding: var(--dmo-space-2);
+  border-left: 3px solid var(--dmo-brand-600);
+  border-radius: var(--dmo-r-control);
+}
+.peso-summary-item span { display: block; color: var(--dmo-muted); font-size: var(--dmo-font-size-label); }
+.peso-summary-item strong { display: block; font-size: var(--dmo-font-size-md); }
+
+.peso-context-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--dmo-space-3);
+}
+.peso-context-grid > div { padding: var(--dmo-space-2); border-radius: var(--dmo-r-control); background: var(--dmo-subtle); }
+.peso-context-grid span { display: block; color: var(--dmo-muted); font-size: var(--dmo-font-size-label); }
+.peso-context-grid strong { display: block; }
+
+/* Readings / machine choice cards */
+.peso-readings { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--dmo-space-2); }
+
+/* Compact production info bar — single row, tight items */
+.peso-ref-top-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--dmo-space-2);
+}
+.peso-ref-top-grid > div {
+  padding: 8px 9px;
+  border-left: 3px solid var(--dmo-brand-600);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-subtle);
+}
+.peso-ref-top-grid span {
+  display: block;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-xs);
+}
+.peso-ref-top-grid strong {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--dmo-font-size-md);
+}
+.peso-reading { display: grid; grid-template-columns: 70px 1fr; gap: var(--dmo-space-2); align-items: end; }
+.peso-reading-result { grid-column: 1 / -1; }
+
+.peso-machine-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--dmo-space-2); }
+.peso-machine-choice {
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-card);
+  padding: var(--dmo-space-2);
+  font-weight: var(--dmo-font-weight-bold);
+  cursor: pointer;
+  min-height: 40px;
+}
+.peso-machine-choice.selected { background: var(--dmo-brand-600); color: var(--dmo-text-on-color); border-color: var(--dmo-brand-600); }
+
+.peso-live { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--dmo-space-3); }
+.peso-live > div { padding: var(--dmo-space-2); border-right: var(--dmo-border-width) solid var(--dmo-border); }
+.peso-live span { display: block; color: var(--dmo-muted); font-size: var(--dmo-font-size-label); }
+.peso-live strong { display: block; }
+
+/* Responsável composition */
+.peso-metrics { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: var(--dmo-space-3); margin-bottom: var(--dmo-space-4); }
+.peso-metric { padding: var(--dmo-space-4); }
+.peso-metric span { display: block; text-transform: uppercase; color: var(--dmo-muted); font-size: var(--dmo-font-size-table-head); font-weight: 800; }
+.peso-metric strong { font-size: 22px; }
+
+.peso-approval-layout { display: grid; grid-template-columns: 360px 1fr; gap: var(--dmo-space-4); align-items: start; }
+
+.peso-queue { margin-top: var(--dmo-space-4); }
+.peso-queue-filters { display: grid; grid-template-columns: 1fr 1fr; gap: var(--dmo-space-2); margin-top: var(--dmo-space-2); }
+.peso-queue-item { position: relative; padding: var(--dmo-space-3); border: var(--dmo-border-width) solid var(--dmo-border); border-radius: var(--dmo-r-card); margin-top: var(--dmo-space-2); }
+.peso-queue-item .dmo-pill { position: absolute; right: 10px; top: 10px; }
+.peso-queue-item small { display: block; color: var(--dmo-muted); margin-top: 3px; }
+
+.peso-section-title { margin: var(--dmo-space-4) 0 var(--dmo-space-2); padding: var(--dmo-space-2) var(--dmo-space-2); border-left: 4px solid var(--dmo-brand-600); border-radius: var(--dmo-r-control); background: var(--dmo-subtle); font-size: var(--dmo-font-size-md); }
+
+/* Histórico layout — calendar + filters/table */
+.peso-history-layout {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: var(--dmo-space-4);
+  align-items: start;
+}
+.peso-approval-cal {
+  padding: var(--dmo-space-4);
+}
+.peso-mt-sm { margin-top: var(--dmo-space-4); }
+.peso-history-selected-date {
+  margin-top: var(--dmo-space-2);
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-sm);
+}
+
+.peso-identity {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--dmo-space-2);
+}
+.peso-identity > div, .peso-summary > div { padding: var(--dmo-space-2); background: var(--dmo-subtle); border-radius: var(--dmo-r-control); }
+.peso-identity span, .peso-summary span { display: block; color: var(--dmo-muted); font-size: var(--dmo-font-size-label); }
+.peso-identity strong, .peso-summary strong { display: block; font-size: var(--dmo-font-size-xs); }
+
+/* Responsive spacing (token-based) */
+.peso-mt-sm { margin-top: var(--dmo-space-2); }
+
+/* Responsável summary grids */
+.peso-summary-4col { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--dmo-space-2); }
+.peso-summary-3col { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--dmo-space-2); margin-top: var(--dmo-space-3); }
+
+/* Reference detail table columns (history) */
+.peso-grid5 { display: grid; grid-template-columns: 1fr 1fr 1fr 150px 150px; gap: var(--dmo-space-3); }
+
+/* Sheet/modal width override */
+.peso-sheet { width: min(920px, 100%); }
+
+.peso-cm-decision { display: flex; gap: var(--dmo-space-2); }
+/* Compact per-CM decision buttons (reference .cm-choice .dmo-button). */
+.peso-cm-decision .dmo-button {
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: var(--dmo-font-size-label);
+}
+.peso-cm-decision .dmo-button.selected { background: var(--dmo-brand-600); color: var(--dmo-text-on-color); border-color: var(--dmo-brand-600); }
+
+.peso-email-preview {
+  margin-top: var(--dmo-space-3);
+  padding: var(--dmo-space-3);
+  border: var(--dmo-border-width) solid var(--dmo-brand-200);
+  border-left: 4px solid var(--dmo-brand-600);
+  border-radius: var(--dmo-r-card);
+}
+.peso-email-preview[hidden] { display: none; }
+
+/* Approval decision box (reference .decision subtle tile). */
+.peso-decision {
+  margin-top: var(--dmo-space-4);
+  padding: var(--dmo-space-4);
+  background: var(--dmo-subtle);
+  border-radius: var(--dmo-r-card);
+}
+
+/* Dense compact table (reference .compact-table) used by the peso result /
+   comparison detail tables. */
+.peso-page .dmo-table.compact-table th,
+.peso-page .dmo-table.compact-table td {
+  padding: 8px 7px;
+  font-size: var(--dmo-font-size-xs);
+}
+
+.peso-actions { display: flex; justify-content: flex-end; gap: var(--dmo-space-2); margin-top: var(--dmo-space-3); }
+.peso-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--dmo-space-3); }
+
+/* Module-composition header + hint (spacing/typography only, tokens). */
+.peso-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--dmo-space-3); margin-bottom: var(--dmo-space-3); }
+.peso-section-head h3 { margin: 0; font-size: var(--dmo-font-size-card-title); }
+.peso-section-head p { margin: 3px 0 0; }
+.peso-hint { font-size: var(--dmo-font-size-label); color: var(--dmo-muted); }
+.peso-hr { border: 0; border-top: var(--dmo-border-width) solid var(--dmo-border); margin: 18px 0; }
+.peso-page .peso-page { gap: var(--dmo-space-4); }
+
+/* Responsive (DMO §22) */
+@media (max-width: 1200px) {
+  .peso-machine-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 980px) {
+  .peso-approval-layout { grid-template-columns: 1fr; }
+  .peso-reference-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .peso-result-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .peso-control-grid { grid-template-columns: 1fr 1fr 95px; }
+  .peso-sap-grid { grid-template-columns: 190px 160px 1fr; }
+  .peso-readings, .peso-live { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .peso-grid3 { grid-template-columns: 1fr 1fr; }
+  .peso-identity { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .peso-ref-top-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .peso-history-layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .peso-reference-summary, .peso-result-summary, .peso-readings, .peso-live,
+  .peso-control-grid, .peso-sap-grid, .peso-grid3 { grid-template-columns: 1fr; }
+  .peso-machine-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .peso-metrics { grid-template-columns: 1fr 1fr; }
+  .peso-identity { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .peso-tabs { gap: 16px; }
+  .peso-ref-top-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

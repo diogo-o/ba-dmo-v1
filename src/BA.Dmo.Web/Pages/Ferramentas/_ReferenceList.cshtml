@@ -1,0 +1,42 @@
+@model BA.Dmo.Web.Pages.Ferramentas.FerramentasListModel
+
+<div class="dmo-card">
+    <div class="ferramentas-section-head">
+        <h3>Referências</h3>
+        <button class="dmo-button" data-new-registo data-type="@Model.ToolType" type="button">Criar novo registo</button>
+    </div>
+
+    <div class="ferramentas-filters">
+        <div class="dmo-field dmo-field--compact"><label>Referência</label><input data-filter="reference" placeholder="Ex.: CM-01"></div>
+        <div class="dmo-field"><label>Nome técnico</label><input data-filter="technicalName" placeholder="Nome técnico"></div>
+        <div class="dmo-field dmo-field--compact"><label>Lote</label><input data-filter="lote" placeholder="Ex.: 4"></div>
+        <div class="dmo-field dmo-field--compact"><label>Desenho</label><input data-filter="drawing" placeholder="N.º do desenho"></div>
+        <div class="dmo-field dmo-field--compact"><label>Máquina/Linha</label><input data-filter="line" placeholder="Ex.: B1"></div>
+        <div class="dmo-field"><label>Processo</label><select data-filter="processo"><option value="">Todos</option><option>NNPB</option><option>PS</option></select></div>
+        <div class="dmo-field"><label>Owner plant</label><input data-filter="ownerPlant" placeholder="MG — Marinha Grande"></div>
+        <button class="dmo-button" data-search data-type="@Model.ToolType" type="button">Pesquisar</button>
+    </div>
+
+    <div class="dmo-table-wrap">
+        <table class="dmo-table select-table">
+            <thead>
+                <tr>
+                    <th>Tipo</th>
+                    <th>Referência</th>
+                    <th>Nome técnico</th>
+                    <th>Owner plant</th>
+                    <th>Lotes</th>
+                    <th>Processo do lote</th>
+                    <th>Máquinas/Linhas</th>
+                </tr>
+            </thead>
+            <tbody data-dmo-list data-ref-list>
+                <tr><td colspan="7" class="empty">Sem referências. Crie um novo registo para começar.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="ferramentas-actions">
+        <button class="dmo-button" data-new-lote disabled type="button">Novo lote a partir deste</button>
+    </div>
+</div>

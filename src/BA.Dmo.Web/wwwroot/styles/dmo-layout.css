@@ -1,0 +1,630 @@
+/* ============================================================
+   BA DMO — dmo-layout.css (U-08)
+   Shell frame, admin composition, login shell and canonical
+   responsive behavior. Values are token references; breakpoints
+   follow DMO §22 (1200/980/720) plus the exact media rules the
+   reference defines (760px login, 600px header, admin 1100/900/640).
+   ============================================================ */
+
+/* ---------- App frame on the U-07 shell markup ---------- */
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--dmo-z-sticky);
+}
+
+.app-header .app-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dmo-space-3);
+  color: var(--dmo-brand-950);
+  font-size: var(--dmo-font-size-header-title);
+  font-weight: var(--dmo-font-weight-extrabold);
+  letter-spacing: var(--dmo-letter-spacing-caps);
+}
+
+.app-header .app-account {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dmo-space-2);
+}
+
+/* Module navigation: derived tabs (GLM-SHL-03; DMO §7 active rule). */
+.app-nav {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: var(--dmo-space-6);
+  min-height: var(--dmo-tabs-height);
+  padding: 0 var(--dmo-page-gutter-desktop);
+  background: var(--dmo-card);
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+}
+
+.app-nav ul {
+  display: flex;
+  align-items: stretch;
+  gap: 25px; /* reference admin-nav/tab gap exact */
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.app-nav-left {
+  flex-wrap: wrap;
+}
+
+.nav-tab,
+.nav-area {
+  display: flex;
+  align-items: center;
+}
+
+.nav-tab > a,
+.nav-area > a {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 2px; /* reference tab button padding exact */
+  border: 0;
+  border-bottom: 3px solid transparent; /* reference admin-nav active rule */
+  background: none;
+  color: var(--dmo-muted);
+  font-weight: var(--dmo-font-weight-bold);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav-tab > a:hover,
+.nav-area > a:hover {
+  /* Design reference: no background on hover; only text+border change via :active */
+  text-decoration: none;
+}
+
+/* Active indication (reference admin-nav .active exact). */
+.nav-tab.nav-active > a,
+.nav-area.nav-active > a {
+  color: var(--dmo-brand-600);
+  border-bottom-color: var(--dmo-brand-600);
+}
+
+.nav-area ul {
+  gap: var(--dmo-space-2); /* area children cluster tighter than top tabs */
+}
+
+.nav-area ul .nav-tab > a {
+  font-weight: var(--dmo-font-weight-semibold);
+}
+
+/* ---------- Work area: fluid content, canonical gutters (P0-3) ---------- */
+
+.app-work-area {
+  max-width: var(--dmo-page-max-width);
+  margin: 0 auto;
+  padding: var(--dmo-space-5) var(--dmo-page-gutter-desktop) var(--dmo-space-8);
+}
+
+/* Shell feedback banner (deep-link denial; DMO alert pattern). */
+.app-work-area > [role="status"] {
+  display: flex;
+  gap: 10px;
+  background: var(--dmo-brand-050);
+  border-left: 4px solid var(--dmo-brand-600);
+  padding: 11px 13px;
+  border-radius: var(--dmo-r-control);
+  margin-bottom: var(--dmo-space-5);
+}
+
+/* ---------- Page anatomy (reference admin patterns) ---------- */
+
+.dmo-page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: var(--dmo-space-3);
+  margin-bottom: 18px;
+}
+
+.dmo-page-head h2 {
+  margin: 0;
+  font-size: 24px; /* reference page-head h2 exact */
+}
+
+.dmo-page-head p {
+  margin: 3px 0 0;
+  color: var(--dmo-muted);
+}
+
+.dmo-toolbar {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  padding: var(--dmo-space-4);
+  margin-bottom: 14px;
+}
+
+.dmo-toolbar .search {
+  flex: 1;
+}
+
+/* Admin sub-navigation (reference admin-nav exact composition: fixed 50px).
+   Padding removed — height + align-items center vertically position links. */
+.admin-nav {
+  display: flex;
+  align-items: center;
+  height: var(--dmo-admin-nav-height);
+  gap: 25px;
+  padding: 0;
+  margin-bottom: 14px;
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+}
+
+.admin-nav a {
+  border: 0;
+  background: none;
+  color: var(--dmo-muted);
+  font-weight: var(--dmo-font-weight-bold);
+  border-bottom: 3px solid transparent;
+  padding: var(--dmo-space-2) 0;
+  text-decoration: none;
+}
+
+.admin-nav a.active {
+  color: var(--dmo-brand-600);
+  border-color: var(--dmo-brand-600);
+}
+
+.admin-nav a:hover {
+  color: var(--dmo-brand-600);
+  text-decoration: none;
+}
+
+.admin-nav .back {
+  margin-left: auto;
+}
+
+/* Admin filter grid (reference audit-filters exact). */
+.audit-filters {
+  display: grid;
+  grid-template-columns: 110px minmax(150px, 1fr) 135px 145px 125px 120px 120px 85px auto;
+  gap: 10px;
+  align-items: end;
+  padding: var(--dmo-space-4);
+  margin-bottom: 14px;
+}
+
+/* Admin filter grid — auto variant: reference admin.html audit-filters is a
+   full 8-field grid (8 columns desktop → 4 → 2 → 1). Desktop base lives here;
+   the 900px→2 step (admin contract §3) is in admin-layout.css so the shared
+   selector is not duplicated across files. */
+.audit-filters--auto {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+/* Admin audit detail (reference exact). */
+.audit-detail {
+  display: none;
+  margin-top: 14px;
+  padding: var(--dmo-space-4);
+}
+
+.audit-detail.open {
+  display: block;
+}
+
+.audit-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.audit-detail-grid div {
+  padding: 10px;
+  border-radius: var(--dmo-r-control);
+  background: var(--dmo-subtle);
+}
+
+.audit-detail-grid span {
+  display: block;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-label);
+}
+
+.audit-detail-grid strong {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--dmo-font-size-md);
+}
+
+/* Applications list (reference app-row exact). */
+.app-list {
+  display: grid;
+  gap: 10px;
+}
+
+.app-row {
+  display: grid;
+  grid-template-columns: 1.4fr .7fr 80px 1fr auto;
+  gap: var(--dmo-space-3);
+  align-items: center;
+  padding: 13px 15px;
+  background: var(--dmo-card);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-table);
+}
+
+.app-name strong {
+  display: block;
+}
+
+.app-name span {
+  font-size: var(--dmo-font-size-label);
+  color: var(--dmo-muted);
+}
+
+/* ---------- Login shell (reference login.html exact composition) ---------- */
+
+.login-body {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--dmo-page-gutter-desktop);
+}
+
+.login-shell {
+  width: min(var(--dmo-login-shell-width), 100%);
+  min-height: var(--dmo-login-shell-min-height);
+  display: grid;
+  grid-template-columns: 38% 62%;
+  overflow: hidden;
+}
+
+.login-shell .identity {
+  position: relative;
+  padding: 50px 44px;
+  background: linear-gradient(155deg, var(--dmo-brand-050), var(--dmo-login-gradient-end));
+  display: flex;
+  flex-direction: column;
+}
+
+.login-shell .brand-logo {
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-bottom: 22px;
+}
+
+.login-shell .eyebrow {
+  font-size: var(--dmo-font-size-xs);
+  font-weight: 850;
+  letter-spacing: .14em;
+  color: var(--dmo-brand-600);
+}
+
+.login-shell .identity h1 {
+  margin: 8px 0 4px;
+  font-size: 32px; /* reference identity h1 exact */
+  color: var(--dmo-brand-950);
+}
+
+.login-shell .identity p {
+  margin: 0;
+  color: var(--dmo-brand-800);
+}
+
+.login-shell .identity-foot {
+  margin-top: auto;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-label);
+}
+
+.login-shell .identity-foot strong {
+  display: block;
+  margin-top: var(--dmo-space-3);
+  color: var(--dmo-brand-700);
+}
+
+.login-side {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 58px;
+}
+
+.login-form {
+  width: min(var(--dmo-login-form-width), 100%);
+}
+
+.login-form h2 {
+  font-size: 28px; /* reference login-form h2 exact */
+  margin: 0 0 6px;
+}
+
+.login-form > .lead {
+  margin: 0 0 18px;
+  color: var(--dmo-muted);
+}
+
+.login-form .dmo-field {
+  margin-bottom: 15px;
+}
+
+/* Canonical test-notice block (reference login.html .notice exact). */
+.login-form .notice {
+  display: flex;
+  gap: 10px;
+  background: var(--dmo-brand-050);
+  border-left: 4px solid var(--dmo-brand-600);
+  padding: 11px 13px;
+  border-radius: var(--dmo-r-control);
+  margin-bottom: var(--dmo-space-5);
+}
+
+.login-form .notice strong {
+  display: block;
+  font-size: var(--dmo-font-size-sm);
+}
+
+.login-form .notice span {
+  font-size: var(--dmo-font-size-xs);
+  color: var(--dmo-muted);
+}
+
+.password-wrap {
+  position: relative;
+}
+
+.password-wrap input {
+  padding-right: 78px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 7px;
+  top: 5px;
+  min-height: 30px;
+  padding: 4px 9px;
+}
+
+.login-form .submit {
+  width: 100%;
+  min-height: var(--dmo-touch-target);
+  margin-top: var(--dmo-space-1);
+}
+
+/* ---------- Contextual sidebar (reference sidebar + DMO §20) ---------- */
+
+.dmo-work-split {
+  display: grid;
+  grid-template-columns: var(--dmo-sidebar-width) 1fr;
+  gap: var(--dmo-space-4);
+  align-items: start;
+}
+
+.dmo-sidebar {
+  padding: var(--dmo-space-5) var(--dmo-space-4);
+  background: var(--dmo-sidebar-gradient);
+  color: var(--dmo-text-on-color);
+  border-radius: var(--dmo-r-card);
+}
+
+.dmo-sidebar__head {
+  padding: 0 4px var(--dmo-space-4);
+}
+
+.dmo-sidebar__head h2 {
+  margin: 0;
+  font-size: var(--dmo-font-size-xs);
+  letter-spacing: .08em; /* reference side-head exact */
+  color: var(--dmo-text-on-color);
+}
+
+.dmo-sidebar__head p {
+  margin: 3px 0 0;
+  color: var(--dmo-sidebar-muted);
+  font-size: var(--dmo-font-size-xs);
+}
+
+.dmo-sidebar__card {
+  position: relative;
+  padding: 13px; /* reference machine card exact */
+  border-radius: var(--dmo-r-card);
+  background: var(--dmo-sidebar-card-bg);
+  border: var(--dmo-border-width) solid var(--dmo-sidebar-card-border);
+  margin-bottom: 10px;
+}
+
+.dmo-sidebar__card strong {
+  font-weight: var(--dmo-font-weight-extrabold);
+}
+
+.dmo-sidebar__card p {
+  margin: 3px 0 0;
+  color: var(--dmo-sidebar-muted);
+  font-size: var(--dmo-font-size-xs);
+}
+
+/* ---------- Responsive (DMO §22 + reference media rules) ---------- */
+
+@media (max-width: 1200px) {
+  .dmo-work-split {
+    grid-template-columns: minmax(220px, var(--dmo-sidebar-width)) 1fr;
+  }
+}
+
+@media (max-width: 1100px) {
+  .audit-filters {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .app-header {
+    padding-left: var(--dmo-page-gutter-tablet);
+    padding-right: var(--dmo-page-gutter-tablet);
+  }
+
+  .app-nav {
+    padding: 0 var(--dmo-page-gutter-tablet);
+    overflow-x: auto; /* tab overflow; the page itself never scrolls */
+  }
+
+  .app-work-area {
+    padding-left: var(--dmo-page-gutter-tablet);
+    padding-right: var(--dmo-page-gutter-tablet);
+  }
+
+  /* Reference behavior: sidebar narrows, then stacks (block/drawer). */
+  .dmo-work-split {
+    grid-template-columns: var(--dmo-sidebar-width-compact) 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .app-work-area {
+    padding-top: 18px;
+  }
+
+  .dmo-modal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dmo-modal-grid .span2 {
+    grid-column: auto;
+  }
+
+  .audit-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dmo-work-split {
+    grid-template-columns: 1fr; /* sidebar becomes stacked block */
+  }
+}
+
+@media (max-width: 760px) {
+  /* Reference login mobile exact. */
+  .login-body {
+    padding: 0;
+  }
+
+  .login-shell {
+    min-height: 100vh;
+    grid-template-columns: 1fr;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .login-shell .identity {
+    padding: 22px 24px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    align-items: center;
+  }
+
+  .login-shell .brand-logo {
+    width: 56px;
+    height: 56px;
+    margin: 0;
+  }
+
+  .login-shell .identity .copy h1 {
+    font-size: var(--dmo-font-size-xl);
+    margin: 2px 0;
+  }
+
+  .login-shell .identity .copy p,
+  .login-shell .identity-foot {
+    display: none;
+  }
+
+  .login-side {
+    padding: 36px 24px;
+    align-items: start;
+  }
+}
+
+@media (max-width: 720px) {
+  .app-header {
+    padding: 10px var(--dmo-page-gutter-mobile);
+  }
+
+  .app-header .app-brand {
+    font-size: var(--dmo-font-size-card-title);
+  }
+
+  .app-nav {
+    padding: 0 var(--dmo-page-gutter-mobile);
+  }
+
+  .app-work-area {
+    padding-left: var(--dmo-page-gutter-mobile);
+    padding-right: var(--dmo-page-gutter-mobile);
+  }
+
+  /* Touch targets (P0-4). */
+  .nav-tab > a,
+  .nav-area > a {
+    min-height: var(--dmo-touch-target);
+  }
+}
+
+@media (max-width: 640px) {
+  .audit-filters,
+  .audit-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-nav {
+    overflow-x: auto;
+  }
+
+  .dmo-page-head {
+    align-items: flex-start;
+    gap: var(--dmo-space-3);
+  }
+}
+
+@media (max-width: 600px) {
+  /* Reference app-header mobile exact. */
+  .dmo-app-header {
+    padding: 10px 14px;
+  }
+
+  .dmo-app-header__logo {
+    width: var(--dmo-logo-size-mobile);
+    height: var(--dmo-logo-size-mobile);
+  }
+
+  .dmo-app-header__page h1 {
+    font-size: var(--dmo-font-size-card-title);
+  }
+
+  .dmo-app-header__page p {
+    max-width: 180px;
+  }
+
+  .dmo-app-header__user {
+    min-width: 0;
+    padding-left: 10px;
+  }
+
+  .dmo-app-header__user strong {
+    font-size: var(--dmo-font-size-label);
+  }
+}
+
+/* ============================================================
+   Utility: right-align within a flex row (used by module tabs)
+   ============================================================ */
+
+.right {
+  margin-left: auto;
+}

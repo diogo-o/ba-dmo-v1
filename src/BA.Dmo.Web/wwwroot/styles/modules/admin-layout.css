@@ -1,0 +1,227 @@
+/* ============================================================
+   BA DMO — wwwroot/styles/modules/admin-layout.css
+   Admin-scope composition (ADMIN_IMPLEMENTATION_CONTRACT §1/§3).
+   Loaded always (scoped to body.admin-scope / .admin-work-area /
+   admin component classes), after dmo-utilities.css.
+   Not a copy of the shared shell CSS — only overrides the module
+   shell to the reference admin.html anatomy (72px header, 42px
+   logo, compact brand, 1280px content) plus admin component rules.
+   ============================================================ */
+
+/* ---------- Admin header: 72px shell, 42px logo, compact brand ---------- */
+
+body.admin-scope .dmo-app-header {
+  min-height: var(--dmo-admin-header-height); /* 72px */
+}
+
+body.admin-scope .dmo-app-header__logo {
+  width: 42px;
+  height: 42px;
+}
+
+body.admin-scope .dmo-app-header__page h1 {
+  font-size: 17px;
+}
+
+body.admin-scope .dmo-app-header__page p {
+  margin: 2px 0 0;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-label);
+}
+
+/* ---------- Admin content width (reference admin-main 1280px) ---------- */
+
+/* Applied on <main class="app-work-area admin-work-area"> (admin scope).
+   Loaded after dmo-layout.css, so this wins over .app-work-area. */
+.admin-work-area {
+  max-width: var(--dmo-admin-main-max-width); /* 1280px */
+  padding: 28px;
+}
+
+/* ---------- Shared selection toolbar (contract §3) ---------- */
+
+.dmo-selection-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+/* Helper text inside the toolbar uses the canonical .dmo-field__helper
+   typography (11px muted, already defined in dmo-components.css). */
+
+/* ---------- Audit filters - auto grid: 900px step (contract §3) ----------
+   Desktop (8 col) lives in dmo-layout.css .audit-filters--auto; 1100px→4 and
+   640px→1 are the existing dmo-layout.css .audit-filters media rules (the
+   --auto element also carries the .audit-filters class). Only the 900px→2
+   step needs an explicit rule here. */
+@media (max-width: 900px) {
+  .audit-filters.audit-filters--auto {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .audit-filters.audit-filters--auto {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Export form sits inline in the audit page head (reference admin.html):
+   no default form margin so the button aligns with the heading row. */
+.audit-export-form {
+  margin: 0;
+}
+
+/* Audit event detail card title: flush, bottom-only 12px padding (the card
+   header carries no side padding, matching the reference detail block). */
+.audit-detail .dmo-table-title {
+  padding: 0 0 12px;
+}
+
+/* ---------- Applications: card list (contract §3 / owner override §7) ---------- */
+
+.admin-app-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-app-row {
+  display: grid;
+  grid-template-columns: 1.4fr .7fr 140px auto;
+  gap: 12px;
+  align-items: center;
+  padding: 13px 15px;
+  background: var(--dmo-card);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: 10px;
+}
+
+.admin-app-name strong {
+  display: block;
+}
+
+.admin-app-name span {
+  font-size: var(--dmo-font-size-label);
+  color: var(--dmo-muted);
+}
+
+/* Clickable availability pill (the app row's Ativa/Inativa toggle). */
+.admin-app-state {
+  cursor: pointer;
+  display: inline-flex;
+}
+
+.admin-app-state:disabled {
+  cursor: not-allowed;
+}
+
+/* Availability disclaimer under the page head (contract §3 exact text in
+   the page markup; visual here). */
+.admin-availability-note {
+  font-size: var(--dmo-font-size-xs);   /* 12px */
+  color: var(--dmo-muted);
+  background: var(--dmo-subtle);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-control);  /* 8px */
+  padding: 10px 12px;
+  margin-bottom: 16px;
+}
+
+/* Accessible hiding for hidden inputs inside app rows (alias of the shared
+   .dmo-u-visually-hidden — kept local so admin pages need no utility class). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Applications list responsive (reference admin.html) ---------- */
+
+@media (max-width: 900px) {
+  .admin-app-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-app-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Users → Editar: per-user module editor (contract §6) ----------
+   Card markup: .dmo-card.dmo-modules-card > .dmo-table-title + helper +
+   repeated .dmo-module-row (see Users/Edit.cshtml). Only used on the Admin
+   page, so the selectors are safe with the file always loaded. */
+
+.dmo-modules-card {
+  margin-top: 16px;
+}
+
+.dmo-modules-card .dmo-table-title {
+  padding: 17px 18px 0;
+}
+
+.dmo-modules-card > .dmo-field__helper {
+  padding: 0 18px;
+  margin: 0 0 8px;
+}
+
+.dmo-module-row {
+  padding: 12px 18px;
+  border-top: var(--dmo-border-width) solid var(--dmo-border);
+}
+
+/* Job On row for pure-admins is rendered inert (see page aria-disabled). */
+.dmo-module-row[aria-disabled="true"] {
+  opacity: .55;
+}
+
+.dmo-module-row__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dmo-field-group {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.dmo-field--check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  cursor: pointer;
+}
+
+/* Override the global .dmo-field control sizing — checkboxes cap at 16px. */
+.dmo-field--check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  accent-color: var(--dmo-brand-600);
+  cursor: pointer;
+}
+
+.dmo-field--check span {
+  font-size: var(--dmo-font-size-sm); /* 13px */
+  color: var(--dmo-text);
+}
+
+@media (max-width: 640px) {
+  .dmo-module-row {
+    padding: 10px 14px;
+  }
+}

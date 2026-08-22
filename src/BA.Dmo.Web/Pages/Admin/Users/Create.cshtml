@@ -1,0 +1,67 @@
+@page "/admin/users/create"
+@model BA.Dmo.Web.Pages.Admin.Users.CreateModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.AdminPolicies.AdminGerir)]
+@{
+    ViewData["Title"] = "Administração";
+}
+<partial name="_AdminNav" />
+<div class="dmo-page-head">
+    <div>
+        <h2>Criar utilizador</h2>
+        <p>A conta Auth é criada pelo aprovisionamento server-side; sem passos manuais fora da aplicação.</p>
+    </div>
+</div>
+<div class="dmo-card">
+    <div class="dmo-modal-body">
+        @if (ViewData.ModelState.ErrorCount > 0)
+        {
+            <div asp-validation-summary="All" class="dmo-form-message"></div>
+        }
+        <form method="post">
+            @Html.AntiForgeryToken()
+            <div class="dmo-modal-grid">
+                <div class="dmo-field">
+                    <label for="email">Email (conta Auth)</label>
+                    <input id="email" name="email" type="email" required autocomplete="off" value="@Model.Input.Email" />
+                </div>
+                <div class="dmo-field">
+                    <label for="password">Palavra-passe inicial</label>
+                    <input id="password" name="password" type="password" required autocomplete="new-password" />
+                </div>
+                <div class="dmo-field span2">
+                    <label for="displayName">Nome</label>
+                    <input id="displayName" name="displayName" type="text" required value="@Model.Input.DisplayName" />
+                </div>
+                <div class="dmo-field span2">
+                    <label for="profileTitle">Título / função apresentado no cabeçalho</label>
+                    <input id="profileTitle" name="profileTitle" type="text" maxlength="40"
+                           placeholder="Ex.: Chefe, Engenheiro, Metrologia" value="@Model.Input.ProfileTitle" />
+                    <p class="dmo-field__helper">Texto visual livre; não altera permissões.</p>
+                </div>
+                <div class="dmo-field">
+                    <label for="templateId">Template de acesso</label>
+                    <select id="templateId" name="templateId" required>
+                        <option value="">— escolher —</option>
+                        @foreach (var template in Model.Templates)
+                        {
+                            <option value="@template.TemplateId" selected="@(Model.Input.TemplateId == template.TemplateId)">
+                                @template.Name (@(template.Active ? "ativo" : "inativo"))
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div class="dmo-field">
+                    <label for="active">Estado</label>
+                    <select id="active" name="active">
+                        <option value="true" selected="@(Model.Input.Active)">Ativo</option>
+                        <option value="false" selected="@(!Model.Input.Active)">Inativo</option>
+                    </select>
+                </div>
+            </div>
+            <div class="dmo-modal-foot">
+                <a class="dmo-button" href="/admin/users">Cancelar</a>
+                <button type="submit" class="dmo-button"><span class="dmo-button__label">Guardar</span></button>
+            </div>
+        </form>
+    </div>
+</div>

@@ -1,0 +1,550 @@
+@page "/jobon"
+@model BA.Dmo.Web.Pages.JobOn.IndexModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.CapabilityPolicies.JobonView)]
+@{
+    ViewData["Title"] = "Job On";
+    // CSS-only gating: responsible-only elements hidden when read-only.
+    ViewData["can-edit"] = Model.CanEdit.ToString().ToLower();
+}
+@* ============================================================
+   Job On — Folha de produção (U-13)
+   Structure transcribed from authoritative Design-Reference:
+   portal-dmo-design-final/job-on-v48-folha-producao.html
+   Image: File System Access API + IndexedDB (TD-23).
+   Data: U-13 authoritative fields bound to Model; future-domain
+   tool families remain representative/read-only.
+   ============================================================ *@
+
+@if (Model.JobOnId is not null)
+{
+    <meta name="jobon-id" content="@Model.JobOnId">
+}
+
+<link rel="stylesheet" href="~/styles/modules/jobon-layout.css" />
+
+<nav class="jobon-tabs" aria-label="Job On navigation">
+    <button class="tab@(Model.JobOn is null ? " active" : "")" data-view="planeamento">Planeamento</button>
+    <button class="tab@(Model.JobOn is not null ? " active" : "")" data-view="folha">Job On</button>
+    <button class="tab" data-view="historico">Histórico</button>
+    @if (Model.CanConfigure)
+    {
+        <button class="tab settings" data-view="definicoes">Definições</button>
+    }
+</nav>
+
+<div class="jobon-page">
+    @* ======== PLANEAMENTO VIEW ======== *@
+    <section class="jobon-view active" id="planeamento">
+        <div class="page-title">
+            <h2>Planeamento de Job On</h2>
+            <p class="dmo-u-muted">Escolha o dia; selecione um registo ou abra-o com duplo clique.</p>
+        </div>
+        <div class="dmo-work-split">
+            <aside class="dmo-sidebar" aria-label="Contexto das linhas">
+                <div class="dmo-sidebar__head">
+                    <h2>LINHAS DE PRODUÇÃO</h2>
+                    <p>Produção atual em máquina</p>
+                </div>
+                <div id="linePanel" class="dmo-sidebar__cards" data-testid="line-panel"></div>
+            </aside>
+            <div class="planner">
+            <aside class="dmo-card calendar">
+                <section id="calendar"
+                         data-dmo-calendar
+                         data-month="@Model.SelectedDateValue.Substring(0, 7)"
+                         data-record-dates="@Model.RecordDatesCsv"
+                         data-record-lines='@Model.RecordLinesJson'>
+                    <div class="dmo-calendar__head">
+                        <button type="button" class="dmo-icon-button dmo-calendar__btn" data-calendar-prev aria-label="Mês anterior">&lsaquo;</button>
+                        <strong data-calendar-label></strong>
+                        <button type="button" class="dmo-icon-button dmo-calendar__btn" data-calendar-next aria-label="Mês seguinte">&rsaquo;</button>
+                    </div>
+                    <div class="dmo-calendar__week">
+                        <span>SEG</span><span>TER</span><span>QUA</span><span>QUI</span><span>SEX</span><span>SÁB</span><span>DOM</span>
+                    </div>
+                    <div class="dmo-calendar__grid" data-calendar-grid></div>
+                </section>
+            </aside>
+
+            <section class="dmo-card day-card" data-dmo-list>
+                <div class="card-head">
+                    <div>
+                        <h3 id="planning-day-title">Job Ons de @Model.SelectedDateDisplay</h3>
+                        <p class="dmo-u-muted">O botão de criação pertence a este contexto e usa o dia selecionado.</p>
+                    </div>
+                    @if (Model.CanEdit)
+                    {
+                        <div class="card-head-actions">
+                            <button class="dmo-button" id="newJob" type="button">Criar Job On</button>
+                        </div>
+                    }
+                </div>
+                <div class="filters">
+                    <div class="dmo-field">
+                        <label>Referência ou produção</label>
+                        <input placeholder="Pesquisar" id="planning-search">
+                    </div>
+                    <div class="dmo-field">
+                        <label>Máquina</label>
+                        <select id="planning-machine">
+                            <option>Todas</option>
+                            <option>B1</option><option>B2</option><option>B3</option>
+                            <option>C1</option><option>C2</option><option>C3</option>
+                        </select>
+                    </div>
+                    <div class="dmo-field">
+                        <label>Linhas</label>
+                        <select id="planning-lines">
+                            <option>20</option><option>40</option><option>60</option>
+                        </select>
+                    </div>
+                    <button class="dmo-button" id="planning-clear" type="button">Limpar</button>
+                </div>
+                <div class="dmo-table-wrap">
+                    <table id="jobList" class="dmo-table">
+                        <thead>
+                            <tr>
+                                <th>Data</th><th>Referência</th><th>Produção</th>
+                                <th>Máquina</th><th>Estado</th><th>Preparação</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.PlaneamentoItems.Count == 0)
+                            {
+                                <tr><td colspan="6" class="dmo-empty-state">Nenhum Job On planeado para este dia.</td></tr>
+                            }
+                            else
+                            {
+                                var first = true;
+                                @foreach (var item in Model.PlaneamentoItems)
+                                {
+                                    var isFirst = first;
+                                    first = false;
+                                    <tr data-dmo-row data-id="@item.JobOnId" class="@(isFirst ?"selected" : "")"
+                                        data-line-key="@item.LineColorKey"
+                                        data-date="@item.DateIso"
+                                        data-open-url="@Url.Page("/JobOn/Index", new { id = item.JobOnId })">
+                                        <td data-label=""><span class="dmo-line-swatch @(item.LineColorKey is null ? "" : "dmo-line-" + item.LineColorKey)"></span>@item.Date</td>
+                                        <td><strong>@item.Reference</strong></td>
+                                        <td>@item.Production</td>
+                                        <td><span class="dmo-line-machine">@item.Machine</span></td>
+                                        <td><span class="dmo-pill @item.LifecyclePillClass">@item.LifecycleDisplay</span></td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(item.PreparationPillClass))
+                                            {
+                                                <span class="dmo-pill @item.PreparationPillClass">@item.PreparationDisplay</span>
+                                            }
+                                            else
+                                            {
+                                                @item.PreparationDisplay
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="list-foot">
+                    <span>@Model.PlaneamentoItems.Count registos · Página 1 de 1</span>
+                    <div class="pager">
+                        <button class="dmo-icon-button" disabled>&lsaquo;</button>
+                        <span>1 / 1</span>
+                        <button class="dmo-icon-button" disabled>&rsaquo;</button>
+                    </div>
+                </div>
+
+                <div class="create-panel" id="createPanel">
+                    <div class="card-head">
+                        <div>
+                            <h3 id="create-panel-title">Criar Job On para @Model.SelectedDateDisplay</h3>
+                            <p class="dmo-u-muted">A data vem do calendário; os restantes valores identificam o novo fabrico.</p>
+                        </div>
+                        <button class="dmo-icon-button" id="closeCreate" type="button">&times;</button>
+                    </div>
+                    <div class="create-grid">
+                        <div class="dmo-field dmo-field--compact"><label>Referência</label><input id="create-ref" placeholder="Referência"></div>
+                        <div class="dmo-field dmo-field--compact"><label>Produção</label><input id="create-prod" placeholder="Produção"></div>
+                        <div class="dmo-field"><label>Máquina</label>
+                            <select id="create-machine">
+                                <option>B1</option><option>B2</option><option>B3</option>
+                                <option>C1</option><option>C2</option><option>C3</option>
+                            </select>
+                        </div>
+                        <div class="dmo-field dmo-field--compact"><label>Secções</label><input id="create-seccoes" placeholder="Secções"></div>
+                        <div class="dmo-field dmo-field--compact"><label>Gota</label><input id="create-gota" placeholder="Gota"></div>
+                        <div class="dmo-field"><label>Data</label><input type="date" id="create-date" value="@Model.SelectedDateValue"></div>
+                    </div>
+                    <div class="source-grid">
+                        <button class="source selected" type="button"><strong>Duplicar anterior</strong><span>Usa o Job On anterior desta Referência</span></button>
+                        <button class="source" type="button"><strong>Escolher histórico</strong><span>Selecionar outro Job On desta Referência</span></button>
+                        <button class="source" type="button"><strong>Novo em branco</strong><span>Folha completa sem ferramentas associadas</span></button>
+                    </div>
+                    <div class="actions">
+                        <button class="dmo-button" id="cancelCreate" type="button">Cancelar</button>
+                        <button class="dmo-button" id="createDraft" type="button">Criar rascunho</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </section>
+
+    @* ======== FOLHA (JOB ON) VIEW ======== *@
+    <section class="jobon-view" id="folha">
+        <div class="page-title with-action">
+            <div>
+                <h2>Folha Job On</h2>
+                <p class="dmo-u-muted">Produção @Model.ProductionDisplay · Referência @Model.ReferenceDisplay · Máquina @Model.MachineDisplay</p>
+            </div>
+            <button class="dmo-button" id="backToPlanning" type="button">Voltar ao planeamento</button>
+        </div>
+
+        <section class="sheet" id="jobSheet">
+            <div class="dmo-card sheet-head">
+                <div class="context">
+                    <div class="key-context">
+                        <span>Data início</span>
+                        <input id="jobStartDate" type="date" value="@Model.StartDateDisplay" aria-label="Data de início">
+                    </div>
+                    <div class="key-context">
+                        <span>Data fim</span>
+                        <input id="jobEndDate" type="date" value="@Model.EndDateDisplay" aria-label="Data de fim">
+                    </div>
+                    <div class="key-context">
+                        <span>Máquina/Linha</span>
+                        <select aria-label="Máquina ou linha">
+                            <option selected>@Model.MachineDisplay</option>
+                        </select>
+                    </div>
+                    <div><span>Referência</span><input value="@Model.ReferenceDisplay" aria-label="Referência"></div>
+                    <div><span>Produção</span><input value="@Model.ProductionDisplay" aria-label="Produção"></div>
+                    <div><span>Secções</span><input type="number" value="@Model.SectionsDisplay" min="0" aria-label="Secções"></div>
+                    <div><span>Gota</span><input type="number" value="@Model.DropCountDisplay" min="0" aria-label="Gota"></div>
+                    <div><span>Tipo</span><input value="@Model.TypeDisplay" aria-label="Tipo"></div>
+                    <div><span>Paragem</span><input value="@Model.StopDisplay" placeholder="—" aria-label="Paragem"></div>
+                    <div><span>Peso</span><input type="number" value="@Model.WeightDisplay" step="0.01" aria-label="Peso"></div>
+                    <div><span>Processo</span>
+                        <select aria-label="Processo">
+                            <option selected>@Model.ProcessDisplay</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="sheet-toolbar">
+                    @if (Model.CanEdit)
+                    {
+                        <button class="dmo-button responsible-only" id="editSheet" type="button">Editar folha</button>
+                        <button class="dmo-button responsible-only" id="saveSheet" type="button" hidden>Guardar nova revisão</button>
+                        <button class="dmo-button edit-only responsible-only" type="button">Alterar data</button>
+                        <button class="dmo-button edit-only responsible-only" type="button">Duplicar</button>
+                    }
+                    <button class="dmo-button" type="button">Comparar</button>
+                    <button class="dmo-button" type="button">Exportar</button>
+                    <span class="dmo-pill sheet-mode" id="sheetMode">Modo consulta</span>
+                </div>
+            </div>
+
+            <div class="visual-row">
+                @if (Model.HasPendingVerifications)
+                {
+                    <div class="dmo-alert">
+                        <strong>Preparação pendente:</strong>
+                        @foreach (var v in Model.VerificationItems.Where(vi => vi.IsPending).Take(3))
+                        {
+                            <text>@v.RuleText. </text>
+                        }
+                    </div>
+                }
+                <div class="image-box">
+                    <div class="image-preview" id="imagePreview">
+                        @(Model.HasImage ? "Imagem ligada" : "Sem imagem")
+                    </div>
+                    <div>
+                        <strong>Imagem do artigo</strong>
+                        <small id="image-directory-status">
+                            @(Model.HasImage ? Model.ImageAssetId : "Pré-visualização associada ao contexto aberto.")
+                        </small>
+                        @if (Model.CanEdit)
+                        {
+                            <label for="job-image-input" class="dmo-button image-upload" id="link-image-dir-btn">Carregar imagem</label>
+                            <input type="file" id="job-image-input" accept="image/*" hidden>
+                            <button type="button" class="dmo-button image-upload edit-only" id="replace-image-btn">Substituir imagem</button>
+                            <button type="button" class="dmo-button image-upload danger edit-only" id="remove-image-btn">Remover associação</button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="dmo-card sheet-body">
+                <div class="section-bar">
+                    <h3>Folha de ferramentas</h3>
+                    <span class="dmo-u-muted">Snapshot integral desta produção; em edição todos os campos podem ser alterados.</span>
+                </div>
+
+                @* Inventory picker (edit-only) — future-domain: Armazém/Ferramentas *@
+                <section class="dmo-card inventory-picker edit-only" id="inventoryPicker" aria-label="Selecionar ferramenta do Job On">
+                    <div class="card-head">
+                        <div>
+                            <h3 id="inventoryPickerTitle">Alterar CM associado</h3>
+                            <p class="dmo-u-muted">Lista live filtrada pela Referência da ferramenta e pela Máquina. A associação só muda depois de confirmar e guardar o Job On.</p>
+                        </div>
+                        <button class="dmo-button compact" type="button">Associar lote selecionado</button>
+                    </div>
+                    <div class="inventory-filters">
+                        <div class="dmo-field"><label>Referência ou nome técnico</label><input value="5447" placeholder="Pesquisar"></div>
+                        <div class="dmo-field"><label>Família</label><select id="toolFamilyFilter"><option>CM</option><option>MF</option><option>BQ</option></select></div>
+                        <div class="dmo-field"><label>Localização</label><select><option>Todas</option><option>Armazém</option><option>Produção</option><option>Reparação</option></select></div>
+                        <div class="dmo-field"><label>Estado</label><select><option>Todos</option><option>Novo</option><option>Reparado</option><option>Por reparar</option></select></div>
+                        <button class="dmo-button" type="button">Limpar</button>
+                    </div>
+                    <div class="dmo-table-wrap"><table class="dmo-table"><thead><tr><th>Referência</th><th>Lote</th><th>Nome técnico</th><th>Máquina</th><th>Posição</th><th>Contexto</th><th>Estado</th><th>% uso</th></tr></thead>
+                    <tbody>
+                        <tr data-dmo-row class="selected"><td><strong>5447</strong></td><td>3</td><td>Contra-molde 5447</td><td>B1</td><td>2421</td><td>Armazém</td><td><span class="dmo-pill pending">Por reparar</span></td><td>38%</td></tr>
+                        <tr data-dmo-row><td><strong>5447</strong></td><td>4</td><td>Contra-molde 5447</td><td>B1</td><td>—</td><td>Reparação externa</td><td><span class="dmo-pill">Fora para reparar</span></td><td>22%</td></tr>
+                        <tr data-dmo-row><td><strong>5447</strong></td><td>6</td><td>Contra-molde 5447</td><td>B1</td><td>1840</td><td>Armazém</td><td><span class="dmo-pill approved">Reparado</span></td><td>14%</td></tr>
+                    </tbody></table></div>
+                    <p class="inventory-source">Posição/contexto: Armazém. Estado técnico e % de uso: domínio da ferramenta. Selecionar não cria uma Saída nem reserva a ferramenta.</p>
+                </section>
+
+                @* Tool grid — 4 columns, 11 tool cards per Design-Reference *@
+                <div class="tool-grid">
+                    @* MP — wide, priority *@
+                    <article class="tool wide priority">
+                        <div class="tool-title"><h4>MP</h4><span class="dmo-pill approved">Completo</span><div class="tool-title-actions">@if (Model.CanEdit){<button class="dmo-button compact edit-only" type="button">Alterar</button>}</div></div>
+                        <div class="tool-body"><div class="mini-grid">
+                            <div class="dmo-field"><label>Referência</label><input value="5809"></div>
+                            <div class="dmo-field"><label>Lote</label><select><option>01</option><option>04</option></select></div>
+                            <div class="dmo-field"><label>Tipo</label><input value='6 1/4"'></div>
+                            <div class="dmo-field"><label>Diâmetro pata</label><input value="35,00"></div>
+                            <div class="dmo-field"><label>Diâmetro gargalo</label><input value="43,00"></div>
+                            <div class="dmo-field"><label>Diâmetro exterior</label><input value="152,20"></div>
+                            <div class="dmo-field"><label>Folgas</label><input value="0,19 / 0 / +0,03"></div>
+                            <div class="dmo-field"><label>Adaptador</label><select><option>N/A</option></select></div>
+                            <div class="dmo-field"><label>Inversão</label><input value="82,55"></div>
+                            <div class="dmo-field"><label>Parafuso</label><select><option>N/A</option></select></div>
+                            <div class="dmo-field"><label>3.ª almofada</label><select><option>N/A</option></select></div>
+                            <div class="dmo-field"><label>Reparador</label><input value="MOLDIN"></div>
+                            <div class="dmo-field"><label>Utilização</label><input value="30,00%"></div>
+                            <div class="quantity"><div><span>Stock</span><strong>18</strong></div><div><span>Em máquina</span><strong>12</strong></div></div>
+                            <div class="dmo-field full"><label>Notas MP</label><textarea>CX rodar justa 1/4 de volta. Verificar diâmetro exterior.</textarea></div>
+                        </div></div>
+                    </article>
+                    @* MF — wide, priority *@
+                    <article class="tool wide priority">
+                        <div class="tool-title"><h4>MF</h4><span class="dmo-pill pending">Verificar</span><div class="tool-title-actions">@if (Model.CanEdit){<button class="dmo-button compact edit-only" type="button">Alterar</button>}</div></div>
+                        <div class="tool-body"><div class="mini-grid">
+                            <div class="dmo-field"><label>Referência</label><input value="5810"></div>
+                            <div class="dmo-field"><label>Lote</label><select><option>01</option><option>04</option><option>13</option></select></div>
+                            <div class="dmo-field"><label>Tipo</label><input value='6 1/4"'></div>
+                            <div class="dmo-field"><label>Diâmetro corpo</label><input value="70 / 69,40"></div>
+                            <div class="dmo-field"><label>Diâmetro gargalo</label><input value="43,40"></div>
+                            <div class="dmo-field"><label>Diâmetro exterior</label><input value="152,20"></div>
+                            <div class="dmo-field"><label>Folgas</label><input value="0,18 / 0 / +0,03"></div>
+                            <div class="dmo-field"><label>Fundo final</label><input value="5810"></div>
+                            <div class="dmo-field"><label>Adaptador</label><select><option>N/A</option></select></div>
+                            <div class="dmo-field"><label>Inversão</label><input value="82,55"></div>
+                            <div class="dmo-field"><label>Parafuso</label><select><option>N/A</option></select></div>
+                            <div class="dmo-field"><label>Reparador</label><input value="BA"></div>
+                            <div class="dmo-field"><label>Utilização</label><input value="12,00%"></div>
+                            <div class="quantity"><div><span>Stock</span><strong>16</strong></div><div><span>Em máquina</span><strong>12</strong></div></div>
+                            <div class="dmo-field full"><label>Notas MF</label><textarea>Tratar gravações. Bolear rebaixo do molde final.</textarea></div>
+                        </div></div>
+                    </article>
+                    @* BQ — priority *@
+                    <article class="tool priority">
+                        <div class="tool-title"><h4>BQ</h4><span class="dmo-pill approved">Disponível</span><div class="tool-title-actions">@if (Model.CanEdit){<button class="dmo-button compact edit-only" type="button">Alterar</button>}</div></div>
+                        <div class="tool-body"><div class="mini-grid">
+                            <div class="dmo-field"><label>Referência</label><input value="T173"></div>
+                            <div class="dmo-field"><label>Lote</label><select><option>24/33</option><option>25/08</option></select></div>
+                            <div class="dmo-field"><label>Utilização</label><input value="45,00%"></div>
+                            <div class="quantity"><div><span>Stock</span><strong>192</strong></div><div><span>Necessárias</span><strong>144</strong></div></div>
+                            <div class="dmo-field full"><label>Notas BQ</label><textarea>Garantir folga AN/BQ entre 0,04–0,06 mm.</textarea></div>
+                        </div></div>
+                    </article>
+                    @* PU — secondary *@
+                    <article class="tool secondary">
+                        <div class="tool-title"><h4>PU</h4><span class="dmo-pill">Informação</span></div>
+                        <div class="tool-body"><div class="mini-grid">
+                            <div class="dmo-field"><label>Referência</label><input value="5809"></div>
+                            <div class="dmo-field"><label>Versão</label><input value="AP5809PA8L-B"></div>
+                            <div class="quantity full"><div><span>Stock</span><strong>12</strong></div><div><span>Em máquina</span><strong>12</strong></div></div>
+                            <div class="dmo-field full"><label>Notas PU</label><textarea>Procedimento NNPB. Confirmar marcação.</textarea></div>
+                        </div></div>
+                    </article>
+                    @* CAL — wide *@
+                    <article class="tool wide">
+                        <div class="tool-title"><h4>CAL</h4><div class="tool-title-actions"><span class="dmo-pill approved">Completo</span>@if (Model.CanEdit){<button class="dmo-button compact edit-only" id="addCalRow" type="button">Adicionar linha</button>}</div></div>
+                        <div class="tool-body">
+                            <table class="measure-table"><thead><tr><th>Elemento</th><th>Valor</th><th>Qtd. máquina</th><th class="edit-only">Ação</th></tr></thead>
+                            <tbody id="calRows">
+                                <tr><td><input value="Bucha marcada" aria-label="Elemento CAL"></td><td><input value="5809" aria-label="Valor CAL"></td><td><input value="3" aria-label="Quantidade em máquina"></td><td class="edit-only"><button class="dmo-button compact danger cal-remove" type="button">Remover</button></td></tr>
+                                <tr><td><input value="CS P interna" aria-label="Elemento CAL"></td><td><input value="56,4 × 43,3" aria-label="Valor CAL"></td><td><input value="3" aria-label="Quantidade em máquina"></td><td class="edit-only"><button class="dmo-button compact danger cal-remove" type="button">Remover</button></td></tr>
+                                <tr><td><input value="Tampão" aria-label="Elemento CAL"></td><td><input value="34,95" aria-label="Valor CAL"></td><td><input value="3" aria-label="Quantidade em máquina"></td><td class="edit-only"><button class="dmo-button compact danger cal-remove" type="button">Remover</button></td></tr>
+                                <tr><td><input value="Inversão MF" aria-label="Elemento CAL"></td><td><input value="75,20 mm" aria-label="Valor CAL"></td><td><input value="3" aria-label="Quantidade em máquina"></td><td class="edit-only"><button class="dmo-button compact danger cal-remove" type="button">Remover</button></td></tr>
+                                <tr><td><input value="Inversão MP" aria-label="Elemento CAL"></td><td><input value="32,60 mm" aria-label="Valor CAL"></td><td><input value="3" aria-label="Quantidade em máquina"></td><td class="edit-only"><button class="dmo-button compact danger cal-remove" type="button">Remover</button></td></tr>
+                                <tr><td><input value="Nível" aria-label="Elemento CAL"></td><td><input value="37,60 mm" aria-label="Valor CAL"></td><td><input value="3" aria-label="Quantidade em máquina"></td><td class="edit-only"><button class="dmo-button compact danger cal-remove" type="button">Remover</button></td></tr>
+                                <tr><td><input value="Cabeça de sopro" aria-label="Elemento CAL"></td><td><input value="56,4 × 43,3" aria-label="Valor CAL"></td><td><input value="3" aria-label="Quantidade em máquina"></td><td class="edit-only"><button class="dmo-button compact danger cal-remove" type="button">Remover</button></td></tr>
+                                <tr><td><input value="Pinças" aria-label="Elemento CAL"></td><td><input value="P 43,9 / M 43,3" aria-label="Valor CAL"></td><td><input value="3" aria-label="Quantidade em máquina"></td><td class="edit-only"><button class="dmo-button compact danger cal-remove" type="button">Remover</button></td></tr>
+                            </tbody></table>
+                        </div>
+                    </article>
+                    @* AN — secondary *@
+                    <article class="tool secondary">
+                        <div class="tool-title"><h4>AN</h4><span class="dmo-pill">Informação</span></div>
+                        <div class="tool-body"><div class="mini-grid">
+                            <div class="dmo-field full"><label>Referência</label><input value="T173"></div>
+                            <div class="dmo-field full"><label>Notas AN</label><textarea>Chanfro. Garantir folga AN/BQ.</textarea></div>
+                        </div></div>
+                    </article>
+                    @* ARR — secondary *@
+                    <article class="tool secondary">
+                        <div class="tool-title"><h4>ARR</h4><span class="dmo-pill">Informação</span></div>
+                        <div class="tool-body"><div class="mini-grid">
+                            <div class="dmo-field full"><label>Referência</label><input value="5809"></div>
+                            <div class="dmo-field full"><label>Notas ARR</label><textarea>AR5809PA8L roscado 30 mm.</textarea></div>
+                        </div></div>
+                    </article>
+                    @* PI — secondary *@
+                    <article class="tool secondary">
+                        <div class="tool-title"><h4>PI</h4><span class="dmo-pill approved">Completo</span></div>
+                        <div class="tool-body"><div class="mini-grid">
+                            <div class="dmo-field"><label>Pinças</label><select id="piClampMaterial" data-catalog="PI.clamp_material"><option>Latão</option><option>Grafite</option></select></div>
+                            <div class="dmo-field"><label>Diâmetro</label><input value="44,00"></div>
+                            <div class="dmo-field full"><label>Notas PI</label><textarea>Boleadas.</textarea></div>
+                        </div></div>
+                    </article>
+                    @* CS — secondary *@
+                    <article class="tool secondary">
+                        <div class="tool-title"><h4>CS</h4><span class="dmo-pill">Informação</span></div>
+                        <div class="tool-body"><div class="mini-grid">
+                            <div class="dmo-field"><label>Referência</label><input value="T173"></div>
+                            <div class="dmo-field"><label>Furos</label><input value="4 × 4"></div>
+                            <div class="dmo-field full"><label>Tubo</label><input value="À face"></div>
+                            <div class="quantity full"><div><span>Stock</span><strong>9</strong></div><div><span>Em máquina</span><strong>3</strong></div></div>
+                            <div class="dmo-field full"><label>Notas CS</label><textarea>Confirmar tubo à face.</textarea></div>
+                        </div></div>
+                    </article>
+                    @* TP — secondary *@
+                    <article class="tool secondary">
+                        <div class="tool-title"><h4>TP</h4><span class="dmo-pill">Informação</span></div>
+                        <div class="tool-body"><div class="mini-grid">
+                            <div class="dmo-field"><label>Diâmetro PS</label><input value="34,95"></div>
+                            <div class="dmo-field"><label>Referência</label><input value="T173"></div>
+                            <div class="dmo-field full"><label>Bacia PS</label><input value="6,70"></div>
+                            <div class="quantity full"><div><span>Stock</span><strong>7</strong></div><div><span>Em máquina</span><strong>3</strong></div></div>
+                            <div class="dmo-field full"><label>Notas TP</label><textarea>Maquinados.</textarea></div>
+                        </div></div>
+                    </article>
+                    @* FO — secondary *@
+                    <article class="tool secondary">
+                        <div class="tool-title"><h4>FO</h4><span class="dmo-pill">Por preencher</span></div>
+                        <div class="tool-body"><div class="mini-grid">
+                            <div class="dmo-field full"><label>Tipo</label><input placeholder="Introduzir tipo"></div>
+                            <div class="quantity full"><div><span>Stock</span><strong>—</strong></div><div><span>Em máquina</span><strong>—</strong></div></div>
+                            <div class="dmo-field full"><label>Notas FO</label><textarea placeholder="Observações"></textarea></div>
+                        </div></div>
+                    </article>
+                </div>
+                @* Lower grid: Verificações + Notas gerais *@
+                <div class="lower-grid">
+                    <section>
+                        <div class="section-bar">
+                            <h3>Verificações</h3>
+                            @if (Model.PendingVerificationCount > 0)
+                            {
+                                <span class="dmo-pill pending">@Model.PendingVerificationCount pendentes</span>
+                            }
+                            else
+                            {
+                                <span class="dmo-pill approved">Completo</span>
+                            }
+                        </div>
+                        <p class="dmo-u-muted">Confirmações manuais deste Job On. Só mudam de estado depois de o check ser guardado.</p>
+                        <div class="checks">
+                            @if (Model.VerificationItems.Count == 0)
+                            {
+                                <div class="dmo-empty-state">Nenhuma verificação registada para esta produção.</div>
+                            }
+                            else
+                            {
+                                @foreach (var v in Model.VerificationItems)
+                                {
+                                    <label class="check">
+                                        <input type="checkbox" checked="@(v.IsChecked ? "checked" : null)" @(Model.CanConfirm ? "" : "disabled")>
+                                        <span>
+                                            <strong>@v.RuleText</strong>
+                                            @if (v.CompletedBy is not null)
+                                            {
+                                                <small>Confirmada por @v.CompletedBy@(v.CompletedAt is not null ? $" · {v.CompletedAt}" : "")</small>
+                                            }
+                                        </span>
+                                        <span class="dmo-pill @v.StatusPillClass">@v.StatusDisplay</span>
+                                    </label>
+                                }
+                            }
+                        </div>
+                    </section>
+                    <section class="notes">
+                        <div class="section-bar"><h3>Notas gerais</h3></div>
+                        <div class="dmo-field"><textarea>@Model.GeneralNotesDisplay</textarea></div>
+                    </section>
+                </div>
+                @* History box within sheet — audit-event read contract pending (InsertAuditEventAsync is write-only) *@
+                <section class="history-box">
+                    <div class="section-bar"><h3>Histórico desta produção</h3><span class="dmo-u-muted">Alterações, verificações e movimentos relacionados.</span></div>
+                    <div class="dmo-table-wrap"><table class="dmo-table"><thead><tr><th>Data/hora</th><th>Evento</th><th>Ferramenta</th><th>Detalhe</th><th>Utilizador</th></tr></thead>
+                    <tbody>
+                        <tr><td colspan="5" class="dmo-empty-state">Sem histórico disponível para esta produção.</td></tr>
+                    </tbody></table></div>
+                </section>
+            </div>
+        </section>
+    </section>
+
+    @* ======== HISTÓRICO VIEW ======== *@
+    <section class="jobon-view" id="historico">
+        <div class="page-title">
+            <h2>Histórico por Referência e Produção</h2>
+            <p class="dmo-u-muted">Filtre a Referência para ver todas as Produções. Um clique seleciona; duplo clique abre a revisão corrente e o respetivo histórico.</p>
+        </div>
+        <div class="dmo-card day-card" data-dmo-list>
+            <div class="filters historico-filters">
+                <div class="dmo-field dmo-field--compact"><label>Referência</label><input placeholder="Pesquisar Referência"></div>
+                <div class="dmo-field dmo-field--compact"><label>Produção</label><input placeholder="Todas"></div>
+                <div class="dmo-field"><label>Máquina</label><select><option>Todas</option><option>B1</option><option>B3</option><option>C3</option></select></div>
+                <div class="dmo-field"><label>Desde</label><input type="date"></div>
+                <div class="dmo-field"><label>Até</label><input type="date"></div>
+                <div class="dmo-field"><label>Linhas</label><select><option>20</option><option>40</option><option>60</option></select></div>
+                <button class="dmo-button" type="button">Limpar</button>
+            </div>
+            <div class="dmo-table-wrap"><table class="dmo-table"><thead><tr><th>Data início</th><th>Data fim</th><th>Referência</th><th>Produção</th><th>Máquina</th><th>Revisão corrente</th><th>Total revisões</th><th>Estado</th></tr></thead>
+            <tbody>
+                <tr><td colspan="8" class="dmo-empty-state">Utilize os filtros para pesquisar produções históricas.</td></tr>
+            </tbody></table></div>
+            <div class="list-foot"><span>0 Produções · Página 1 de 1</span><div class="pager"><button class="dmo-icon-button" disabled>&lsaquo;</button><span>1 / 1</span><button class="dmo-icon-button" disabled>&rsaquo;</button></div></div>
+        </div>
+    </section>
+
+    @if (Model.CanConfigure)
+    {
+    <section class="jobon-view" id="definicoes">
+        <div class="page-title"><h2>Definições do Job On</h2><p class="dmo-u-muted">Gestão dos valores disponíveis nos campos configuráveis.</p></div>
+        <div class="dmo-card day-card">
+            <div class="card-head"><div><h3>Opções dos campos</h3><p class="dmo-u-muted">As opções são partilhadas pelos novos Job Ons. Desativar não altera folhas nem revisões antigas.</p></div></div>
+            <div class="filters definicoes-filters">
+                <div class="dmo-field"><label>Família</label><select id="catalogFamily"><option>PI</option><option>MP</option><option>MF</option><option>BQ</option><option>PU</option><option>CS</option><option>TP</option><option>FO</option></select></div>
+                <div class="dmo-field"><label>Campo</label><select id="catalogField"><option value="clamp_material">Pinças — material</option></select></div>
+                <div class="dmo-field dmo-field--compact"><label>Nova opção</label><input id="newCatalogOption" placeholder="Ex.: Aço tratado"></div>
+                <button class="dmo-button" id="addCatalogOption" type="button">Adicionar opção</button>
+            </div>
+            <div class="dmo-table-wrap"><table class="dmo-table"><thead><tr><th>Ordem</th><th>Opção</th><th>Estado</th><th>Utilização</th></tr></thead>
+            <tbody id="catalogRows">
+                <tr data-option-row class="selected"><td>1</td><td><strong>Latão</strong></td><td><span class="dmo-pill approved">Ativa</span></td><td>Disponível em novos registos</td></tr>
+                <tr data-option-row><td>2</td><td><strong>Grafite</strong></td><td><span class="dmo-pill approved">Ativa</span></td><td>Disponível em novos registos</td></tr>
+            </tbody></table></div>
+            <div class="list-foot"><span>2 opções · Um clique seleciona</span><div class="pager"><button class="dmo-button" id="editCatalogOption" type="button">Editar selecionada</button><button class="dmo-button danger" id="disableCatalogOption" type="button">Desativar selecionada</button></div></div>
+        </div>
+    </section>
+    }
+</div>
+
+<script src="~/scripts/jobon.js" defer></script>

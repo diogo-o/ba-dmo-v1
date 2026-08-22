@@ -1,0 +1,185 @@
+@page "/admin/users/edit"
+@model BA.Dmo.Web.Pages.Admin.Users.EditModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.AdminPolicies.AdminGerir)]
+@{
+    ViewData["Title"] = "Administração";
+}
+<partial name="_AdminNav" />
+@if (!string.IsNullOrEmpty(Model.ServiceErrorMessage))
+{
+    <div class="dmo-form-message" role="alert">
+        @Model.ServiceErrorMessage
+    </div>
+    <div class="dmo-empty-state">
+        <strong>Serviço de administração indisponível</strong>
+        <p><a href="/admin/users">Voltar à lista</a></p>
+    </div>
+}
+else if (Model.Entry is null)
+{
+    <div class="dmo-empty-state">
+        <strong>Utilizador não encontrado</strong>
+        <p><a href="/admin/users">Voltar à lista</a></p>
+    </div>
+}
+else
+{
+    var jobOnBlocked = Model.TemplateGrantsAdmin || Model.PostedGrantsAdmin;
+    var jobOnModuleId = BA.Dmo.Application.Shared.Access.CanonicalModuleCatalog.JobonModuleId;
+    <div class="dmo-page-head">
+        <div>
+            <h2>Editar utilizador</h2>
+            <p>Nome, título/função, template de acesso, estado e módulos associados.</p>
+        </div>
+        <a class="dmo-button" href="/admin/users">Voltar à lista</a>
+    </div>
+    <div class="dmo-card">
+        <div class="dmo-modal-body">
+            @if (ViewData.ModelState.ErrorCount > 0)
+            {
+                <div asp-validation-summary="All" class="dmo-form-message"></div>
+            }
+            @if (!string.IsNullOrEmpty(Model.Feedback))
+            {
+                <div class="dmo-alert success" role="status">@Model.Feedback</div>
+            }
+            <form method="post" asp-page-handler="Save">
+                <input type="hidden" name="id" value="@Model.Entry.ActorId" />
+                <input type="hidden" name="version" value="@Model.Entry.UpdatedAtUtc.ToString("O")" />
+                <div class="dmo-modal-grid">
+                    <div class="dmo-field">
+                        <label for="email">Email</label>
+                        @if (string.IsNullOrWhiteSpace(Model.Entry.AuthEmail))
+                        {
+                            <span class="dmo-pill inactive">Email indisponível</span>
+                        }
+                        else
+                        {
+                            <input id="email" type="text" value="@Model.Entry.AuthEmail"
+                                   readonly tabindex="-1" autocomplete="off" />
+                        }
+                        <p class="dmo-field__helper">Definido pela conta de autenticação; não pode ser alterado aqui.</p>
+                    </div>
+                    <div class="dmo-field">
+                        <label for="displayName">Nome</label>
+                        <input id="displayName" name="displayName" type="text" required value="@Model.Entry.DisplayName" />
+                    </div>
+                    <div class="dmo-field">
+                        <label for="templateId">Template de acesso</label>
+                        <select id="templateId" name="templateId" required>
+                            @foreach (var template in Model.Templates)
+                            {
+                                <option value="@template.TemplateId" selected="@(Model.Entry.TemplateId == template.TemplateId)">
+                                    @template.Name (@(template.Active ? "ativo" : "inativo"))
+                                </option>
+                            }
+                        </select>
+                    </div>
+                    <div class="dmo-field span2">
+                        <label for="profileTitle">Título / função apresentado no cabeçalho</label>
+                        <input id="profileTitle" name="profileTitle" type="text" maxlength="40"
+                               placeholder="Ex.: Chefe, Engenheiro, Metrologia" value="@Model.Entry.ProfileTitle" />
+                        <p class="dmo-field__helper">Texto visual livre; não altera permissões.</p>
+                    </div>
+                    <div class="dmo-field">
+                        <label for="active">Estado</label>
+                        <select id="active" name="active">
+                            <option value="true" selected="@Model.Entry.Active">Ativo</option>
+                            <option value="false" selected="@(!Model.Entry.Active)">Inativo</option>
+                        </select>
+                    </div>
+                </div>
+
+                @* Módulos associados — per-user grants (contract §6.7). One row
+                   per canonical catalog module; state pill + capability checklist
+                   inside .dmo-field. Effective state shown = stored override (if
+                   set) else the template grants. Job On is rendered disabled and
+                   its inputs are excluded from the POST when the user's template
+                   (or the posted set) grants admin — server guard authoritative. *@
+                <div class="dmo-card dmo-modules-card">
+                    <div class="dmo-table-title">
+                        <h3>Módulos associados</h3>
+                    </div>
+                    <p class="dmo-field__helper">
+                        Acesso por utilizador, sobreposto ao template. Marcos de acesso não apagam permissões nem dados.
+                    </p>
+                    @foreach (var module in Model.CatalogModules)
+                    {
+                        var isArea = BA.Dmo.Web.Pages.Admin.Users.EditModel.IsFunctionalArea(module);
+                        var hasCaps = module.Capabilities.Count > 0;
+                        IReadOnlySet<string>? grantedCaps = null;
+                        var isGranted = !isArea
+                            && Model.EffectiveGrants.TryGetValue(module.ModuleId, out grantedCaps);
+                        var isJobOn = module.ModuleId == jobOnModuleId;
+                        var rowDisabled = isJobOn && jobOnBlocked;
+                        <div class="dmo-module-row" aria-disabled="@(rowDisabled ? "true" : "false")">
+                            <div class="dmo-module-row__head">
+                                <strong>@module.DisplayName</strong>
+                                <span class="@((isArea ? Model.IsAreaGranted(module.ModuleId) : isGranted) ? "dmo-pill active" : "dmo-pill inactive")">
+                                    @(isArea
+                                        ? (Model.IsAreaGranted(module.ModuleId) ? "Acesso" : "Sem acesso")
+                                        : (isGranted ? "Acesso" : "Sem acesso"))
+                                </span>
+                            </div>
+                            @if (isArea)
+                            {
+                                <p class="dmo-field__helper">Área composta; o acesso é definido pelos submódulos.</p>
+                            }
+                            else if (rowDisabled)
+                            {
+                                <p class="dmo-field__helper">Não pode ser atribuído a administradores puros.</p>
+                            }
+                            else if (hasCaps)
+                            {
+                                <div class="dmo-field-group">
+                                    @foreach (var capability in module.Capabilities)
+                                    {
+                                        <label class="dmo-field dmo-field--check">
+                                            <input type="checkbox"
+                                                   name="Modules[@module.ModuleId]"
+                                                   value="@capability.Id"
+                                                   checked="@(grantedCaps != null && grantedCaps.Contains(capability.Id))" />
+                                            <span>@capability.Id</span>
+                                        </label>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="dmo-field-group">
+                                    <label class="dmo-field dmo-field--check">
+                                        <input type="checkbox"
+                                               name="Modules[@module.ModuleId]"
+                                               value="true"
+                                               checked="@isGranted" />
+                                        <span>Conceder acesso</span>
+                                    </label>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="dmo-modal-foot">
+                    <a class="dmo-button" href="/admin/users">Cancelar</a>
+                    <button type="submit" class="dmo-button"><span class="dmo-button__label">Guardar</span></button>
+                </div>
+            </form>
+        </div>
+    </div>
+    @* Password reset: initiated entirely from the Admin UI through the
+       privileged server-side adapter (04_ACC §9; TD-16). Interaction is the
+       reference one (admin.html): explicit native confirmation before the
+       submit; cancel aborts. The message travels as an HTML-encoded data
+       attribute so the display name is never injected into script. *@
+    <form method="post" asp-page-handler="ResetPassword"
+          data-dmo-confirm-message="Iniciar reset de password para @Model.Entry.DisplayName?">
+        <input type="hidden" name="id" value="@Model.Entry.ActorId" />
+        <div class="dmo-row-actions">
+            <button type="submit" class="dmo-button danger reset-password"
+                    onclick="return confirm(this.form.getAttribute('data-dmo-confirm-message'))">
+                Reset password
+            </button>
+        </div>
+    </form>
+}

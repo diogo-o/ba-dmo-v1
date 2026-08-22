@@ -1,0 +1,193 @@
+/* ============================================================
+   Controlo — module layout (R012 Unified Workspace)
+   Composition / layout ONLY (GLM-DSN-03, DESIGN_IMPLEMENTATION_CONTRACT §3.3).
+   Organizes grid, order, widths and reveals for the Controlo surface.
+   Does NOT redefine colour/radius/shadow/typography nor the canonical
+   dmo-* components — those live in the shared layer.
+   ============================================================ */
+
+/* Page container */
+.controlo-page {
+  max-width: var(--dmo-page-max-width);
+  margin: 0 auto;
+  padding: var(--dmo-space-6) var(--dmo-page-gutter-desktop);
+}
+
+/* ============================================================
+   Active production card (workspace context indicator)
+   ============================================================ */
+
+.controlo-active-card {
+  margin-bottom: var(--dmo-space-4);
+}
+
+.controlo-active-card-body {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) auto;
+  gap: var(--dmo-space-4);
+  align-items: center;
+  padding: var(--dmo-space-4);
+}
+
+.controlo-card-title {
+  font-size: var(--dmo-font-size-label);
+  color: var(--dmo-muted);
+  text-transform: uppercase;
+  font-weight: var(--dmo-font-weight-bold);
+  letter-spacing: var(--dmo-letter-spacing-caps);
+}
+
+.controlo-card-line {
+  font-size: var(--dmo-font-size-xl);
+  font-weight: var(--dmo-font-weight-extrabold);
+  color: var(--dmo-text);
+}
+
+.controlo-card-sub {
+  font-size: var(--dmo-font-size-sm);
+  color: var(--dmo-muted);
+  margin-top: var(--dmo-space-1);
+}
+
+.controlo-card-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--dmo-space-1);
+}
+
+.controlo-hint {
+  font-size: var(--dmo-font-size-label);
+  color: var(--dmo-muted);
+}
+
+/* ============================================================
+   Tabs (module-specific bar using shared .tab pattern)
+   ============================================================ */
+
+.controlo-tabs {
+  display: flex;
+  gap: var(--dmo-space-6);
+  padding: 0 2px;
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+  margin-bottom: var(--dmo-space-4);
+}
+
+.controlo-tabs .tab {
+  border: 0;
+  background: none;
+  border-bottom: 3px solid transparent;
+  padding: 0 2px;
+  cursor: pointer;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-md);
+  font-weight: var(--dmo-font-weight-extrabold);
+  line-height: 1;
+}
+
+.controlo-tabs .tab:hover {
+  background: var(--dmo-brand-050);
+}
+
+.controlo-tabs .tab.active {
+  color: var(--dmo-brand-600);
+  border-bottom-color: var(--dmo-brand-600);
+}
+
+/* Tab views */
+.controlo-tab-view {
+  display: none;
+}
+
+.controlo-tab-view.active {
+  display: block;
+}
+
+/* ============================================================
+   Summary tab layout
+   ============================================================ */
+
+.controlo-context {
+  padding: var(--dmo-space-4);
+  margin-bottom: var(--dmo-space-4);
+}
+
+.controlo-context-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--dmo-space-3);
+}
+
+.controlo-context-grid > div {
+  padding: 9px 10px;
+  border-left: 3px solid var(--dmo-border);
+  border-radius: var(--dmo-radius-control);
+  background: var(--dmo-surface-subtle);
+}
+
+.controlo-context-grid span {
+  display: block;
+  color: var(--dmo-text-muted);
+  font-size: var(--dmo-font-size-xs);
+  text-transform: uppercase;
+}
+
+.controlo-context-grid strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--dmo-text);
+  font-weight: var(--dmo-font-weight-extrabold);
+}
+
+.controlo-items-card,
+.controlo-history-card {
+  margin-bottom: var(--dmo-space-4);
+}
+
+/* ============================================================
+   Embed area for reused Peso/Comparação/Pegamentos UIs
+   ============================================================ */
+
+.controlo-tab-note {
+  font-size: var(--dmo-font-size-label);
+  color: var(--dmo-muted);
+  margin-top: var(--dmo-space-3);
+}
+
+.controlo-tab-embed > * {
+  /* Reused module content fills here */
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+
+@media (max-width: 720px) {
+  .controlo-page {
+    padding: var(--dmo-space-4) var(--dmo-page-gutter-mobile);
+  }
+
+  .controlo-active-card-body {
+    grid-template-columns: 1fr;
+    gap: var(--dmo-space-2);
+  }
+
+  .controlo-card-actions {
+    align-items: flex-start;
+  }
+
+  .controlo-tabs {
+    gap: var(--dmo-space-3);
+    overflow-x: auto;
+  }
+
+  .controlo-context-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .controlo-context-grid {
+    grid-template-columns: 1fr;
+  }
+}

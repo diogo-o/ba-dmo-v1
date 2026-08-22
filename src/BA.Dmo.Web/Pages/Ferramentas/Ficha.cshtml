@@ -1,0 +1,90 @@
+@page "/ferramentas/{id:guid}"
+@model BA.Dmo.Web.Pages.Ferramentas.FichaModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.ModulePolicies.Ferramentas)]
+@{
+    ViewData["Title"] = "Ficha da referência";
+}
+<link rel="stylesheet" href="~/styles/modules/ferramentas-layout.css" />
+
+<main data-testid="page-ferramentas-ficha" class="ferramentas-page">
+    <input type="hidden" id="referenceId" value="@Model.ReferenceId">
+    <input type="hidden" id="canConfigure" value="@(Model.CanConfigure ? "true" : "false")">
+
+    <div class="dmo-page-head">
+        <div>
+            <h2 id="fichaTitle">Ficha da referência</h2>
+            <p id="fichaSubtitle"></p>
+        </div>
+        <span class="dmo-pill" id="fichaType">CM</span>
+    </div>
+
+    <div class="dmo-card">
+        <div class="ferramentas-section-head"><h3>Identificação</h3></div>
+        <div class="ferramentas-context-grid">
+            <div><span>Tipo</span><strong data-node="tipo">—</strong></div>
+            <div><span>Referência</span><strong data-node="refCode">—</strong></div>
+            <div><span>Nome técnico</span><strong data-node="technicalName">—</strong></div>
+            <div><span>Owner plant</span><strong data-node="ownerPlant">—</strong></div>
+        </div>
+    </div>
+
+    <div class="dmo-card">
+        <div class="ferramentas-section-head">
+            <div>
+                <h3>Lotes</h3>
+                <p class="ferramentas-hint">Um clique seleciona; duplo clique abre o lote. A duplicação fica fora da lista.</p>
+            </div>
+            <button class="dmo-button" id="btnDuplicate" disabled type="button">Novo lote a partir deste</button>
+        </div>
+        <div class="dmo-table-wrap">
+            <table class="dmo-table select-table">
+                <thead>
+                    <tr>
+                        <th>Lote</th>
+                        <th>Processo</th>
+                        <th>Quantidade</th>
+                        <th>Máquinas/Linhas</th>
+                        <th>Desenho</th>
+                        <th>Revisão</th>
+                    </tr>
+                </thead>
+                <tbody data-dmo-list id="loteList">
+                    <tr><td colspan="6" class="empty">Sem lotes registados para esta referência.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @* Per-lot Verificações panel *@
+    <div class="dmo-card" id="verificacoesCard" hidden>
+        <div class="ferramentas-section-head">
+            <div>
+                <h3>Verificações</h3>
+                <p class="ferramentas-hint">Regras configuradas neste lote. A configuração exige <c>ferramentas.configure</c>.</p>
+            </div>
+            <button class="dmo-button" id="btnAddRule" hidden type="button">Adicionar regra</button>
+        </div>
+        <div class="dmo-table-wrap">
+            <table class="dmo-table">
+                <thead>
+                    <tr><th>Regra</th><th>Frequência</th><th>Estado</th><th></th></tr>
+                </thead>
+                <tbody id="ruleList">
+                    <tr><td colspan="4" class="empty">Sem regras configuradas neste lote.</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="ferramentas-rule-editor" id="ruleEditor" hidden>
+            <div class="dmo-field dmo-field--compact"><label>Texto da regra</label><input id="ruleText"></div>
+            <div class="dmo-field"><label>Frequência</label><select id="ruleFrequency"><option value="uma_vez_no_lote">Uma vez no lote</option><option value="por_fabrico">Por fabrico</option></select></div>
+            <div class="ferramentas-actions">
+                <button class="dmo-button" id="btnCancelRule" type="button">Cancelar</button>
+                <button class="dmo-button success" id="btnSaveRule" type="button">Guardar regra</button>
+            </div>
+        </div>
+    </div>
+</main>
+
+<div class="dmo-toast" role="status" id="toast"></div>
+<script src="~/scripts/ferramentas.js" defer></script>

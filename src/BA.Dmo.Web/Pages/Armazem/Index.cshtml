@@ -1,0 +1,249 @@
+@page "/armazem"
+@model BA.Dmo.Web.Pages.Armazem.IndexModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.ModulePolicies.Armazem)]
+@{
+    ViewData["Title"] = "Armazém";
+}
+<link rel="stylesheet" href="~/styles/modules/armazem-layout.css" />
+
+<nav class="armazem-tabs" aria-label="Navegação Armazém">
+    <button class="tab active" data-view="registo" type="button">Registo</button>
+    <button class="tab" data-view="consulta" type="button">Consulta</button>
+    <button class="tab" data-view="programadas" type="button">Programadas</button>
+    <button class="tab" data-view="historico" type="button">Histórico</button>
+</nav>
+
+<main data-testid="page-armazem" class="armazem-page">
+
+    <!-- ===== Registo ===== -->
+    <section class="armazem-view active" id="registo">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Registo</h2>
+                <p>Posições e movimentos de ferramentas (CM/MF). O Armazém apenas regista onde a ferramenta está; os dados técnicos pertencem ao domínio da ferramenta.</p>
+            </div>
+        </div>
+
+        <div class="armazem-action-row">
+            <button type="button" class="dmo-button" data-open="entrada">Entrada</button>
+            <button type="button" class="dmo-button" data-open="saida">Saída</button>
+            <button type="button" class="dmo-button" data-open="substituir">Substituir</button>
+        </div>
+
+        <div class="armazem-empty dmo-empty-state" data-testid="registo-empty">
+            <strong>Escolha Entrada, Saída ou Substituir para começar.</strong>
+            <span>O formulário abre nesta página.</span>
+        </div>
+
+        <form id="entradaForm" class="armazem-card dmo-card" hidden>
+            <h3>Registar Entrada / Repor</h3>
+            <div class="armazem-grid">
+                <div class="dmo-field">
+                    <label for="entradaType">Tipo</label>
+                    <select id="entradaType">
+                        <option value="CM">CM</option>
+                        <option value="MF">MF</option>
+                    </select>
+                </div>
+                <div class="dmo-field">
+                    <label for="entradaRef">Referência</label>
+                    <input id="entradaRef" type="text" autocomplete="off" />
+                </div>
+                <div class="dmo-field">
+                    <label for="entradaLot">Lote</label>
+                    <input id="entradaLot" type="text" autocomplete="off" />
+                </div>
+                <div class="dmo-field">
+                    <label for="entradaPosition">Posição (4 dígitos)</label>
+                    <input id="entradaPosition" type="text" inputmode="numeric" maxlength="4" autocomplete="off" />
+                </div>
+                <div class="dmo-field">
+                    <label for="entradaObs">Observações</label>
+                    <input id="entradaObs" type="text" autocomplete="off" />
+                </div>
+            </div>
+            <div class="armazem-actions dmo-row-actions">
+                <button type="button" class="dmo-button" data-close>Cancelar</button>
+                <button type="button" class="dmo-button success" data-submit="entrada">Guardar Entrada</button>
+            </div>
+        </form>
+
+        <form id="saidaForm" class="armazem-card dmo-card" hidden>
+            <h3>Registar Saída (Retirar)</h3>
+            <div class="armazem-grid">
+                <div class="dmo-field">
+                    <label for="saidaType">Tipo</label>
+                    <select id="saidaType">
+                        <option value="CM">CM</option>
+                        <option value="MF">MF</option>
+                    </select>
+                </div>
+                <div class="dmo-field">
+                    <label for="saidaRef">Referência</label>
+                    <input id="saidaRef" type="text" autocomplete="off" />
+                </div>
+                <div class="dmo-field">
+                    <label for="saidaLot">Lote</label>
+                    <input id="saidaLot" type="text" autocomplete="off" />
+                </div>
+                <div class="dmo-field">
+                    <label for="saidaDest">Destino (opcional)</label>
+                    <select id="saidaDest">
+                        <option value="">—</option>
+                        <option value="producao">Produção</option>
+                        <option value="reparacao">Reparação</option>
+                    </select>
+                </div>
+                <div class="dmo-field">
+                    <label for="saidaObs">Observações</label>
+                    <input id="saidaObs" type="text" autocomplete="off" />
+                </div>
+            </div>
+            <div class="armazem-actions dmo-row-actions">
+                <button type="button" class="dmo-button" data-close>Cancelar</button>
+                <button type="button" class="dmo-button success" data-submit="saida">Guardar Saída</button>
+            </div>
+        </form>
+
+        <form id="substituirForm" class="armazem-card dmo-card" hidden>
+            <h3>Substituir posição (uma ação atómica)</h3>
+            <div class="armazem-grid">
+                <div class="dmo-field">
+                    <label for="substPosition">Posição (4 dígitos)</label>
+                    <input id="substPosition" type="text" inputmode="numeric" maxlength="4" autocomplete="off" />
+                </div>
+                <div class="dmo-field">
+                    <label for="substType">Novo tipo</label>
+                    <select id="substType">
+                        <option value="CM">CM</option>
+                        <option value="MF">MF</option>
+                    </select>
+                </div>
+                <div class="dmo-field">
+                    <label for="substRef">Nova referência</label>
+                    <input id="substRef" type="text" autocomplete="off" />
+                </div>
+                <div class="dmo-field">
+                    <label for="substLot">Novo lote</label>
+                    <input id="substLot" type="text" autocomplete="off" />
+                </div>
+                <div class="dmo-field">
+                    <label for="substObs">Observações</label>
+                    <input id="substObs" type="text" autocomplete="off" />
+                </div>
+            </div>
+            <div class="armazem-actions dmo-row-actions">
+                <button type="button" class="dmo-button" data-close>Cancelar</button>
+                <button type="button" class="dmo-button danger" data-submit="substituir">Substituir</button>
+            </div>
+        </form>
+    </section>
+
+    <!-- ===== Consulta ===== -->
+    <section class="armazem-view" id="consulta">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Consulta</h2>
+                <p>Pesquise por tipo, referência, lote ou posição. Posições com ferramentas de referências diferentes geram alerta de qualidade de dados.</p>
+            </div>
+        </div>
+
+        <div class="armazem-search dmo-card">
+            <div class="armazem-grid">
+                <div class="dmo-field">
+                    <label for="seekType">Tipo</label>
+                    <select id="seekType">
+                        <option value="">—</option>
+                        <option value="CM">CM</option>
+                        <option value="MF">MF</option>
+                    </select>
+                </div>
+                <div class="dmo-field">
+                    <label for="seekRef">Referência</label>
+                    <input id="seekRef" type="text" autocomplete="off" />
+                </div>
+                <div class="dmo-field">
+                    <label for="seekLot">Lote</label>
+                    <input id="seekLot" type="text" autocomplete="off" />
+                </div>
+                <div class="dmo-field">
+                    <label for="seekPosition">Posição</label>
+                    <input id="seekPosition" type="text" inputmode="numeric" maxlength="4" autocomplete="off" />
+                </div>
+            </div>
+            <div class="armazem-actions dmo-row-actions">
+                <button type="button" class="dmo-button" data-seek>Pesquisar</button>
+                <button type="button" class="dmo-button" data-seek-clear>Limpar</button>
+            </div>
+        </div>
+
+        <div class="armazem-results dmo-table-card">
+            <div class="dmo-table-wrap">
+                <table class="dmo-table" id="consultationTable">
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Referência</th>
+                            <th>Nome técnico</th>
+                            <th>Lote</th>
+                            <th>Localização/contexto</th>
+                            <th>Posição</th>
+                            <th>Alerta</th>
+                        </tr>
+                    </thead>
+                    <tbody id="consultationBody"></tbody>
+                </table>
+            </div>
+            <div class="dmo-empty-state" hidden id="consultationEmpty">Sem resultados.</div>
+        </div>
+    </section>
+
+    <!-- ===== Programadas ===== -->
+    <section class="armazem-view" id="programadas">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Entradas programadas</h2>
+                <p>Movimentos de entrada planeados para ferramentas CM/MF no Armazém.</p>
+            </div>
+        </div>
+        <div class="dmo-card">
+            <div class="armazem-grid">
+                <div class="dmo-field"><label>Tipo</label><select id="progType"><option value="CM">CM</option><option value="MF">MF</option></select></div>
+                <div class="dmo-field dmo-field--compact"><label>Referência</label><input id="progRef" type="text" autocomplete="off" /></div>
+                <div class="dmo-field"><label>Data prevista</label><input id="progDate" type="date" /></div>
+            </div>
+            <div class="dmo-table-wrap">
+                <table class="dmo-table">
+                    <thead><tr><th>Tipo</th><th>Referência</th><th>Lote</th><th>Data prevista</th><th>Estado</th></thead>
+                    <tbody id="programadasBody"><tr><td colspan="5" class="empty">Sem entradas programadas.</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== Histórico ===== -->
+    <section class="armazem-view" id="historico">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Histórico de movimentos</h2>
+                <p>Movimentos registados no Armazém: entradas, saídas e substituições.</p>
+            </div>
+        </div>
+        <div class="dmo-card">
+            <div class="armazem-grid">
+                <div class="dmo-field"><label>Tipo</label><select id="histType"><option value="">Todos</option><option value="entrada">Entrada</option><option value="saida">Saída</option><option value="substituir">Substituição</option></select></div>
+                <div class="dmo-field"><label>Desde</label><input id="histFrom" type="date" /></div>
+                <div class="dmo-field"><label>Até</label><input id="histTo" type="date" /></div>
+            </div>
+            <div class="dmo-table-wrap">
+                <table class="dmo-table">
+                    <thead><tr><th>Data/hora</th><th>Tipo</th><th>Referência</th><th>Lote</th><th>Posição</th><th>Destino/Nota</th><th>Operador</th></thead>
+                    <tbody id="historicoBody"><tr><td colspan="7" class="empty">Sem movimentos no período.</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</main>
+
+<div class="dmo-toast" role="status" id="toast"></div>
+<script src="~/scripts/armazem.js" defer></script>

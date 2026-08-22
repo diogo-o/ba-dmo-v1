@@ -1,0 +1,215 @@
+/* ============================================================
+   Reparação Externa — module layout (U-15)
+   Composition / layout ONLY (GLM-DSN-03, DESIGN_IMPLEMENTATION_CONTRACT §3.3).
+   Organizes grid, order, widths and reveals for the Reparação Externa surface.
+   Does NOT redefine colour/radius/shadow/typography nor the canonical
+   dmo-* components — those live in the shared layer.
+   ============================================================ */
+
+.reparacao-externa-page {
+  max-width: var(--dmo-page-max-width);
+  margin: 0 auto;
+  padding: var(--dmo-space-6) var(--dmo-page-gutter-desktop);
+}
+
+.reparacao-externa-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dmo-space-6);
+  padding: 0 2px;
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+}
+.reparacao-externa-tabs .tab {
+  background: none;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  padding: 12px 2px;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-md);
+  font-weight: var(--dmo-font-weight-extrabold);
+  line-height: 1;
+}
+.reparacao-externa-tabs .tab.active {
+  color: var(--dmo-brand-600);
+  border-bottom-color: var(--dmo-brand-600);
+}
+
+.reparacao-externa-view {
+  display: none;
+}
+.reparacao-externa-view.active {
+  display: block;
+}
+
+.reparacao-externa-action-row {
+  display: flex;
+  gap: var(--dmo-space-2);
+  margin-bottom: var(--dmo-space-4);
+}
+.reparacao-externa-action-row > .dmo-button {
+  min-height: var(--dmo-control-height);
+}
+
+.reparacao-externa-grid {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.3fr) minmax(140px, 1fr) minmax(120px, 0.9fr);
+  gap: var(--dmo-space-3);
+  align-items: end;
+}
+
+.reparacao-externa-actions {
+  margin-top: var(--dmo-space-3);
+}
+
+.reparacao-externa-deferred {
+  padding: var(--dmo-space-4);
+  max-width: 720px;
+}
+
+.reparacao-externa-card {
+  padding: var(--dmo-space-4);
+  margin-bottom: var(--dmo-space-4);
+  max-width: 960px;
+}
+
+@media (max-width: 900px) {
+  .reparacao-externa-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .reparacao-externa-page {
+    padding: var(--dmo-space-4) var(--dmo-page-gutter-mobile);
+  }
+  .reparacao-externa-grid {
+    grid-template-columns: 1fr;
+  }
+  .reparacao-externa-action-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* ============================================================
+   Associação Reparador ↔ Linha — compact form + list
+   ============================================================ */
+
+.reparacao-externa-line-form {
+  display: flex;
+  gap: var(--dmo-space-3);
+  align-items: end;
+  flex-wrap: wrap;
+  margin-bottom: var(--dmo-space-4);
+}
+
+.reparacao-externa-line-form .dmo-field {
+  flex: 1;
+  min-width: 160px;
+}
+
+.reparacao-externa-line-form .dmo-field--search {
+  position: relative;
+  flex: 2;
+  min-width: 200px;
+}
+
+.reparacao-externa-line-form .dmo-button {
+  height: var(--dmo-control-height);
+}
+
+.reparacao-externa-compact-title {
+  font-size: var(--dmo-font-size-sm);
+  color: var(--dmo-muted);
+  margin: var(--dmo-space-4) 0 var(--dmo-space-2) 0;
+  font-weight: var(--dmo-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.reparacao-externa-compact-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--dmo-space-2);
+}
+
+.reparacao-externa-compact-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--dmo-space-2) var(--dmo-space-3);
+  background: var(--dmo-surface-card);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-radius-sm);
+  font-size: var(--dmo-font-size-sm);
+}
+
+.reparacao-externa-compact-list .line-label {
+  font-weight: var(--dmo-font-weight-bold);
+  color: var(--dmo-brand-600);
+}
+
+.reparacao-externa-compact-list .repairer-name {
+  color: var(--dmo-text-primary);
+  font-weight: var(--dmo-font-weight-medium);
+}
+
+.reparacao-externa-compact-list .no-association {
+  color: var(--dmo-muted);
+  font-style: italic;
+}
+
+.reparacao-externa-compact-list .remove-btn {
+  border: none;
+  background: none;
+  color: var(--dmo-danger);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.reparacao-externa-compact-list .remove-btn:hover {
+  opacity: 1;
+}
+
+.dmo-autocomplete-list {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0 0;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--dmo-card);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-radius-sm);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  display: none;
+}
+
+.dmo-autocomplete-list.visible {
+  display: block;
+}
+
+.dmo-autocomplete-list li {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: var(--dmo-font-size-sm);
+  transition: background 0.1s;
+}
+
+.dmo-autocomplete-list li:hover,
+.dmo-autocomplete-list li.active {
+  background: var(--dmo-brand-100);
+  color: var(--dmo-brand-600);
+}

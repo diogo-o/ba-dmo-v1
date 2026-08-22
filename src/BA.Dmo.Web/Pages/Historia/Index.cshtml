@@ -1,0 +1,279 @@
+@page "/historia"
+@model BA.Dmo.Web.Pages.Historia.IndexModel
+@using BA.Dmo.Application.Modules.Historia
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.ModulePolicies.Historia)]
+@{
+    ViewData["Title"] = "História";
+
+    string PillForResult(string result) => result switch
+    {
+        "succeeded" => "dmo-pill active",
+        "corrected" => "dmo-pill",
+        _ => "dmo-pill rejected"
+    };
+
+    string LabelForResult(string result) => result switch
+    {
+        "succeeded" => "Sucesso",
+        "failed" => "Falha",
+        "denied" => "Negado",
+        "corrected" => "Corrigida",
+        _ => result
+    };
+
+    // Action verb label (contract §13.2: explicit verb, not a technical-only
+    // code). For codes outside the known catalog the raw code is shown as-is —
+    // the module never invents semantics for unknown actions.
+    string ActionLabel(string action) => action switch
+    {
+        "jobon.created" => "Job On criado",
+        "jobon.duplicated" => "Job On duplicado",
+        "jobon.revision.saved" => "Revisão guardada",
+        "jobon.tool.replaced" => "Ferramenta substituída",
+        "jobon.date.changed" => "Data alterada",
+        "jobon.verification.confirmed" => "Verificação confirmada",
+        "jobon.verification.reset" => "Verificação reposta",
+        "weight.lot.created" => "Lote criado",
+        "weight.control.calculated" => "Controlo calculado",
+        "weight.control.submitted" => "Controlo submetido",
+        "weight.control.approved" => "Controlo aprovado",
+        "weight.control.rejected" => "Controlo não aprovado",
+        "weight.comparison.decided" => "Comparação decidida",
+        "gluing.record.created" => "Registo de pegamento criado",
+        "gluing.record.saved" => "Registo de pegamento guardado",
+        "bq.lot.created" => "Lote de Boquilha criado",
+        "bq.movement.created" => "Movimento de Boquilha criado",
+        "bq.movement.corrected" => "Movimento de Boquilha corrigido",
+        "bq.lot.closed" => "Lote de Boquilha fechado",
+        "warehouse.entry.created" => "Entrada de armazém criada",
+        "warehouse.exit.created" => "Saída de armazém criada",
+        "warehouse.location.corrected" => "Localização corrigida",
+        "warehouse.scheduled_exit.completed" => "Saída programada concluída",
+        "repair.list.created" => "Lista de reparação criada",
+        "repair.exit.confirmed" => "Saída de reparação confirmada",
+        "repair.entry.confirmed" => "Entrada de reparação confirmada",
+        "repair.internal.created" => "Reparação interna registada",
+        "repair.internal.corrected" => "Reparação interna corrigida",
+        "stopper.quantity.added" => "Quantidade adicionada",
+        "stopper.quantity.removed" => "Quantidade removida",
+        "stopper.configuration.changed" => "Configuração alterada",
+        "stopper.plan.updated" => "Plano de Tampões atualizado",
+        "admin.user.created" => "Utilizador criado",
+        "admin.user.updated" => "Utilizador atualizado",
+        "admin.user.deactivated" => "Utilizador desativado",
+        "admin.option.updated" => "Opção administrável atualizada",
+        "admin.access_template.updated" => "Template de acesso atualizado",
+        _ => action
+    };
+
+    string ModuleLabel(string module) => module switch
+    {
+        "jobon" => "Job On",
+        "boquilhas" => "Boquilhas",
+        "peso" => "Peso",
+        "pegamentos" => "Pegamentos",
+        "ferramentas" => "Ferramentas",
+        "armazem" => "Armazém",
+        "reparacao_interna" => "Reparação Interna",
+        "reparacao_externa" => "Reparação Externa",
+        "tampoes" => "Tampões",
+        "admin" => "Administração",
+        _ => module
+    };
+
+    string BuildQuery(int page) =>
+        $"query={Uri.EscapeDataString(Model.Query ?? string.Empty)}" +
+        $"&module={Uri.EscapeDataString(Model.Module ?? string.Empty)}" +
+        $"&action={Uri.EscapeDataString(Model.Action ?? string.Empty)}" +
+        $"&actor={Uri.EscapeDataString(Model.Actor ?? string.Empty)}" +
+        $"&result={Uri.EscapeDataString(Model.Result ?? string.Empty)}" +
+        $"&pageSize={Model.PageSize}" +
+        (Model.FromUtc.HasValue ? $"&from={Model.FromUtc.Value.UtcDateTime:yyyy-MM-dd}" : string.Empty) +
+        (Model.ToUtc.HasValue ? $"&to={Model.ToUtc.Value.UtcDateTime:yyyy-MM-dd}" : string.Empty) +
+        $"&page={page}";
+}
+<main data-testid="page-historia" class="historia-page">
+    <div class="dmo-page-head">
+        <div>
+            <h2>História transversal</h2>
+            <p>Histórico de ações persistido, por ferramenta, produção, linha e ator, limitado aos módulos autorizados pelo seu template.</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="dmo-alert" role="alert">@Model.ErrorMessage</div>
+    }
+
+    <form method="get" class="audit-filters audit-filters--auto dmo-card">
+        <div class="dmo-field">
+            <label for="query">Entidade (referência/lote/produção)</label>
+            <input id="query" name="query" type="text" value="@Model.Query" autocomplete="off" />
+        </div>
+        <div class="dmo-field">
+            <label for="module">Módulo</label>
+            <select id="module" name="module">
+                <option value="">Todos</option>
+                @foreach (var moduleId in Model.VisibleModuleIds)
+                {
+                    <option value="@moduleId" selected="@(Model.Module == moduleId)">@ModuleLabel(moduleId)</option>
+                }
+            </select>
+        </div>
+        <div class="dmo-field">
+            <label for="action">Tipo de ação</label>
+            <input id="action" name="action" type="text" value="@Model.Action" autocomplete="off" />
+        </div>
+        <div class="dmo-field">
+            <label for="actor">Ator</label>
+            <input id="actor" name="actor" type="text" value="@Model.Actor" autocomplete="off" />
+        </div>
+        <div class="dmo-field">
+            <label for="result">Resultado</label>
+            <select id="result" name="result">
+                <option value="">Todos</option>
+                @foreach (var option in new[] { "succeeded", "failed", "denied", "corrected" })
+                {
+                    <option value="@option" selected="@(Model.Result == option)">@LabelForResult(option)</option>
+                }
+            </select>
+        </div>
+        <div class="dmo-field">
+            <label for="from">De</label>
+            <input id="from" name="from" type="date" value="@(Model.FromUtc?.UtcDateTime.ToString("yyyy-MM-dd"))" />
+        </div>
+        <div class="dmo-field">
+            <label for="to">Até</label>
+            <input id="to" name="to" type="date" value="@(Model.ToUtc?.UtcDateTime.ToString("yyyy-MM-dd"))" />
+        </div>
+        <div class="dmo-field">
+            <label for="pageSize">Linhas</label>
+            <select id="pageSize" name="pageSize">
+                @foreach (var size in new[] { 20, 40, 60 })
+                {
+                    <option value="@size" selected="@(Model.PageSize == size)">@size</option>
+                }
+            </select>
+        </div>
+        <button type="submit" class="dmo-button">Filtrar</button>
+    </form>
+
+    @if (Model.Histories is not null)
+    {
+        var totalPages = Math.Max(1, (int)Math.Ceiling(Model.Histories.TotalCount / (double)Model.Histories.PageSize));
+        <div class="dmo-card dmo-table-card">
+            <div class="dmo-table-title">
+                <div>
+                    <h3>Histórico agrupado por entidade</h3>
+                    <p class="dmo-field__helper">Leitura apenas. Um clique seleciona; expanda cada entrada para ver o detalhe factual.</p>
+                </div>
+                <span class="dmo-pill">@Model.Histories.TotalCount entidade(s)</span>
+            </div>
+
+            @if (Model.Histories.Groups.Count == 0)
+            {
+                <div class="dmo-empty-state">Sem eventos históricos persistidos para os módulos autorizados.</div>
+            }
+            else
+            {
+                <div class="historia-group-list" data-dmo-list>
+                    @foreach (var group in Model.Histories.Groups)
+                    {
+                        <section class="historia-group dmo-card" data-dmo-row data-id="@group.GroupKey" aria-selected="false">
+                            <header class="historia-group__head">
+                                <div>
+                                    <h4 class="historia-group__entity">@group.EntityLabel</h4>
+                                    <p class="dmo-field__helper">@ModuleLabel(group.ModuleId) · @group.EntityType · @(group.Events.Count) evento(s)</p>
+                                </div>
+                                <span class="dmo-pill">@group.LatestAtUtc.LocalDateTime.ToString("dd/MM/yyyy HH:mm")</span>
+                            </header>
+
+                            <div class="dmo-table-wrap">
+                                <table class="dmo-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Data/hora (local)</th>
+                                            <th>Ação</th>
+                                            <th>Ator</th>
+                                            <th>Resultado</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var entry in group.Events)
+                                        {
+                                            <tr class="historia-entry-row">
+                                                <td>@entry.OccurredAtUtc.LocalDateTime.ToString("dd/MM/yyyy · HH:mm")</td>
+                                                <td>@ActionLabel(entry.ActionCode)</td>
+                                                <td>@(entry.ActorNameSnapshot ?? entry.ActorUserId ?? "—")</td>
+                                                <td><span class="@PillForResult(entry.Result)">@LabelForResult(entry.Result)</span></td>
+                                                <td>
+                                                    <details class="historia-entry">
+                                                        <summary class="historia-entry__summary">Detalhe</summary>
+                                                        <div class="historia-entry__detail">
+                                                            <dl class="historia-entry__meta">
+                                                                <div><dt>Ação</dt><dd>@entry.ActionCode</dd></div>
+                                                                <div><dt>Registo</dt><dd>@entry.EntityType · @entry.EntityId</dd></div>
+                                                                <div><dt>Ator</dt><dd>@(entry.ActorNameSnapshot ?? entry.ActorUserId ?? "—")</dd></div>
+                                                                <div>
+                                                                    <dt>Data/hora</dt>
+                                                                    <dd>@entry.OccurredAtUtc.LocalDateTime.ToString("dd/MM/yyyy HH:mm:ss 'UTC'zzz") (@entry.OccurredAtUtc.UtcDateTime.ToString("HH:mm"))</dd>
+                                                                </div>
+                                                                @if (!string.IsNullOrEmpty(entry.Reason))
+                                                                {
+                                                                    <div><dt>Motivo</dt><dd>@entry.Reason</dd></div>
+                                                                }
+                                                                @if (entry.JobOnId.HasValue)
+                                                                {
+                                                                    <div><dt>Job On</dt><dd>@entry.JobOnId</dd></div>
+                                                                }
+                                                            </dl>
+
+                                                            @if (!string.IsNullOrEmpty(entry.BeforeSummary) || !string.IsNullOrEmpty(entry.AfterSummary))
+                                                            {
+                                                                <div class="dmo-history-entry__compare">
+                                                                    <div>
+                                                                        <strong>Anterior</strong>
+                                                                        <pre class="historia-entry__snapshot">@(entry.BeforeSummary ?? "—")</pre>
+                                                                    </div>
+                                                                    <div>
+                                                                        <strong>Novo</strong>
+                                                                        <pre class="historia-entry__snapshot">@(entry.AfterSummary ?? "—")</pre>
+                                                                    </div>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    </details>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    }
+                </div>
+
+                <div class="dmo-pagination">
+                    <span>@Model.Histories.TotalCount entidade(s) · Página @Model.Histories.Page de @totalPages</span>
+                    @if (Model.Histories.Page > 1)
+                    {
+                        <a class="dmo-button dmo-icon-button" href="/historia?@BuildQuery(Model.Histories.Page - 1)" aria-label="Página anterior">‹</a>
+                    }
+                    else
+                    {
+                        <button class="dmo-button dmo-icon-button" disabled aria-label="Página anterior">‹</button>
+                    }
+                    @if (Model.Histories.Page * Model.Histories.PageSize < Model.Histories.TotalCount)
+                    {
+                        <a class="dmo-button dmo-icon-button" href="/historia?@BuildQuery(Model.Histories.Page + 1)" aria-label="Página seguinte">›</a>
+                    }
+                    else
+                    {
+                        <button class="dmo-button dmo-icon-button" disabled aria-label="Página seguinte">›</button>
+                    }
+                </div>
+            }
+        </div>
+    }
+</main>

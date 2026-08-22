@@ -1,0 +1,44 @@
+@inject BA.Dmo.Application.Shared.Shell.IShellService Shell
+@{
+    // Global header — reference dmo-app-header anatomy (DMO §6): logo +
+    // page identity + user block (name + profile_title, presentation only,
+    // UD-02) with the account trigger. Derivation/grants untouched (U-07).
+    var shell = Shell.Current;
+    var pageTitle = ViewData["Title"] as string;
+    // Admin scope (contract §1): set by _Layout before this partial renders;
+    // in admin scope the brand block is the reference admin-header identity
+    // (h1 "Portal DMO" + p "Administração") instead of the module page title.
+    var adminScope = ViewData["AdminScope"] is bool admin && admin;
+}
+<header class="app-header dmo-app-header">
+    <a href="/" class="app-brand" aria-label="BA DMO — início">
+        <img class="dmo-app-header__logo" src="~/assets/ba-logo.png" alt="BA" />
+    </a>
+    @if (!string.IsNullOrWhiteSpace(pageTitle))
+    {
+        if (adminScope)
+        {
+            <div class="dmo-app-header__page">
+                <h1>Portal DMO</h1>
+                <p>Administração</p>
+            </div>
+        }
+        else
+        {
+            <div class="dmo-app-header__page">
+                <h1>@pageTitle</h1>
+            </div>
+        }
+    }
+    @if (shell is not null)
+    {
+        <div class="dmo-app-header__user" data-testid="shell-user">
+            <strong data-user-profile-name>@shell.DisplayName</strong>
+            @if (!string.IsNullOrWhiteSpace(shell.ProfileTitle))
+            {
+                <span data-user-profile-title data-testid="shell-profile-title">@shell.ProfileTitle</span>
+            }
+            <a href="/logout" data-testid="shell-logout">Terminar sessão</a>
+        </div>
+    }
+</header>

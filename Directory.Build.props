@@ -1,0 +1,15 @@
+<Project>
+
+  <!--
+    BA DMO — central build settings (Plan-V3 GLM-ARCH-12 build contract).
+    Single target framework for every project in BA-DMO.sln: net10.0.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <NeutralLanguage>pt-PT</NeutralLanguage>
+  </PropertyGroup>
+
+</Project>

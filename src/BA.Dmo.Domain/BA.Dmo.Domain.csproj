@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- BA DMO domain layer: entities, value objects, domain services, invariants. No dependencies. -->
+
+  <PropertyGroup>
+    <InternalsVisibleTo>BA.Dmo.Infrastructure</InternalsVisibleTo>
+    <InternalsVisibleTo>BA.Dmo.UnitTests</InternalsVisibleTo>
+  </PropertyGroup>
+
+</Project>

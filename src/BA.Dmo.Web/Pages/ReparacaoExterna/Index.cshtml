@@ -1,0 +1,200 @@
+@page "/reparacao-externa"
+@model BA.Dmo.Web.Pages.ReparacaoExterna.IndexModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.ModulePolicies.ReparacaoExterna)]
+@{
+    ViewData["Title"] = "Reparação Externa";
+}
+<link rel="stylesheet" href="~/styles/modules/reparacao-externa-layout.css" />
+
+<nav class="reparacao-externa-tabs" aria-label="Navegação Reparação Externa">
+    <button class="tab active" data-view="boquilhas" type="button">Boquilhas</button>
+    <button class="tab" data-view="contra-moldes" type="button">Contra moldes</button>
+    <button class="tab" data-view="moldes-finais" type="button">Moldes finais</button>
+    <button class="tab" data-view="envios" type="button">Envios</button>
+    <button class="tab" data-view="historico" type="button">Histórico</button>
+    <button class="tab" data-view="definicoes" type="button">Definições</button>
+</nav>
+
+<main data-testid="page-reparacao-externa" class="reparacao-externa-page">
+
+    <!-- ===== Boquilhas (U-19 deferral, no fake behavior) ===== -->
+    <section class="reparacao-externa-view active" id="boquilhas">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Boquilhas</h2>
+            </div>
+        </div>
+        <div class="dmo-card reparacao-externa-deferred">
+            <p>Este módulo gere reparação externa de contra moldes (CM) e moldes finais (MF). A funcionalidade de Boquilhas está disponível na secção dedicada.</p>
+        </div>
+    </section>
+
+    <!-- ===== Contra moldes (CM) / Moldes finais (MF) — external cycle ===== -->
+    <section class="reparacao-externa-view" id="contra-moldes" data-repair-type="CM">
+        @await Html.PartialAsync("_RepairListBuilder", new ReparacaoExternaListBuilderModel("Contra moldes", "CM"))
+    </section>
+
+    <section class="reparacao-externa-view" id="moldes-finais" data-repair-type="MF">
+        @await Html.PartialAsync("_RepairListBuilder", new ReparacaoExternaListBuilderModel("Moldes finais", "MF"))
+    </section>
+
+    <!-- ===== Envios ===== -->
+    <section class="reparacao-externa-view" id="envios">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Envios</h2>
+                <p>Listas programadas (CM/MF) e o respetivo progresso físico. As posições só são libertas após confirmação explícita no Armazém.</p>
+            </div>
+        </div>
+        <div class="reparacao-externa-action-row">
+            <button type="button" class="dmo-button" data-refresh-exits>Atualizar</button>
+        </div>
+        <div class="dmo-table-card">
+            <div class="dmo-table-wrap">
+                <table class="dmo-table" id="exitsTable">
+                    <thead>
+                        <tr>
+                            <th>Lista</th>
+                            <th>Tipo</th>
+                            <th>Reparador</th>
+                            <th>Data prevista</th>
+                            <th>Estado</th>
+                            <th>Criado por</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="exitsBody"></tbody>
+                </table>
+            </div>
+            <div class="dmo-empty-state" hidden id="exitsEmpty">Sem saídas programadas.</div>
+            <div class="dmo-row-actions reparacao-externa-actions" id="exitsActions" hidden>
+                <button type="button" class="dmo-button" data-disponibilizar>Disponibilizar</button>
+                <button type="button" class="dmo-button danger" data-open-exit>Ver lista</button>
+            </div>
+        </div>
+
+        <div class="dmo-card" id="exitDetailCard" hidden>
+            <h3 data-detail-title>Lista</h3>
+            <div class="dmo-table-wrap">
+                <table class="dmo-table">
+                    <thead>
+                        <tr>
+                            <th>Referência</th>
+                            <th>Lote</th>
+                            <th>N.º</th>
+                            <th>Operador saída</th>
+                            <th>Operador entrada</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody data-detail-body></tbody>
+                </table>
+            </div>
+            <div class="reparacao-externa-grid">
+                <div class="dmo-field">
+                    <label for="returnPosition">Posição de retorno (4 dígitos)</label>
+                    <input id="returnPosition" type="text" inputmode="numeric" maxlength="4" autocomplete="off" />
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== Histórico ===== -->
+    <section class="reparacao-externa-view" id="historico">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Histórico</h2>
+                <p>Consulta transversal das listas concluídas e dos seus movimentos.</p>
+            </div>
+        </div>
+        <div class="reparacao-externa-action-row">
+            <button type="button" class="dmo-button" data-refresh-history>Atualizar</button>
+        </div>
+        <div class="dmo-table-card">
+            <div class="dmo-table-wrap">
+                <table class="dmo-table" id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>Lista</th>
+                            <th>Tipo</th>
+                            <th>Referência</th>
+                            <th>Lote</th>
+                            <th>N.º</th>
+                            <th>Reparador</th>
+                            <th>Saída</th>
+                            <th>Operador saída</th>
+                            <th>Entrada</th>
+                            <th>Operador entrada</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody"></tbody>
+                </table>
+            </div>
+            <div class="dmo-empty-state" hidden id="historyEmpty">Sem registos no histórico.</div>
+        </div>
+    </section>
+
+    <!-- ===== Definições: reparadores + linhas ===== -->
+    <section class="reparacao-externa-view" id="definicoes">
+        <div class="dmo-page-head">
+            <div>
+                <h2>Definições</h2>
+                <p>Reparadores permitidos por tipo e Linha. Desativar nunca apaga; cada envio guarda o snapshot do reparador usado.</p>
+            </div>
+        </div>
+
+        <div class="dmo-card">
+            <h3>Reparadores</h3>
+            <div class="reparacao-externa-grid">
+                <div class="dmo-field">
+                    <label for="newRepairerName">Nome</label>
+                    <input id="newRepairerName" type="text" autocomplete="off" />
+                </div>
+            </div>
+            <div class="dmo-row-actions">
+                <button type="button" class="dmo-button success" data-create-repairer>Adicionar reparador</button>
+            </div>
+            <div class="dmo-table-card">
+                <table class="dmo-table" id="repairersTable">
+                    <thead>
+                        <tr><th>Nome</th><th>Estado</th><th>Ações</th></tr>
+                    </thead>
+                    <tbody id="repairersBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="dmo-card reparacao-externa-line-associations">
+            <h3>Associação Reparador ↔ Linha</h3>
+
+            <div class="reparacao-externa-line-form">
+                <div class="dmo-field">
+                    <label for="lineAssocLine">Linha</label>
+                    <select id="lineAssocLine">
+                        <option value="B1">B1</option>
+                        <option value="B2">B2</option>
+                        <option value="B3">B3</option>
+                        <option value="C1">C1</option>
+                        <option value="C2">C2</option>
+                        <option value="C3">C3</option>
+                    </select>
+                </div>
+                <div class="dmo-field dmo-field--search">
+                    <label for="lineAssocRepairer">Reparador</label>
+                    <input id="lineAssocRepairer" type="text" autocomplete="off" placeholder="Pesquisar reparador…" />
+                    <ul id="lineAssocRepairerDropdown" class="dmo-autocomplete-list"></ul>
+                </div>
+                <div class="dmo-row-actions">
+                    <button type="button" class="dmo-button success" data-save-line-association>Guardar</button>
+                </div>
+            </div>
+
+            <h4 class="reparacao-externa-compact-title">Associações atuais</h4>
+            <ul id="lineAssociationsList" class="reparacao-externa-compact-list"></ul>
+        </div>
+    </section>
+</main>
+
+<div class="dmo-toast" role="status" id="toast"></div>
+<script src="~/scripts/reparacao-externa.js" defer></script>
