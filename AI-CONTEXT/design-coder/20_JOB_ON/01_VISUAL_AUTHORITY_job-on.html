@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Job On — Portal DMO</title>
+  <link rel="stylesheet" href="dmo-design-system.css">
+  <link rel="stylesheet" href="jobon-redesign.css">
+</head>
+<body data-view="planning" data-mode="view">
+  <header class="app-header dmo-app-header">
+    <div class="brand-mark" aria-hidden="true">BA</div>
+    <div class="brand-copy dmo-app-header__page"><strong>Job On</strong><span>Planeamento e preparação da produção</span></div>
+    <div class="user-block dmo-app-header__user"><strong>Ana Martins</strong><span>Responsável de moldes</span></div>
+  </header>
+
+  <nav class="primary-tabs dmo-primary-nav" aria-label="Tarefas principais">
+    <a class="active" href="job-on.html" aria-current="page">Job On</a>
+    <a href="controlo.html">Controlo</a>
+    <a href="reparacao-interna.html">Reparação Interna</a>
+    <a href="boquilhas.html">Boquilhas</a>
+    <a href="armazem.html">Armazém</a>
+  </nav>
+  <nav class="module-tabs dmo-secondary-nav" aria-label="Navegação Job On">
+    <button class="active" data-tab="planning">Planeamento</button>
+    <button data-tab="sheet">Job On</button>
+    <button data-tab="control">Controlo</button>
+    <button data-tab="history">Histórico</button>
+    <button data-tab="settings">Definições</button>
+  </nav>
+
+  <div class="app-layout">
+    <aside class="production-rail" id="productionRail">
+      <div class="rail-head"><div><span>Linhas</span><strong>Produção atual</strong></div><button class="rail-toggle" id="railToggle" aria-expanded="false">Ver linhas</button></div>
+      <div class="line-list">
+        <button class="line-card active" data-line="B1"><span class="line-code">B1</span><span class="line-state running">Ativo</span><strong>5774T173</strong><small>Produção 202603</small><span class="line-metric"><b>8</b> reparar · <b>6</b> em fábrica</span></button>
+        <button class="line-card" data-line="B2"><span class="line-code">B2</span><span class="line-state running">Ativo</span><strong>5810T188</strong><small>Produção 202602</small><span class="line-metric"><b>12</b> reparar · <b>4</b> em fábrica</span></button>
+        <button class="line-card" data-line="B3"><span class="line-code">B3</span><span class="line-state idle">Sem produção</span><small>Sem Job On ativo</small></button>
+        <button class="line-card attention" data-line="C1"><span class="line-code">C1</span><span class="line-state warning">Atenção</span><strong>9121T173</strong><small>Produção 202602</small><span class="line-metric"><b>24</b> reparar · <b>9</b> em fábrica</span></button>
+        <button class="line-card" data-line="C2"><span class="line-code">C2</span><span class="line-state idle">Sem produção</span><small>Sem Job On ativo</small></button>
+        <button class="line-card" data-line="C3"><span class="line-code">C3</span><span class="line-state running">Ativo</span><strong>7080C002</strong><small>Produção 202602</small><span class="line-metric"><b>5</b> reparar · <b>3</b> em fábrica</span></button>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <section class="view planning-view active" id="planningView">
+        <div class="page-heading"><div><span class="eyebrow">Planeamento</span><h1>Produções planeadas</h1><p>Selecione um dia para consultar ou preparar os Job Ons.</p></div><button class="button primary">Criar Job On</button></div>
+        <div class="planning-grid">
+          <section class="surface calendar-card">
+            <div class="calendar-head dmo-calendar__head"><button class="icon-button dmo-icon-button" aria-label="Mês anterior">‹</button><strong>Agosto 2026</strong><button class="icon-button dmo-icon-button" aria-label="Mês seguinte">›</button></div>
+            <div class="weekday dmo-calendar__week"><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span><span>Dom</span></div>
+            <div class="calendar dmo-calendar__grid" id="calendar"></div>
+            <div class="calendar-legend"><span><i class="line-dot b1"></i>B1</span><span><i class="line-dot b2"></i>B2</span><span><i class="line-dot b3"></i>B3</span><span><i class="line-dot c1"></i>C1</span><span><i class="line-dot c2"></i>C2</span><span><i class="line-dot c3"></i>C3</span></div>
+          </section>
+          <section class="surface jobs-card">
+            <div class="section-heading"><div><h2>Job Ons de 18 de agosto</h2><p>Um clique seleciona; duplo clique abre a folha.</p></div><div class="compact-filter"><label>Linhas</label><select><option>20</option><option>40</option><option>60</option></select></div></div>
+            <section class="loaded-job-context empty" id="loadedJobContext" aria-live="polite">
+              <div class="loaded-job-empty"><strong>Nenhum Job On carregado</strong><span>Selecione uma produção da lista para carregar o contexto.</span></div>
+              <div class="loaded-job-content" hidden>
+                <div class="loaded-job-heading"><div><span>Job On carregado</span><strong id="loadedJobTitle">-</strong></div><span class="status success">Contexto ativo</span></div>
+                <div class="loaded-job-data"><div><span>Referência</span><strong id="loadedJobReference">-</strong></div><div><span>Produção</span><strong id="loadedJobProduction">-</strong></div><div><span>Máquina</span><strong id="loadedJobMachine">-</strong></div><div><span>Revisão</span><strong id="loadedJobRevision">-</strong></div></div>
+                <div class="loaded-job-actions"><button class="button ghost" id="openLoadedControl">Ver Controlo</button><button class="button ghost" id="openLoadedRepairs">Ver reparações</button><button class="button primary" id="openLoadedSheet">Abrir Folha Job On</button></div>
+              </div>
+            </section>
+            <div class="jobs-list" data-list>
+              <article class="job-row" data-job-row data-job-id="job-b1-202603" data-production="202603" data-reference="5774T173" data-line="B1" data-revision="2"><div class="date-block"><strong>18 AGO</strong><span>06:00–14:00</span></div><div><span class="job-line line-b1">B1</span><strong>5774T173</strong><small>Produção 202603 · NNPB</small></div><div><span>Preparação</span><strong>2 verificações</strong><small>MF · BQ</small></div><span class="status warning">Atenção</span></article>
+              <article class="job-row" data-job-row data-job-id="job-c3-202602" data-production="202602" data-reference="7080C002" data-line="C3" data-revision="3"><div class="date-block"><strong>18 AGO</strong><span>14:00–22:00</span></div><div><span class="job-line line-c3">C3</span><strong>7080C002</strong><small>Produção 202602 · NNPB</small></div><div><span>Preparação</span><strong>Completa</strong><small>Rev. 3</small></div><span class="status success">Pronto</span></article>
+              <article class="job-row" data-job-row data-job-id="job-b2-202602" data-production="202602" data-reference="5810T188" data-line="B2" data-revision="1"><div class="date-block"><strong>19 AGO</strong><span>06:00–14:00</span></div><div><span class="job-line line-b2">B2</span><strong>5810T188</strong><small>Produção 202602 · PS</small></div><div><span>Preparação</span><strong>Em curso</strong><small>Rev. 1</small></div><span class="status info">Planeado</span></article>
+            </div>
+            <div class="list-footer"><span>3 Job Ons · Página 1 de 1</span><div><button class="icon-button" disabled>‹</button><span>1 / 1</span><button class="icon-button" disabled>›</button></div></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view sheet-view" id="sheetView">
+        <div class="sheet-title-row">
+          <div class="sheet-heading"><button class="text-action" id="backPlanning">← Voltar ao planeamento</button><h1>Folha Job On</h1></div>
+          <div class="production-navigator" aria-label="Contexto e Job Ons anteriores desta referência">
+            <div class="navigator-context">
+              <div class="navigator-production"><span>Produção</span><div class="production-switcher"><button class="icon-button" id="previousProduction" aria-label="Produção anterior">‹</button><label><select id="productionSelect" aria-label="Produção"><option value="202602" data-job-id="job-c3-202602" data-line="C3" data-revision="3">202602 · atual</option><option value="202601" data-job-id="job-c3-202601" data-line="C3" data-revision="4">202601 · 15/07/2026</option><option value="202512" data-job-id="job-b2-202512" data-line="B2" data-revision="2">202512 · 10/06/2026</option></select></label><button class="icon-button" id="nextProduction" aria-label="Produção seguinte" disabled>›</button></div></div>
+            </div>
+            <button class="text-action" id="openReferenceHistory">Ver histórico completo</button>
+          </div>
+          <div class="mode-indicator" id="modeIndicator"><span class="mode-dot"></span><strong>Modo consulta</strong></div>
+        </div>
+
+        <section class="surface summary-surface">
+          <div class="summary-grid">
+            <label class="summary-cell key"><span>Data inicial</span><input type="date" value="2026-08-17"></label>
+            <label class="summary-cell key"><span>Data final</span><input type="date" value="2026-08-20"></label>
+            <label class="summary-cell key short"><span>Máquina</span><select id="sheetMachine"><option>C3</option><option>B1</option><option>B2</option></select></label>
+            <label class="summary-cell identity"><span>Referência</span><input value="7080C002"></label>
+            <label class="summary-cell identity"><span>Produção</span><input id="sheetProduction" value="202602"></label>
+            <label class="summary-cell tiny"><span>Secções</span><input value="12"></label>
+            <label class="summary-cell tiny"><span>Gota</span><input value="3"></label>
+            <label class="summary-cell tiny"><span>Tipo</span><input value="3"></label>
+            <label class="summary-cell short"><span>Paragem</span><input value="—"></label>
+            <label class="summary-cell short"><span>Peso</span><input value="145 g"></label>
+            <label class="summary-cell short"><span>Processo</span><select><option>NNPB</option><option>PS</option></select></label>
+          </div>
+          <div class="action-bar">
+            <div class="primary-actions"><button class="button primary" id="editSheet">Editar folha</button><button class="button primary edit-only" id="saveSheet">Guardar nova revisão</button><button class="button ghost edit-only" id="cancelEdit">Cancelar edição</button></div>
+            <div class="secondary-actions"><button class="button ghost" id="viewSheetControl">Ver Controlo</button><button class="button ghost" id="viewSheetRepairs">Ver reparações</button><button class="button ghost edit-only">Alterar data</button><button class="button ghost">Duplicar</button><button class="button ghost">Comparar</button><button class="button ghost" id="printJobOn">Imprimir 4 folhas</button><button class="button more" aria-label="Mais ações">•••</button></div>
+          </div>
+        </section>
+
+        <div class="preparation-alert"><div class="alert-icon">!</div><div><strong>Preparação pendente</strong><span>Verificar gargalo no MF e confirmar pernos nos fundos antes do fabrico.</span></div><button class="text-action" id="goChecks">Ver verificações</button></div>
+
+        <section class="priority-grid">
+          <article class="tool-card priority-tool" data-family="CM">
+            <header><div><span class="tool-code">CM</span><small>Contra molde</small></div><span class="status success">Completo</span></header>
+            <div class="tool-fields">
+              <label><span>Referência</span><input value="7080"></label><label><span>Lote</span><select><option>01</option><option>04</option></select></label><label><span>Tipo</span><input value="4 1/4&quot;"></label>
+              <label><span>Ø pata</span><input value="28,50"></label><label><span>Ø gargalo</span><input value="24,80"></label><label><span>Ø exterior</span><input value="117,60"></label>
+              <label class="span-2"><span>Folgas</span><input value="0,16 / 0 / +0,03"></label><label><span>Inversão</span><input value="82,55"></label>
+              <label><span>Adaptador</span><select><option>N/A</option></select></label><label><span>Parafuso</span><select><option>N/A</option></select></label><label><span>Reparador</span><input value="BA"></label>
+              <label class="notes-field span-all"><span>Notas CM</span><textarea>CX rodar justa 1/4 de volta. Verificar flecha e pontos 0 a 9.</textarea><button class="expand-note" type="button">Expandir</button></label>
+            </div>
+            <button class="button compact edit-only tool-change" data-family="CM">Alterar CM</button>
+          </article>
+
+          <div class="tool-stack bq-stack">
+          <article class="tool-card priority-tool" data-family="BQ">
+            <header><div><span class="tool-code">BQ</span><small>Boquilha</small></div><span class="status success">Completo</span></header>
+            <div class="tool-fields two">
+              <label><span>Referência</span><input value="C002"></label><label><span>Lote</span><select><option>518</option></select></label>
+              <label><span>Utilização</span><input value="10,00%"></label><label><span>Estado</span><input value="Disponível"></label>
+              <label class="notes-field span-all"><span>Notas BQ</span><textarea>Garantir 100% folga AN/BQ entre 0,03 e 0,05 mm.</textarea><button class="expand-note">Expandir</button></label>
+            </div>
+            <button class="button compact edit-only tool-change" data-family="BQ">Alterar BQ</button>
+          </article>
+          <article class="tool-card related-card" data-family="AN">
+            <header><div><span class="tool-code">AN</span><small>Anel da boquilha</small></div><span class="status info">Associado à BQ</span></header>
+            <div class="tool-fields"><label class="span-all"><span>Referência</span><input value="C002"></label><label class="notes-field span-all"><span>Notas AN</span><textarea>Garantir folga AN/BQ.</textarea><button class="expand-note">Expandir</button></label></div>
+          </article>
+          </div>
+
+          <article class="tool-card priority-tool" data-family="MF">
+            <header><div><span class="tool-code">MF</span><small>Molde final</small></div><span class="status warning">Verificar</span></header>
+            <div class="tool-fields">
+              <label><span>Referência</span><input value="7080"></label><label><span>Lote</span><select><option>01</option><option>04</option></select></label><label><span>Tipo</span><input value="4 1/4&quot;"></label>
+              <label><span>Ø corpo</span><input value="549,90 / 549,50"></label><label><span>Ø gargalo</span><input value="25,20"></label><label><span>Ø exterior</span><input value="127,20"></label>
+              <label class="span-2"><span>Folgas</span><input value="0,12 / 0 / +0,03"></label><label><span>Fundo final</span><input value="4116"></label>
+              <label><span>Adaptador</span><select><option>N/A</option></select></label><label><span>Inversão</span><input value="82,55"></label><label><span>Reparador</span><input value="BA"></label>
+              <label class="notes-field span-all"><span>Notas MF</span><textarea>Tratar gravações. Auditar código de pontos. Bolear rebaixo.</textarea><button class="expand-note" type="button">Expandir</button></label>
+            </div>
+            <button class="button compact edit-only tool-change" data-family="MF">Alterar MF</button>
+          </article>
+
+          <div class="tool-stack pu-stack">
+          <article class="tool-card priority-tool" data-family="PU">
+            <header><div><span class="tool-code">PU</span><small>Porta-unidades</small></div><span class="status info">Informação</span></header>
+            <div class="tool-fields two"><label><span>Referência</span><input value="7080"></label><label><span>Versão</span><input value="AP7080PA8L-B"></label><label class="notes-field span-all"><span>Notas PU</span><textarea>Procedimento NNPB. Confirmar marcação.</textarea><button class="expand-note">Expandir</button></label></div>
+          </article>
+          <article class="tool-card related-card" data-family="ARR">
+            <header><div><span class="tool-code">ARR</span><small>Arrefecedores</small></div><span class="status info">Associado ao PU</span></header>
+            <div class="tool-fields"><label class="span-all"><span>Referência</span><input value="7080"></label><label class="notes-field span-all"><span>Notas ARR</span><textarea>ARR7080PA8L roscado 30 mm.</textarea><button class="expand-note">Expandir</button></label></div>
+          </article>
+          </div>
+
+          <article class="article-card priority-image">
+            <header><div><strong>Imagem do artigo</strong><span>7080C002 · Garrafa 340 mm</span></div><span class="status info">Completa</span></header>
+            <button class="article-image" id="articleImage" aria-label="Ampliar imagem do artigo"><img src="article-bottle.svg" alt="Imagem completa do artigo 7080C002"></button>
+            <footer><span>A imagem é apresentada integralmente, sem corte.</span><button class="button compact edit-only">Substituir imagem</button></footer>
+          </article>
+        </section>
+
+        <section class="inventory-picker surface edit-only" id="inventoryPicker">
+          <div class="section-heading"><div><h2 id="pickerTitle">Alterar CM associado</h2><p>Escolha outra ferramenta compatível. A associação só muda quando guardar a nova revisão.</p></div></div>
+          <div class="picker-filters"><label><span>Referência ou nome técnico</span><input value="7080" placeholder="Pesquisar"></label><label><span>Máquina</span><select><option>C3</option><option>B1</option><option>B2</option></select></label><label><span>Localização</span><select><option>Todas</option><option>Armazém</option><option>Produção</option><option>Reparação</option></select></label><label><span>Estado</span><select><option>Todos</option><option>Reparado</option><option>Por reparar</option><option>Novo</option></select></label><button class="button ghost">Limpar</button></div>
+          <div class="table-scroll"><table><thead><tr><th>Referência</th><th>Lote</th><th>Nome técnico</th><th>Localização</th><th>Estado</th><th>Utilização</th></tr></thead><tbody><tr class="selected"><td><strong>7080</strong></td><td>01</td><td>CM 4 1/4</td><td>Posição 2421</td><td><span class="status success">Reparado</span></td><td>30%</td></tr><tr><td><strong>7080</strong></td><td>04</td><td>CM 4 1/4</td><td>Reparação externa</td><td><span class="status warning">Por reparar</span></td><td>18%</td></tr></tbody></table></div>
+          <div class="picker-footer"><span>1 ferramenta selecionada</span><button class="button primary">Associar CM selecionado</button></div>
+        </section>
+
+        <section class="secondary-grid">
+          <article class="tool-card cal-card"><header><span class="tool-code">CAL</span><span class="status success">Completo</span></header><div class="table-scroll"><table class="cal-table"><thead><tr><th>Elemento</th><th>Valor</th><th>Qtd.</th></tr></thead><tbody><tr><td>Bucha marcada</td><td>7080</td><td>3</td></tr><tr><td>CS P interna</td><td>56,4 × 25,1</td><td>3</td></tr><tr><td>Tampão</td><td>25,95</td><td>3</td></tr><tr><td>Inversão MF</td><td>68,70 mm</td><td>3</td></tr><tr><td>Inversão CM</td><td>25,50 mm</td><td>3</td></tr><tr><td>Nível</td><td>30,50 mm</td><td>3</td></tr><tr><td>Cabeça de sopro</td><td>56,4 × 25,1</td><td>3</td></tr><tr><td>Pinças</td><td>P 24,6 / M 25,1</td><td>3</td></tr></tbody></table></div></article>
+          <article class="tool-card"><header><span class="tool-code">PI</span><span class="status success">Completo</span></header><div class="tool-fields two"><label><span>Pinças</span><select><option>Grafite</option><option>Latão</option></select></label><label><span>Diâmetro</span><input value="24,70"></label><label class="notes-field span-all"><span>Notas PI</span><textarea>Tipo C002.</textarea><button class="expand-note">Expandir</button></label></div></article>
+          <article class="tool-card"><header><span class="tool-code">CS</span><span class="status info">Informação</span></header><div class="tool-fields two"><label><span>Referência</span><input value="C002"></label><label><span>Furos</span><input value="4 × 4"></label><label class="span-all"><span>Tubo</span><input value="À face"></label><label class="notes-field span-all"><span>Notas CS</span><textarea>Confirmar tubo à face.</textarea><button class="expand-note">Expandir</button></label></div></article>
+          <article class="tool-card"><header><span class="tool-code">TP</span><span class="status info">Informação</span></header><div class="tool-fields two"><label><span>Diâmetro PS</span><input value="25,95"></label><label><span>Referência</span><input value="C002"></label><label class="span-all"><span>Bacia PS</span><input value="3,00"></label><label class="notes-field span-all"><span>Notas TP</span><textarea>Maquinados.</textarea><button class="expand-note">Expandir</button></label></div></article>
+          <article class="tool-card"><header><span class="tool-code">FO</span><span class="status neutral">Por preencher</span></header><div class="tool-fields"><label class="span-all"><span>Tipo</span><input placeholder="Introduzir tipo"></label><label class="notes-field span-all"><span>Notas FO</span><textarea placeholder="Observações"></textarea><button class="expand-note">Expandir</button></label></div></article>
+        </section>
+
+        <section class="lower-grid" id="checksSection">
+          <article class="surface checks-card">
+            <div class="section-heading"><div><h2>Verificações</h2><p>Confirmações manuais desta produção.</p></div><span class="status warning">2 pendentes</span></div>
+            <div class="check-list">
+              <label class="check-row"><input type="checkbox"><span><strong>MF · Verificar gargalo</strong><small>Por fabrico · Lote 01</small></span><span class="status warning">Pendente</span></label>
+              <label class="check-row"><input type="checkbox"><span><strong>MF · Meter pernos nos fundos</strong><small>Uma vez neste lote · Lote 01</small></span><span class="status warning">Pendente</span></label>
+              <label class="check-row confirmed"><input type="checkbox" checked><span><strong>CM · Confirmar folga</strong><small>João Silva · 17/08/2026 14:32</small></span><span class="status success">Confirmada</span></label>
+            </div>
+          </article>
+          <article class="surface general-notes"><div class="section-heading"><div><h2>Notas gerais</h2><p>Informação transversal desta produção.</p></div></div><textarea>Auditar código de pontos e gravações. Preparar boquilhas lavadas para entrar em máquina. Confirmar concordância MF–FF.</textarea></article>
+        </section>
+
+        <section class="surface history-card">
+          <div class="section-heading"><div><h2>Histórico desta produção</h2><p>Alterações, verificações e movimentos relacionados.</p></div><span class="status neutral">Revisão 3</span></div>
+          <div class="table-scroll"><table><thead><tr><th>Data/hora</th><th>Evento</th><th>Ferramenta</th><th>Detalhe</th><th>Utilizador</th></tr></thead><tbody><tr><td>17/08 · 14:32</td><td>Verificação confirmada</td><td>CM · 7080 · Lote 01</td><td>Folga confirmada no Job On</td><td>João Silva</td></tr><tr><td>16/08 · 09:18</td><td>Revisão guardada</td><td>Job On</td><td>Datas ajustadas para 17–20 agosto</td><td>Ana Martins</td></tr><tr><td>15/08 · 08:42</td><td>Rascunho criado</td><td>Job On</td><td>Duplicado da produção 202601</td><td>Rui Costa</td></tr></tbody></table></div>
+        </section>
+      </section>
+
+      <section class="view control-view" id="controlView">
+        <div class="page-heading"><div><span class="eyebrow">Controlo</span><h1>Controlo da produção escolhida</h1><p>O Job On aberto no calendário define automaticamente o contexto de Resumo, Peso, Comparação e Pegamentos.</p></div></div>
+        <section class="current-job-card" id="currentJobCard" tabindex="0"><div><span>Job On atual aberto por este utilizador</span><strong><b id="currentProduction">202602</b> · <b id="currentReference">7080C002</b> · <b id="currentLine">C3</b></strong><small>job_on_id: <code id="currentJobId">job-c3-202602</code> · revisão exata <b id="currentRevision">3</b></small></div><button class="button ghost" id="loadCurrentJob">Carregar Job On atual</button></section>
+        <section class="surface control-context"><div><span>Referência</span><strong>7080C002</strong></div><div><span>Produção</span><strong>202602</strong></div><div><span>Máquina</span><strong>C3</strong></div><div><span>CM</span><strong>7080 · Lote 01</strong></div><div><span>MF</span><strong>7080 · Lote 01</strong></div><div><span>BQ</span><strong>C002 · Lote 518</strong></div></section>
+        <div class="control-shell surface">
+          <nav class="control-tabs" aria-label="Áreas de Controlo"><button class="active" data-control-tab="summary">Resumo</button><button data-control-tab="weight">Peso</button><button data-control-tab="comparison">Comparação</button><button data-control-tab="gluing">Pegamentos</button><button data-control-tab="control-history">Histórico</button></nav>
+          <section class="control-panel active" id="controlSummary">
+            <div class="section-heading"><div><h2>Resumo do controlo desta produção</h2><p>Ao criar ou guardar, fica fixado a <code>job-c3-202602</code> · revisão <strong>3</strong>; uma revisão futura não altera este registo.</p></div><button class="button primary">Criar/carregar Resumo</button></div>
+            <div class="control-summary-grid"><article><span>Peso</span><strong>Aprovado</strong><small>230,97 g · Rev. 2</small><span class="status success">Enviado</span></article><article><span>Pegamentos</span><strong>Em preparação</strong><small>CM, BQ e MF herdados</small><span class="status warning">Pendente</span></article><article><span>Workspace</span><strong>Produção associada</strong><small>202602_7080C002_C3</small><span class="status success">Autorizado</span></article></div>
+            <section class="production-documents" aria-labelledby="jobDocumentsTitle">
+              <div class="section-heading"><div><h2 id="jobDocumentsTitle">Controlo da produção</h2><p>Snapshots oficiais no programa · PDFs derivados no mesmo workspace da produção.</p></div><span class="status info">Revisão Job On 3</span></div>
+              <div class="document-access-grid">
+                <article class="document-access"><div><span>Peso</span><strong>Snapshot aprovado · revisão 2</strong><small>PDF guardado e acessível</small></div><span class="status success">Disponível</span><button class="button ghost" data-document-open data-document-type="Peso" data-document-state="Disponível">Ver Peso</button></article>
+                <article class="document-access"><div><span>Pegamentos</span><strong>2 versões válidas</strong><small>Atual: revisão 2 · anteriores preservadas</small></div><span class="status info">Versões disponíveis</span><button class="button ghost" data-document-open data-document-type="Pegamentos" data-document-state="Versões disponíveis">Ver Pegamentos</button></article>
+                <article class="document-access"><div><span>Resumo</span><strong>Página consolidada</strong><small>Ainda não fechado para exportação</small></div><span class="status warning">A aguardar aprovação</span><button class="button ghost" data-document-open data-document-type="Resumo" data-document-state="A aguardar aprovação">Ver Resumo</button></article>
+              </div>
+            </section>
+            <div class="section-heading tool-control-heading"><div><h2>Estado por ferramenta</h2><p>Leitura rápida; o menu abre o controlo detalhado ou o registo Macliper.</p></div></div>
+            <div class="tool-control-grid">
+              <article class="tool-control-card"><header><div><strong>CM</strong><span>7080 · Lote 01</span></div><button class="tool-menu-trigger" aria-label="Ações do CM">•••</button></header><div class="decision ok">OK</div><p>Folga e diâmetros confirmados.</p><button class="text-action">Ver detalhes do controlo</button></article>
+              <article class="tool-control-card"><header><div><strong>MF</strong><span>7080 · Lote 01</span></div><button class="tool-menu-trigger" aria-label="Ações do MF">•••</button></header><div class="decision nok">NOK</div><p>Rever gravações antes do arranque.</p><button class="text-action">Ver detalhes do controlo</button></article>
+              <article class="tool-control-card"><header><div><strong>BQ</strong><span>C002 · Lote 518</span></div><button class="tool-menu-trigger" aria-label="Ações da BQ">•••</button></header><div class="decision ok">OK</div><p>Folga AN/BQ dentro da tolerância.</p><button class="text-action">Ver detalhes do controlo</button></article>
+              <article class="tool-control-card"><header><div><strong>PU</strong><span>7080 · AP7080PA8L-B</span></div><button class="tool-menu-trigger" aria-label="Ações do PU">•••</button></header><div class="decision ok">OK</div><p>Marcação confirmada.</p><button class="text-action">Ver detalhes do controlo</button></article>
+              <article class="tool-control-card"><header><div><strong>CS</strong><span>C002 · 4 × 4</span></div><button class="tool-menu-trigger" aria-label="Ações do CS">•••</button></header><div class="decision pending">Por decidir</div><p>Sem comentário registado.</p><button class="text-action">Ver detalhes do controlo</button></article>
+            </div>
+            <div class="table-scroll"><table><thead><tr><th>Tipo</th><th>Data</th><th>Estado</th><th>Revisão</th><th>Responsável</th></tr></thead><tbody><tr><td><strong>Peso</strong></td><td>17/08/2026</td><td><span class="status success">Aprovado</span></td><td>2</td><td>Ana Martins</td></tr><tr><td><strong>Pegamentos</strong></td><td>18/08/2026</td><td><span class="status warning">Rascunho</span></td><td>1</td><td>João Silva</td></tr></tbody></table></div>
+          </section>
+          <section class="control-panel" id="controlWeight"><div class="section-heading"><div><h2>Peso desta produção</h2><p>Criar ou abrir fixa imediatamente o registo à revisão exata do Job On atual.</p></div><button class="button primary">Criar/abrir Peso</button></div><div class="embedded-placeholder"><strong>Associação automática, sem nova seleção</strong><span>job-c3-202602 · revisão 3 · Referência 7080C002 · Produção 202602 · C3 · CM 7080 Lote 01 · NNPB</span></div></section>
+          <section class="control-panel" id="controlComparison"><div class="section-heading"><div><h2>Comparação desta produção</h2><p>O CM em produção e a base aprovada pertencem ao mesmo contexto Job On fixado.</p></div><button class="button primary">Criar/abrir Comparação</button></div><div class="embedded-placeholder"><strong>A base aprovada permanece intacta</strong><span>job-c3-202602 · revisão 3 · cada decisão por CM fica ligada permanentemente a esta produção</span></div></section>
+          <section class="control-panel" id="controlGluing"><div class="section-heading"><div><h2>Pegamentos desta produção</h2><p>Criar ou abrir fixa imediatamente CM, BQ e MF da revisão exata do Job On.</p></div><button class="button primary">Criar/abrir Pegamentos</button></div><div class="embedded-placeholder"><strong>Ferramentas e produção associadas automaticamente</strong><span>job-c3-202602 · revisão 3 · CM 7080/01 · MF 7080/01 · BQ C002/518</span></div></section>
+          <section class="control-panel" id="controlHistory"><div class="section-heading"><div><h2>Histórico do Controlo</h2><p>Eventos append-only desta folha e ligações aos registos Peso e Pegamentos.</p></div></div><div class="table-scroll"><table><thead><tr><th>Data/hora</th><th>Evento</th><th>Estado</th><th>Ator</th><th>Nota</th></tr></thead><tbody><tr><td>18/08/2026 · 11:12</td><td>Pegamentos guardado</td><td><span class="status warning">Rascunho</span></td><td>João Silva</td><td>CM, BQ e MF herdados da revisão 3</td></tr><tr><td>17/08/2026 · 15:40</td><td>Peso aprovado</td><td><span class="status success">Aprovado</span></td><td>Ana Martins</td><td>Registo 202602-P02</td></tr></tbody></table></div></section>
+        </div>
+      </section>
+
+      <section class="view history-view" id="historyView">
+        <div class="page-heading"><div><span class="eyebrow">Histórico</span><h1>Job Ons por Referência e Produção</h1><p>Selecione a Referência e depois a Produção. As revisões anteriores nunca são alteradas.</p></div></div>
+        <section class="surface history-filters"><label><span>Pesquisar Referência</span><input value="7080C002"></label><label><span>Máquina</span><select><option>Todas</option><option>C3</option><option>B1</option></select></label><label><span>Desde</span><input type="date" value="2025-01-01"></label><label><span>Até</span><input type="date" value="2026-08-21"></label><button class="button ghost">Limpar filtros</button></section>
+        <section class="history-browser">
+          <article class="surface reference-list"><div class="section-heading"><div><h2>Referências</h2><p>Um clique seleciona.</p></div><span class="status info">3</span></div><button class="history-choice active"><strong>7080C002</strong><span>3 produções · última 202602</span></button><button class="history-choice"><strong>5774T173</strong><span>5 produções · última 202603</span></button><button class="history-choice"><strong>5810T188</strong><span>2 produções · última 202602</span></button></article>
+          <article class="surface production-list"><div class="section-heading"><div><h2>Produções de 7080C002</h2><p>Duplo clique abre a revisão corrente em consulta, incluindo o respetivo Controlo.</p></div></div><div class="table-scroll"><table><thead><tr><th>Produção</th><th>Datas</th><th>Linha</th><th>Processo</th><th>Revisões</th><th>Documentos</th><th>Estado</th></tr></thead><tbody><tr class="selected"><td><strong>202602</strong></td><td>17–20/08/2026</td><td>C3</td><td>NNPB</td><td>3</td><td><span class="status success">3 disponíveis</span></td><td><span class="status success">Em fabrico</span></td></tr><tr><td><strong>202601</strong></td><td>15–18/07/2026</td><td>C3</td><td>NNPB</td><td>4</td><td><span class="status info">Versões disponíveis</span></td><td><span class="status neutral">Fechado</span></td></tr><tr><td><strong>202512</strong></td><td>10–13/06/2026</td><td>B2</td><td>PS</td><td>2</td><td><span class="status warning">Ficheiro em falta</span></td><td><span class="status neutral">Fechado</span></td></tr></tbody></table></div></article>
+        </section>
+      </section>
+      <section class="view settings-view" id="settingsView">
+        <div class="page-heading"><div><span class="eyebrow">Definições</span><h1>Opções configuráveis do Job On</h1><p>Apenas com autorização; desativar uma opção nunca altera folhas históricas.</p></div><button class="button primary">Adicionar opção</button></div>
+        <section class="surface annual-directory-settings">
+          <div class="section-heading"><div><h2>Diretório principal dos documentos · 2026</h2><p>É a única pasta escolhida pelo utilizador. A estrutura interior é criada automaticamente.</p></div><span class="status success">Configurado</span></div>
+          <div class="annual-directory-grid"><label><span>Diretório principal atual</span><input value="Documentos DMO / 2026" readonly></label><button class="button ghost">Alterar diretório principal</button></div>
+          <div class="directory-example"><span>Estrutura criada automaticamente</span><code>2026 / 5447T173 / 202601 / 202601_5447T173_C3_Peso</code><code>2026 / 5447T173 / 202601 / 202601_5447T173_C3_Pegamentos</code><code>2026 / 5447T173 / 202601 / 202601_5447T173_C3_Resume</code><code class="next-production">Produção seguinte: 2026 / 5447T173 / 202602 / ...</code></div>
+          <p class="directory-note">No início de um novo ano altera-se apenas este diretório principal. Referência, Produção e pastas documentais nunca são introduzidas manualmente.</p>
+        </section>
+        <section class="surface history-filters"><label><span>Família</span><select><option>PI</option><option>CM</option><option>MF</option><option>CAL</option></select></label><label><span>Campo</span><select><option>Material das pinças</option><option>Adaptador</option><option>Tipo</option></select></label><label><span>Estado</span><select><option>Ativas</option><option>Todas</option><option>Desativadas</option></select></label><button class="button ghost">Limpar filtros</button></section>
+        <section class="surface settings-table"><div class="section-heading"><div><h2>Material das pinças · PI</h2><p>Adicionar, editar, ordenar ou desativar. Valores usados anteriormente continuam no snapshot.</p></div></div><div class="table-scroll"><table><thead><tr><th>Ordem</th><th>Valor</th><th>Etiqueta</th><th>Estado</th><th>Uso</th></tr></thead><tbody><tr class="selected"><td>1</td><td>grafite</td><td><strong>Grafite</strong></td><td><span class="status success">Ativa</span></td><td>18 folhas</td></tr><tr><td>2</td><td>latao</td><td><strong>Latão</strong></td><td><span class="status success">Ativa</span></td><td>11 folhas</td></tr><tr><td>3</td><td>bronze_legado</td><td><strong>Bronze</strong></td><td><span class="status neutral">Desativada</span></td><td>4 folhas históricas</td></tr></tbody></table></div><div class="picker-footer"><span>Selecionar não altera o histórico.</span><div class="primary-actions"><button class="button ghost">Editar</button><button class="button ghost">Desativar</button></div></div></section>
+      </section>
+    </main>
+  </div>
+
+  <dialog class="document-dialog" id="documentDialog"><button class="dialog-close" aria-label="Fechar">×</button><span class="eyebrow">Controlo da produção</span><h2 id="documentDialogTitle">Peso · 202602</h2><p id="documentDialogMeta">Job On job-c3-202602 · revisão 3</p><div class="document-preview"><strong id="documentPreviewTitle">Snapshot aprovado</strong><span id="documentPreviewState">Disponível no programa</span><small>Esta vista usa os dados estruturados da revisão selecionada. O PDF é um output derivado e pode ser novamente gerado.</small></div><div class="dialog-actions"><button class="button ghost" id="openSavedPdf">Abrir PDF guardado</button><button class="button primary">Imprimir / Exportar PDF</button></div><div class="version-list" id="documentVersions" hidden><strong>Versões anteriores</strong><button>Revisão 2 · atual</button><button>Revisão 1 · 17/08/2026</button></div></dialog>
+  <dialog class="image-dialog" id="imageDialog"><button class="dialog-close" aria-label="Fechar">×</button><img src="article-bottle.svg" alt="Imagem ampliada e completa do artigo 7080C002"><strong>7080C002</strong><span>Produção 202602 · Linha C3</span></dialog>
+  <script src="jobon-redesign.js"></script>
+</body>
+</html>

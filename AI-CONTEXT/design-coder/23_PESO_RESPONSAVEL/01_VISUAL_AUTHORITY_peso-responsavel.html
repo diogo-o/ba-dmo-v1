@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Controlo de Peso e Volume — Responsável</title>
+<link rel="stylesheet" href="dmo-design-system.css">
+<style>
+.header{height:72px;background:#fff;border-bottom:1px solid var(--dmo-border);display:flex;align-items:center;padding:0 28px;gap:12px}.logo{width:42px;height:42px;border-radius:50%}.brand h1{font-size:17px;margin:0}.brand p,.user span{font-size:11px;color:var(--dmo-muted);margin:2px 0 0}.user{margin-left:auto;text-align:right}.user strong{display:block;font-size:12px}.tabs{height:50px;background:#fff;border-bottom:1px solid var(--dmo-border);display:flex;padding:0 28px}.tabs button{border:0;background:none;color:var(--dmo-brand-600);font-weight:750;border-bottom:3px solid var(--dmo-brand-600)}.tabs .settings{margin-left:auto;color:var(--dmo-muted);border-color:transparent}.main{max-width:1320px;margin:auto;padding:24px}.page-head{margin-bottom:16px}.page-head h2{margin:0;font-size:23px}.page-head p{margin:3px 0 0;color:var(--dmo-muted)}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}.metric{padding:14px 16px}.metric span{display:block;font-size:10px;font-weight:800;color:var(--dmo-muted);text-transform:uppercase}.metric strong{font-size:22px}.layout{display:grid;grid-template-columns:360px 1fr;gap:14px}.card-pad{padding:18px}.queue{margin-top:14px}.queue-filters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.queue-item{position:relative;padding:12px;border:1px solid var(--dmo-border);border-radius:9px;margin-top:8px}.queue-item .dmo-pill{position:absolute;right:10px;top:10px}.queue-item small{display:block;color:var(--dmo-muted);margin-top:3px}.detail-head{display:flex;justify-content:space-between;gap:12px;margin-bottom:14px}.detail-head h3{margin:0}.detail-head p{margin:3px 0 0;color:var(--dmo-muted);font-size:11px}.section-title{margin:14px 0 10px;padding:8px 10px;border-left:4px solid var(--dmo-brand-600);border-radius:7px;background:var(--dmo-subtle);font-size:13px}.identity{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}.identity div,.summary div{padding:10px;background:var(--dmo-subtle);border-radius:8px}.identity span,.summary span{display:block;font-size:10px;color:var(--dmo-muted)}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.summary strong{font-size:16px}.decision{margin-top:14px;padding:14px;background:var(--dmo-subtle);border-radius:10px}.decision .success{--button-color:#527c72}.decision .danger{--button-color:#9a625d}.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}.hint{font-size:11px;color:var(--dmo-muted)}.hidden{display:none}.cm-choice{display:flex;gap:6px}.cm-choice .dmo-button{min-height:30px;padding:4px 8px;font-size:11px}.cm-choice .success{--button-color:#527c72}.cm-choice .danger{--button-color:#9a625d}.cm-choice.has-decision .dmo-button:not(.chosen){opacity:.35}.cm-choice .chosen{box-shadow:0 0 0 3px rgba(60,115,168,.2)}.comparison-note{padding:10px 12px;border-left:4px solid var(--dmo-brand-600);background:var(--dmo-brand-050);border-radius:8px;margin-bottom:12px}@media(max-width:900px){.layout{grid-template-columns:1fr}.identity{grid-template-columns:repeat(3,1fr)}.summary{grid-template-columns:repeat(2,1fr)}}
+.email-preview{display:none;margin-top:12px;padding:13px;background:#fff;border:1px solid var(--dmo-brand-200);border-left:4px solid var(--dmo-brand-600);border-radius:9px}.email-preview.open{display:block}.email-grid{display:grid;grid-template-columns:150px 1fr;gap:7px 12px;margin-top:10px}.email-grid span{color:var(--dmo-muted);font-size:11px}.email-grid strong{font-size:12px}.approved-message{margin-right:auto;color:var(--dmo-success);font-size:12px;font-weight:750}
+</style>
+</head>
+<body>
+<header class="header dmo-app-header">
+<img class="logo" src="logo_recolored(1).png" alt="BA">
+<div class="brand dmo-app-header__page">
+<h1>Controlo de Peso e Volume</h1>
+<p>Responsável</p>
+</div>
+<div class="user dmo-app-header__user">
+<strong>Ana Martins</strong>
+<span data-user-profile-title>Responsável de qualidade</span>
+</div>
+</header>
+<nav class="dmo-primary-nav" aria-label="Tarefas principais"><a href="job-on.html">Job On</a><a class="active" href="controlo.html" aria-current="page">Controlo</a><a href="reparacao-interna.html">Reparação Interna</a><a href="boquilhas.html">Boquilhas</a><a href="armazem.html">Armazém</a></nav>
+<nav class="tabs dmo-secondary-nav" aria-label="Áreas do Controlo de Peso">
+<button>Aprovações</button>
+<button class="settings">Definições</button>
+</nav>
+<main class="main">
+<div class="page-head">
+<h2>Aprovações</h2>
+<p>Controlos recebidos para decisão.</p>
+</div>
+<section class="metrics">
+<div class="dmo-card metric">
+<span>Pendentes</span>
+<strong>1</strong>
+</div>
+<div class="dmo-card metric">
+<span>Aprovados</span>
+<strong>0</strong>
+</div>
+<div class="dmo-card metric">
+<span>Não aprovados</span>
+<strong>0</strong>
+</div>
+</section>
+<div class="layout">
+<aside>
+<section class="dmo-card card-pad" data-dmo-calendar>
+<div class="dmo-calendar__head">
+<button class="dmo-button dmo-icon-button" aria-label="Mês anterior">‹</button>
+<strong>Agosto de 2026</strong>
+<button class="dmo-button dmo-icon-button" aria-label="Mês seguinte">›</button>
+</div>
+<div class="dmo-calendar__week">
+<span>SEG</span>
+<span>TER</span>
+<span>QUA</span>
+<span>QUI</span>
+<span>SEX</span>
+<span>SÁB</span>
+<span>DOM</span>
+</div>
+<div class="dmo-calendar__grid" id="calendar">
+</div>
+<button class="dmo-button" id="allDates" style="margin-top:12px">Mostrar todas as datas</button>
+</section>
+<section class="dmo-card card-pad queue">
+<h3 style="margin:0">Controlos de <span id="selectedDate">15/08/2026</span>
+</h3>
+<p class="hint">Pesquise ou filtre os controlos recebidos.</p>
+<div class="dmo-field">
+<label>Pesquisar</label>
+<input placeholder="Referência, CM, boquilha, lote ou máquina">
+</div>
+<div class="queue-filters"><div class="dmo-field">
+<label>Estado</label>
+<select id="approvalStatusFilter">
+<option value="all">Todos</option>
+<option value="pending">Pendentes</option>
+<option value="approved">Aprovados</option>
+<option value="rejected">Não aprovados</option>
+</select>
+</div><div class="dmo-field"><label>Tipo</label><select id="approvalTypeFilter"><option value="all">Todos</option><option value="control">Registo de peso</option><option value="comparison">Comparação</option></select></div></div>
+<div data-dmo-list id="approvalList">
+<article class="queue-item selected" data-dmo-row data-id="ctrl-202601" data-kind="control" data-status="pending" aria-selected="true">
+<strong>9389T194 · 202601</strong>
+<small>B3 · L26 · Revisão 1 · Peso 155,98 g</small>
+<span class="dmo-pill pending">Pendente</span>
+</article>
+<article class="queue-item" data-dmo-row data-id="cmp-202512" data-kind="comparison" data-status="pending">
+<strong>Comparação · 9389T194</strong>
+<small>B3 · Base aprovada 202512 · 2 CM</small>
+<span class="dmo-pill pending">Pendente</span>
+</article>
+</div>
+</section>
+</aside>
+<section class="dmo-card card-pad" id="controlDetail">
+<div class="detail-head">
+<div>
+<h3>9389T194</h3>
+<p>Produção 202601 · Linha B3 · Lote 26 · Enviado em 15/08/2026 às 10:42</p>
+</div>
+<span class="dmo-pill pending">Pendente</span>
+</div>
+<h3 class="section-title">Identificação da produção</h3>
+<div class="identity">
+<div>
+<span>Referência</span>
+<strong>9389T194</strong>
+</div>
+<div>
+<span>CM</span>
+<strong>9389</strong>
+</div>
+<div>
+<span>Boquilha / Neckring</span>
+<strong>T194</strong>
+</div>
+<div>
+<span>Máquina</span>
+<strong>B3</strong>
+</div>
+<div>
+<span>Lote</span>
+<strong>26</strong>
+</div>
+<div>
+<span>Processo</span>
+<strong>NNPB</strong>
+</div>
+<div>
+<span>Produção</span>
+<strong>202601</strong>
+</div>
+<div>
+<span>Estado do molde</span>
+<strong>Novo</strong>
+</div>
+<div>
+<span>Operador</span>
+<strong>João Silva</strong>
+</div>
+<div>
+<span>Data</span>
+<strong>15/08/2026</strong>
+</div>
+<div>
+<span>Revisão</span>
+<strong>1</strong>
+</div>
+<div>
+<span>Controlo anterior</span>
+<strong>Não disponível</strong>
+</div>
+</div>
+<h3 class="section-title">Comparação global de peso</h3>
+<div class="summary">
+<div>
+<span>Peso médio atual</span>
+<strong>155,98 g</strong>
+</div>
+<div>
+<span>Média do controlo anterior</span>
+<strong>—</strong>
+</div>
+<div>
+<span>Média SAP da produção anterior</span>
+<strong>121 g</strong>
+</div>
+<div>
+<span>Peso nominal do desenho</span>
+<strong>200 g</strong>
+</div>
+<div>
+<span>Capacidade atual</span>
+<strong>120,72 cm³</strong>
+</div>
+<div>
+<span>Capacidade anterior</span>
+<strong>—</strong>
+</div>
+<div>
+<span>Diferença de capacidade</span>
+<strong>—</strong>
+</div>
+</div>
+<h3 class="section-title">Comparação por CM — peso do vidro e volume</h3>
+<p class="hint">O peso de cada posição é calculado com CM + boquilha + punção. O volume confirma o equilíbrio das capacidades.</p>
+<div class="dmo-table-wrap">
+<table class="dmo-table">
+<thead>
+<tr>
+<th>CM</th>
+<th>Peso atual</th>
+<th>Peso anterior</th>
+<th>Diferença</th>
+<th>Volume atual</th>
+<th>Volume anterior</th>
+<th>Diferença volume</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Leitura 1 · CM 12</td>
+<td>155,07 g</td>
+<td>—</td>
+<td>—</td>
+<td>120,34 cm³</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Leitura 2 · CM 20</td>
+<td>157,72 g</td>
+<td>—</td>
+<td>—</td>
+<td>121,44 cm³</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Leitura 3 · CM 41</td>
+<td>153,63 g</td>
+<td>—</td>
+<td>—</td>
+<td>119,74 cm³</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Leitura 4 · CM 54</td>
+<td>157,48 g</td>
+<td>—</td>
+<td>—</td>
+<td>121,34 cm³</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 class="section-title">Referências e observações</h3>
+<div class="dmo-field">
+<label>Observações do operador</label>
+<div style="padding:10px;background:var(--dmo-subtle);border-radius:8px">Sem observações</div>
+</div>
+<div class="decision">
+<div class="dmo-field">
+<label>Responsável</label>
+<input value="Ana Martins" readonly>
+</div>
+<div class="dmo-field" style="margin-top:10px">
+<label>Nota / alterações necessárias</label>
+<textarea rows="2" placeholder="Obrigatória quando o controlo não é aprovado.">
+</textarea>
+</div>
+<div class="actions">
+<button class="dmo-button danger" id="reject">Não aprovar</button>
+<button class="dmo-button success" id="approve">Aprovar</button>
+</div>
+<div class="email-preview" id="emailPreview">
+<strong>Relatório aprovado — envio para produção</strong>
+<p class="hint" style="margin:3px 0 0">A máquina B3 seleciona automaticamente o grupo Linha B. Confirme antes de enviar.</p>
+<div class="email-grid"><span>Máquina</span><strong>B3</strong><span>Destinatários</span><strong>Moldesmg@baglass.com</strong><span>Assunto</span><strong>Controlo de Peso e Volume · 9389T194 · 202601 · B3 · L26</strong><span>Anexo</span><strong>9389T194_202601_B3_L26_R1.pdf</strong></div>
+<div class="actions"><span class="approved-message">Aprovado por Ana Martins</span><button class="dmo-button" id="sendApproved">Enviar para produção</button></div>
+</div>
+</div>
+</section>
+<section class="dmo-card card-pad hidden" id="comparisonDetail">
+<div class="detail-head"><div><h3>Comparação · 9389T194</h3><p>Cada CM atual é comparado diretamente com um CM do controlo aprovado 202512 · B3 · L24</p></div><span class="dmo-pill pending">Pendente</span></div>
+<div class="comparison-note"><strong>Registo complementar</strong><div class="hint">Esta decisão não altera o controlo aprovado usado como base. Cria um registo adicional ligado à revisão aprovada.</div></div>
+<h3 class="section-title">Base aprovada anterior</h3><div class="identity"><div><span>Produção</span><strong>202512</strong></div><div><span>Lote</span><strong>L24</strong></div><div><span>Processo</span><strong>NNPB</strong></div><div><span>Máquina</span><strong>B3</strong></div><div><span>Unidade de comparação</span><strong>Peso do vidro por CM</strong></div><div><span>Fórmula de origem</span><strong>CM + BQ − PU</strong></div></div>
+<h3 class="section-title">Decisão individual por par de CM</h3><div class="dmo-table-wrap"><table class="dmo-table"><thead><tr><th>CM atual</th><th>Peso vidro atual</th><th>CM anterior</th><th>Peso vidro anterior</th><th>Diferença</th><th>Variação</th><th>Decisão</th></tr></thead><tbody>
+<tr data-cm-decision><td><strong>12</strong></td><td>231,41 g</td><td><strong>61</strong></td><td>231,78 g</td><td>-0,37 g</td><td>-0,16%</td><td><div class="cm-choice"><button class="dmo-button success" data-decision="keep">Manter</button><button class="dmo-button danger" data-decision="aside">Colocar de parte</button></div></td></tr>
+<tr data-cm-decision><td><strong>45</strong></td><td>230,53 g</td><td><strong>95</strong></td><td>230,05 g</td><td>+0,48 g</td><td>+0,21%</td><td><div class="cm-choice"><button class="dmo-button success" data-decision="keep">Manter</button><button class="dmo-button danger" data-decision="aside">Colocar de parte</button></div></td></tr>
+</tbody></table></div>
+<div class="summary" style="margin-top:12px"><div><span>CM mantidos</span><strong id="keptCount">0</strong></div><div><span>CM colocados de parte</span><strong id="asideCount">0</strong></div><div><span>Sem decisão</span><strong id="pendingCount">2</strong></div></div>
+<div class="dmo-field" style="margin-top:12px"><label>Justificação</label><textarea id="comparisonReason" rows="2" placeholder="Obrigatória quando pelo menos um CM é colocado de parte."></textarea></div><div class="actions"><button class="dmo-button" id="confirmComparison" disabled>Confirmar decisões</button></div>
+</section>
+</div>
+</main>
+<div class="dmo-toast" id="toast">
+</div>
+<script src="dmo-interactions.js">
+</script>
+<script>
+const calendar=document.querySelector('#calendar');for(let i=0;i<35;i++){const day=i<31?i+1:'';const iso=day?`2026-08-${String(day).padStart(2,'0')}`:'';calendar.insertAdjacentHTML('beforeend',`<button class="dmo-calendar__day ${day===15?'selected has-record':day===14?'has-record':''}" data-date="${iso}" ${day?'':'disabled'}>${day}</button>`)}
+const toast=document.querySelector('#toast'),say=text=>{toast.textContent=text;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),2200)};
+document.addEventListener('dmo:date-select',event=>document.querySelector('#selectedDate').textContent=event.detail.date.split('-').reverse().join('/'));
+document.querySelector('#allDates').onclick=()=>{document.querySelectorAll('[data-dmo-calendar] .selected').forEach(x=>x.classList.remove('selected'));document.querySelector('#selectedDate').textContent='todas as datas'};
+function filterApprovalList(){const type=document.querySelector('#approvalTypeFilter').value,status=document.querySelector('#approvalStatusFilter').value,rows=[...document.querySelectorAll('#approvalList [data-dmo-row]')];rows.forEach(row=>{row.hidden=!((type==='all'||row.dataset.kind===type)&&(status==='all'||row.dataset.status===status))});const selected=rows.find(row=>row.classList.contains('selected'));if(selected?.hidden){selected.classList.remove('selected');const first=rows.find(row=>!row.hidden);if(first)first.click();else{document.querySelector('#controlDetail').classList.add('hidden');document.querySelector('#comparisonDetail').classList.add('hidden')}}}
+document.querySelector('#approvalTypeFilter').onchange=filterApprovalList;
+document.querySelector('#approvalStatusFilter').onchange=filterApprovalList;
+document.querySelector('#approvalList').addEventListener('dmo:list-select',event=>{const comparison=event.detail.row.dataset.kind==='comparison';document.querySelector('#controlDetail').classList.toggle('hidden',comparison);document.querySelector('#comparisonDetail').classList.toggle('hidden',!comparison)});
+document.querySelector('#approvalList').addEventListener('dmo:list-open',event=>say(`Abrir registo ${event.detail.id}`));
+document.querySelectorAll('[data-decision]').forEach(button=>button.onclick=()=>{const group=button.closest('.cm-choice');group.classList.add('has-decision');group.querySelectorAll('button').forEach(item=>item.classList.toggle('chosen',item===button));group.closest('[data-cm-decision]').dataset.decision=button.dataset.decision;updateDecisionSummary()});
+function updateDecisionSummary(){const rows=[...document.querySelectorAll('[data-cm-decision]')],kept=rows.filter(row=>row.dataset.decision==='keep').length,aside=rows.filter(row=>row.dataset.decision==='aside').length,pending=rows.length-kept-aside;document.querySelector('#keptCount').textContent=kept;document.querySelector('#asideCount').textContent=aside;document.querySelector('#pendingCount').textContent=pending;document.querySelector('#confirmComparison').disabled=pending>0}
+document.querySelector('#confirmComparison').onclick=()=>{const aside=Number(document.querySelector('#asideCount').textContent);if(aside&& !document.querySelector('#comparisonReason').value.trim()){say('Indique a justificação para os CM colocados de parte');return}say('Decisões individuais confirmadas; controlo aprovado preservado')};
+document.querySelector('#approve').onclick=()=>{document.querySelector('#emailPreview').classList.add('open');document.querySelector('#approve').disabled=true;document.querySelector('#reject').disabled=true;say('Controlo aprovado — envio para Linha B preparado')};document.querySelector('#reject').onclick=()=>say('Controlo não aprovado — justificação registada');document.querySelector('#sendApproved').onclick=()=>say('Pedido de envio preparado para os destinatários da máquina B3');
+</script>
+</body>
+</html>

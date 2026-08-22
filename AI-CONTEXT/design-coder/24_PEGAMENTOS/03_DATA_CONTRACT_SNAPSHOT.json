@@ -1,0 +1,77 @@
+{
+  "schema_version": "pegamentos-snapshot-v1",
+  "control_id": "PEG-202602-B2",
+  "control_revision_id": "PEG-202602-B2-R1",
+  "revision_number": 1,
+  "job_on_id": "JO-202602-B2",
+  "job_on_revision_id": "JOR-202602-B2-R3",
+  "reference": "9389T194",
+  "production": "202602",
+  "machine": "B2",
+  "measurement_date": "2026-08-17",
+  "calculation_engine_version": "pegamentos-calc-v1",
+  "rounding": {"scale": 2, "mode": "half_away_from_zero"},
+  "components": [
+    {
+      "family": "CM",
+      "label": "Contra molde",
+      "tool_id": "cm-9389",
+      "tool_lot_id": null,
+      "reference": "9389",
+      "lot_label": null,
+      "nominal_mm": 52.00,
+      "lower_limit_mm": 51.80,
+      "upper_limit_mm": 52.20,
+      "measured_average_mm": 52.01,
+      "status": "within_limits",
+      "measurements": [
+        {"number":42,"seam_mm":52.02,"counter_seam_mm":52.00,"ovality_mm":0.02,"average_mm":52.01,"status":"within_limits"},
+        {"number":51,"seam_mm":52.00,"counter_seam_mm":52.04,"ovality_mm":-0.04,"average_mm":52.02,"status":"within_limits"},
+        {"number":34,"seam_mm":52.02,"counter_seam_mm":51.99,"ovality_mm":0.03,"average_mm":52.01,"status":"within_limits"}
+      ]
+    },
+    {
+      "family": "BQ",
+      "label": "Boquilha",
+      "tool_id": "bq-t194",
+      "tool_lot_id": null,
+      "reference": "T194",
+      "lot_label": null,
+      "nominal_mm": 52.20,
+      "lower_limit_mm": 52.00,
+      "upper_limit_mm": 52.40,
+      "measured_average_mm": 52.27,
+      "status": "within_limits",
+      "measurements": [
+        {"number":11,"seam_mm":52.20,"counter_seam_mm":52.21,"ovality_mm":-0.01,"average_mm":52.20,"status":"within_limits"},
+        {"number":51,"seam_mm":52.24,"counter_seam_mm":52.34,"ovality_mm":-0.10,"average_mm":52.29,"status":"within_limits"},
+        {"number":34,"seam_mm":52.24,"counter_seam_mm":52.37,"ovality_mm":-0.13,"average_mm":52.30,"status":"within_limits"}
+      ]
+    },
+    {
+      "family": "MF",
+      "label": "Molde final",
+      "tool_id": "mf-9389",
+      "tool_lot_id": null,
+      "reference": "9389",
+      "lot_label": null,
+      "nominal_mm": 52.40,
+      "lower_limit_mm": 52.20,
+      "upper_limit_mm": 52.60,
+      "measured_average_mm": 52.45,
+      "status": "within_limits",
+      "measurements": [
+        {"number":13,"seam_mm":52.41,"counter_seam_mm":52.48,"ovality_mm":-0.07,"average_mm":52.44,"status":"within_limits"},
+        {"number":81,"seam_mm":52.46,"counter_seam_mm":52.47,"ovality_mm":-0.01,"average_mm":52.47,"status":"within_limits"},
+        {"number":78,"seam_mm":52.43,"counter_seam_mm":52.47,"ovality_mm":-0.04,"average_mm":52.45,"status":"within_limits"}
+      ]
+    }
+  ],
+  "overall_status": "within_limits",
+  "notes": null,
+  "state": "approved",
+  "created_at": "2026-08-17T22:03:22+01:00",
+  "created_by": "user-operator-01",
+  "approved_at": "2026-08-17T22:10:00+01:00",
+  "approved_by": "user-responsavel-01"
+}

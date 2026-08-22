@@ -32,10 +32,30 @@ application defects are intentionally **not** corrected in this baseline.
 
 ## Requirements / design authority
 
-Requirements and design authority will be added in a separate, later commit.
-They are **not** reconstructed from the excluded historical files. Do not
-reconstruct requirements from excluded materials — treat this baseline as the
-implementation state only, without design authority attached.
+The authoritative design and implementation context for this repository is now
+contained in the `AI-CONTEXT/` and `reports/` folders of this same repository.
+
+### AUTHORITY ORDER
+
+1. **AI-CONTEXT/docs/FUNCTIONAL_RULES_SOURCE_OF_TRUTH.md**
+   = functional/business authority
+
+2. **AI-CONTEXT/design-coder**
+   = current final design/presentation/interactions authority
+
+3. **current application source**
+   = implementation evidence, not requirements authority
+
+4. **reports/DESIGN_PLAN_DATABASE_SUPPORT_AUDIT.md**
+   and
+   **reports/DAPPER_REPOSITORY_COMPLETENESS_AUDIT.md**
+   = verified implementation-readiness evidence
+
+Historical recovery materials were intentionally excluded. Do not search outside
+this repository to reconstruct requirements.
+
+The baseline application commit intentionally contains known pre-design defects
+that will be fixed in later commits. They are not described here in detail.
 
 ---
 

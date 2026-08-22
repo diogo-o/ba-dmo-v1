@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Controlo de Peso e Volume — Operador</title>
+<link rel="stylesheet" href="dmo-design-system.css">
+<style>
+.header{height:72px;background:#fff;border-bottom:1px solid var(--dmo-border);display:flex;align-items:center;padding:0 28px;gap:12px}.logo{width:42px;height:42px;border-radius:50%}.brand h1{font-size:17px;margin:0}.brand p,.user span{font-size:11px;color:var(--dmo-muted);margin:2px 0 0}.user{margin-left:auto;text-align:right}.user strong{display:block;font-size:12px}.tabs{height:50px;background:#fff;border-bottom:1px solid var(--dmo-border);display:flex;gap:26px;padding:0 28px}.tab{border:0;background:none;color:var(--dmo-muted);font-weight:700;border-bottom:3px solid transparent}.tab.active{color:var(--dmo-brand-600);border-color:var(--dmo-brand-600)}.settings{margin-left:auto}.main{max-width:1320px;margin:auto;padding:24px}.view{display:none}.view.active{display:block}.page-head{display:flex;align-items:end;justify-content:space-between;margin-bottom:16px}.page-head h2{font-size:23px;margin:0}.page-head p{color:var(--dmo-muted);margin:3px 0 0}.stack{display:grid;gap:14px}.card-pad{padding:18px}.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}.section-head h3{font-size:15px;margin:0}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.control-grid{display:grid;grid-template-columns:minmax(190px,1.25fr) 105px 105px minmax(165px,.8fr) minmax(170px,1fr) 95px;gap:12px;align-items:end}.sap-grid{display:grid;grid-template-columns:210px 175px minmax(340px,1fr);gap:12px}.compact{max-width:150px}.reference-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}.summary-item{padding:10px;border-left:3px solid var(--dmo-brand-600);background:var(--dmo-subtle);border-radius:8px}.summary-item span{display:block;color:var(--dmo-muted);font-size:10px}.summary-item strong{font-size:13px}.readings{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.reading{display:grid;grid-template-columns:70px 1fr;gap:7px}.live{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:12px;padding:13px;border:1px solid var(--dmo-border);border-left:4px solid var(--dmo-brand-600);border-radius:10px}.live div{padding:9px;background:var(--dmo-subtle);border-radius:8px}.live span{display:block;font-size:10px;color:var(--dmo-muted)}.result-summary{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:12px}.result-summary div{background:var(--dmo-subtle);border-radius:8px;padding:10px}.result-summary span{display:block;color:var(--dmo-muted);font-size:10px}.result-summary strong{font-size:14px}.actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.autosave{display:flex;align-items:center;gap:6px;color:var(--dmo-success);font-size:11px}.split{display:grid;grid-template-columns:410px 1fr;gap:12px}.select-table tr.selected{background:#d9e6f2}.compact-table th,.compact-table td{padding:8px 7px;font-size:11px}.reference-list{padding:14px}.reference-list .dmo-table{table-layout:fixed}.reference-list .dmo-table th,.reference-list .dmo-table td{overflow:hidden;text-overflow:ellipsis}.machine-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}.machine-choice{min-height:48px;border:1px solid var(--dmo-border);border-radius:9px;background:var(--dmo-subtle);color:var(--dmo-brand-700);font-weight:800}.machine-choice.selected{background:var(--dmo-brand-600);border-color:var(--dmo-brand-600);color:#fff}.editor{display:none}.editor.open{display:block}.editor-sections{display:grid;gap:12px}.comparison-context{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px}.comparison-context div{padding:10px;background:var(--dmo-subtle);border-radius:8px}.comparison-context span{display:block;font-size:10px;color:var(--dmo-muted)}.sheet-context{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:13px}.hint{font-size:11px;color:var(--dmo-muted)}
+@media(max-width:980px){.grid4,.result-summary{grid-template-columns:repeat(2,1fr)}.control-grid{grid-template-columns:1fr 105px 105px 165px}.sap-grid{grid-template-columns:190px 160px 1fr}.split{grid-template-columns:1fr}.reference-summary{grid-template-columns:repeat(3,1fr)}}@media(max-width:720px){.main{padding:14px}.grid4,.grid3,.control-grid,.sap-grid,.readings,.live,.reference-summary{grid-template-columns:1fr}.machine-grid{grid-template-columns:repeat(3,1fr)}}
+</style>
+<style>.reading-result{grid-column:1/-1;display:block;margin-top:-2px;padding:6px 8px;border-radius:7px;background:var(--dmo-brand-050);color:var(--dmo-brand-700);font-size:11px;font-weight:750}.reading-result.pending{color:var(--dmo-muted)}.comparison-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}.formula-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding:10px 12px;border-left:4px solid var(--dmo-brand-600);border-radius:8px;background:var(--dmo-brand-050)}.formula-banner code{font-size:15px;font-weight:850;color:var(--dmo-brand-700)}.comparison-pairs{display:grid;gap:9px}.comparison-pair{display:grid;grid-template-columns:90px 150px 100px 150px minmax(150px,1fr);gap:8px;align-items:end;padding:10px;border:1px solid var(--dmo-border);border-radius:9px;background:var(--dmo-subtle)}.pair-result{min-height:36px;padding:7px 9px;border-radius:7px;background:#fff}.pair-result span,.pair-result strong{display:block}.pair-result span{font-size:9px;color:var(--dmo-muted)}.embedded-compare-head{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:start}.previous-production-chooser{display:none;margin:13px 0;padding:14px;border:1px solid var(--dmo-border);border-radius:10px;background:var(--dmo-subtle)}.previous-production-chooser.open{display:grid;grid-template-columns:minmax(260px,1fr) auto;gap:10px;align-items:end}.comparison-identities{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:13px 0}.production-identity{padding:12px 14px;border:1px solid var(--dmo-border);border-left:4px solid var(--dmo-brand-600);border-radius:9px;background:#fff}.production-identity.previous{border-left-color:#e99022}.production-identity span{display:block;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--dmo-muted)}.production-identity strong{display:block;margin-top:3px;font-size:15px;color:var(--dmo-brand-700)}.production-identity small{display:block;margin-top:3px;color:var(--dmo-muted)}.embedded-comparison-result{display:none}.embedded-comparison-result.ready{display:block}.comparison-empty{padding:18px;border:1px dashed var(--dmo-border);border-radius:9px;text-align:center;color:var(--dmo-muted);font-size:12px}.comparison-status{display:inline-flex;align-items:center;justify-content:center;min-height:28px;padding:4px 10px;border-radius:999px;background:#fff4e5;color:#9a5200;font-size:11px;font-weight:800}.embedded-prior-cm{min-width:92px}.embedded-prior-cm select{width:100%;min-height:32px;border:1px solid var(--dmo-border);border-radius:7px;background:#fff}.difference-positive{color:#9a5200;font-weight:800}.difference-negative{color:var(--dmo-success);font-weight:800}@media(max-width:980px){.comparison-pair{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:720px){.comparison-pair{grid-template-columns:1fr 1fr}.embedded-compare-head,.previous-production-chooser.open,.comparison-identities{grid-template-columns:1fr}.embedded-compare-head .actions{justify-content:flex-start}.embedded-comparison-result .dmo-table{min-width:720px}}</style>
+</head>
+<body>
+<header class="header dmo-app-header">
+<img class="logo" src="logo_recolored(1).png" alt="BA">
+<div class="brand dmo-app-header__page">
+<h1>Controlo de Peso e Volume</h1>
+<p>Operador</p>
+</div>
+<div class="user dmo-app-header__user">
+<strong>João Silva</strong>
+<span data-user-profile-title>Metrologia</span>
+</div>
+</header>
+<nav class="dmo-primary-nav" aria-label="Tarefas principais"><a href="job-on.html">Job On</a><a class="active" href="controlo.html" aria-current="page">Controlo</a><a href="reparacao-interna.html">Reparação Interna</a><a href="boquilhas.html">Boquilhas</a><a href="armazem.html">Armazém</a></nav>
+<nav class="tabs dmo-secondary-nav" aria-label="Áreas do Controlo de Peso">
+<button class="tab active" data-view="new">Novo controlo</button>
+<button class="tab" data-view="refs">Referências</button>
+<button class="tab" data-view="history">Histórico</button>
+<button class="tab settings" data-view="settings">Definições</button>
+</nav>
+<main class="main">
+<section class="view active" id="new">
+<div class="page-head">
+<div>
+<h2>Novo controlo</h2>
+<p>Preencha as leituras e envie o controlo para aprovação.</p>
+</div>
+<div class="autosave">● Guardado automaticamente</div>
+</div>
+<div class="stack">
+<div class="dmo-card card-pad">
+<div class="section-head">
+<h3>Referência do controlo</h3>
+<div class="actions">
+<button class="dmo-button" id="editActiveRef">Editar referência</button>
+<button class="dmo-button" id="createRefFromNew">Criar referência</button>
+</div>
+</div>
+<div class="grid3">
+<div class="dmo-field">
+<label>Procurar referência</label>
+<input placeholder="Ex.: 9121T173">
+</div>
+<div class="dmo-field">
+<label>Medições anteriores aprovadas</label>
+<select>
+<option>Selecionar produção…</option>
+<option>202512 · B3 · L24</option>
+</select>
+</div>
+</div>
+</div>
+<div class="dmo-card card-pad">
+<div class="section-head">
+<h3>Referência ativa</h3>
+</div>
+<div class="reference-summary">
+<div class="summary-item">
+<span>Referência</span>
+<strong>9389T194</strong>
+</div>
+<div class="summary-item">
+<span>CM</span>
+<strong>5447</strong>
+</div>
+<div class="summary-item">
+<span>Lote CM</span>
+<strong>4</strong>
+</div>
+<div class="summary-item">
+<span>Boquilha</span>
+<strong>T194</strong>
+</div>
+<div class="summary-item">
+<span>Processo</span>
+<strong>NNPB</strong>
+</div>
+<div class="summary-item">
+<span>Máquina atual</span>
+<strong>B3</strong>
+</div>
+</div>
+</div>
+<div class="dmo-card card-pad">
+<div class="section-head">
+<h3>Dados do controlo</h3>
+</div>
+<div class="comparison-context">
+<div><span>Job On</span><strong>JO-202601-B3</strong></div><div><span>Produção</span><strong>202601</strong></div><div><span>CM</span><strong>5447</strong></div><div><span>Lote CM</span><strong>4</strong></div><div><span>Processo do lote</span><strong>NNPB</strong></div><div><span>Máquina</span><strong>B3</strong></div>
+</div>
+<p class="hint">Job On, Referência, Produção, Máquina e o CM/lote exatos vêm do Job On selecionado. O Processo vem desse lote criado no Peso. Estes dados não são editáveis no controlo.</p>
+<div class="control-grid" style="grid-template-columns:165px 170px 95px;margin-top:12px">
+<div class="dmo-field">
+<label>Data de início</label>
+<input type="date" value="2026-08-15">
+</div>
+<div class="dmo-field">
+<label>Estado do molde</label>
+<select>
+<option>Novo</option>
+<option>Reparado</option>
+</select>
+</div>
+<div class="dmo-field">
+<label>Temperatura (°C)</label>
+<input type="number" value="20" min="0" max="99" step="1">
+</div>
+</div>
+<hr style="border:0;border-top:1px solid var(--dmo-border);margin:18px 0">
+<div class="section-head">
+<h3>Leituras por CM</h3>
+<div class="actions">
+<button class="dmo-button" id="removeReading">Remover leitura</button>
+<button class="dmo-button" id="addReading">Adicionar leitura</button>
+</div>
+</div>
+<div class="readings" id="readings">
+<div class="reading">
+<div class="dmo-field">
+<label>CM</label>
+<input value="12">
+</div>
+<div class="dmo-field">
+<label>Peso (g)</label>
+<input value="152.43">
+</div>
+</div>
+<div class="reading">
+<div class="dmo-field">
+<label>CM</label>
+<input value="21">
+</div>
+<div class="dmo-field">
+<label>Peso (g)</label>
+<input value="152.43">
+</div>
+</div>
+<div class="reading">
+<div class="dmo-field">
+<label>CM</label>
+<input value="45">
+</div>
+<div class="dmo-field">
+<label>Peso (g)</label>
+<input value="151.43">
+</div>
+</div>
+<div class="reading">
+<div class="dmo-field">
+<label>CM</label>
+<input value="54">
+</div>
+<div class="dmo-field">
+<label>Peso (g)</label>
+<input value="151.43">
+</div>
+</div>
+</div>
+<div class="live">
+<div>
+<span>Leituras válidas</span>
+<strong id="readingCount">4</strong>
+</div>
+<div>
+<span>Média em água</span>
+<strong>151,93 g</strong>
+</div>
+<div>
+<span>Peso estimado em vidro</span>
+<strong>230,97 g</strong>
+</div>
+<div>
+<span>Peso nominal</span>
+<strong>200,00 g</strong>
+</div>
+</div>
+<hr style="border:0;border-top:1px solid var(--dmo-border);margin:18px 0">
+<div class="sap-grid">
+<div class="dmo-field">
+<label>Fim da produção anterior (SAP)</label>
+<input type="date">
+</div>
+<div class="dmo-field">
+<label>Peso médio anterior (SAP)</label>
+<input class="decimal-2" type="number" step="0.01">
+</div>
+<div class="dmo-field">
+<label>Notas</label>
+<input placeholder="Informação adicional relevante para este controlo">
+</div>
+</div>
+</div>
+<div class="dmo-card card-pad">
+<div class="section-head">
+<div>
+<h3>Resultados</h3>
+<p class="hint">A mesma estrutura é guardada e enviada para aprovação.</p>
+</div>
+</div>
+<div class="result-summary">
+<div>
+<span>Densidade</span>
+<strong>1,00 g/cm³</strong>
+</div>
+<div>
+<span>Capacidade média</span>
+<strong>151,93 cm³</strong>
+</div>
+<div>
+<span>Peso médio do vidro</span>
+<strong>230,97 g</strong>
+</div>
+<div>
+<span>Peso nominal</span>
+<strong>200 g</strong>
+</div>
+<div>
+<span>Diferença nominal</span>
+<strong>+30,97 g</strong>
+</div>
+<div>
+<span>Comparação anterior</span>
+<strong>Por criar</strong>
+</div>
+</div>
+<div class="dmo-table-wrap">
+<table class="dmo-table">
+<thead>
+<tr>
+<th>CM</th>
+<th>Peso em água</th>
+<th>Capacidade</th>
+<th>Desvio cm³</th>
+<th>Desvio %</th>
+<th>Peso do vidro</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>12</td>
+<td>152,43</td>
+<td>152,43</td>
+<td>+0,50</td>
+<td>+0,33%</td>
+<td>231,41</td>
+</tr>
+<tr>
+<td>21</td>
+<td>152,43</td>
+<td>152,43</td>
+<td>+0,50</td>
+<td>+0,33%</td>
+<td>231,41</td>
+</tr>
+<tr>
+<td>45</td>
+<td>151,43</td>
+<td>151,43</td>
+<td>-0,50</td>
+<td>-0,33%</td>
+<td>230,53</td>
+</tr>
+<tr>
+<td>54</td>
+<td>151,43</td>
+<td>151,43</td>
+<td>-0,50</td>
+<td>-0,33%</td>
+<td>230,53</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="actions" style="margin-top:14px">
+<button class="dmo-button" id="calculate">Calcular</button>
+</div>
+</div>
+<div class="dmo-card card-pad" id="embeddedComparison">
+<div class="embedded-compare-head">
+<div>
+<h3>Comparação com uma produção aprovada</h3>
+<p class="hint">Escolha e confirme a produção anterior. A tabela reutiliza os CM desta folha e compara o <strong>Peso do vidro</strong> de cada CM, sem médias de produção, volume ou capacidade.</p>
+</div>
+<div class="actions">
+<span class="comparison-status" id="embeddedComparisonStatus">Produção anterior por confirmar</span>
+<button class="dmo-button" id="choosePreviousProduction">Escolher produção anterior</button>
+</div>
+</div>
+<div class="previous-production-chooser" id="previousProductionChooser">
+<div class="dmo-field">
+<label>Produções anteriores aprovadas desta referência</label>
+<select id="previousProductionSelect">
+<option value="202512" data-job-id="JO-202512-B3" data-revision-id="JOR-202512-B3-R2" data-line="B3" data-revision="2">202512 · Linha B3 · Revisão 2 · 14/05/2026</option>
+<option value="202411" data-job-id="JO-202411-B2" data-revision-id="JOR-202411-B2-R4" data-line="B2" data-revision="4">202411 · Linha B2 · Revisão 4 · 03/11/2025</option>
+</select>
+</div>
+<button class="dmo-button" id="confirmPreviousProduction">Confirmar produção</button>
+</div>
+<div class="comparison-identities">
+<div class="production-identity">
+<span>Produção atual</span>
+<strong>202601 · Linha B3</strong>
+<small>JO-202601-B3 · Revisão atual JOR-202601-B3-R1</small>
+</div>
+<div class="production-identity previous">
+<span>Produção anterior aprovada</span>
+<strong id="previousProductionLabel">Ainda não escolhida</strong>
+<small id="previousProductionIdentity">Selecione um Job On e uma revisão aprovados.</small>
+</div>
+</div>
+<div class="comparison-empty" id="embeddedComparisonEmpty">Confirme primeiro a produção anterior; depois poderá criar a tabela de comparação.</div>
+<div class="embedded-comparison-result" id="embeddedComparisonResult">
+<div class="formula-banner">
+<div><strong>Comparação direta por CM</strong><span class="hint">Em cada linha, associe o CM atual a um CM concreto do snapshot aprovado anterior.</span></div>
+<code>CM + BQ − PU</code>
+</div>
+<div class="dmo-table-wrap">
+<table class="dmo-table compact-table">
+<thead><tr><th>CM atual</th><th>Peso do vidro atual</th><th>CM anterior</th><th>Peso do vidro anterior</th><th>Diferença</th><th>Variação</th></tr></thead>
+<tbody id="embeddedComparisonBody"></tbody>
+</table>
+</div>
+<p class="hint" style="margin-top:9px">A produção anterior é apenas lida. Alterar uma associação de CM nesta tabela não modifica o snapshot histórico.</p>
+</div>
+<div class="comparison-actions">
+<button class="dmo-button" id="createEmbeddedComparison" disabled>Criar tabela de comparação</button>
+<button class="dmo-button" id="sendApproval" disabled>Enviar para aprovação</button>
+</div>
+</div>
+</div>
+</section>
+<section class="view" id="refs">
+<div class="page-head">
+<div>
+<h2>Referências</h2>
+<p>Configuração e controlos associados a cada referência.</p>
+</div>
+</div>
+<div class="split">
+<div class="dmo-card card-pad reference-list">
+<div class="section-head">
+<h3>Lista de referências</h3>
+<button class="dmo-button" id="newRef">Nova referência</button>
+</div>
+<div class="dmo-field">
+<label>Pesquisar</label>
+<input placeholder="Referência, CM, boquilha ou máquina">
+</div>
+<div class="dmo-table-wrap" style="margin-top:12px">
+<table class="dmo-table select-table compact-table">
+<thead>
+<tr>
+<th>Referência</th>
+<th>CM</th>
+<th>Boquilha</th>
+<th>Processo</th>
+<th>Peso</th>
+</tr>
+</thead>
+<tbody data-dmo-list id="referenceList">
+<tr class="selected" data-dmo-row data-id="9389T194" aria-selected="true">
+<td>
+<strong>9389T194</strong>
+</td>
+<td>9389</td>
+<td>T194</td>
+<td>NNPB</td>
+<td>200</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="stack">
+<div class="dmo-card card-pad">
+<div class="section-head">
+<div>
+<h3>Controlos da referência ativa</h3>
+<p class="hint">Um clique seleciona; duplo clique abre a folha.</p>
+</div>
+</div>
+<div class="dmo-table-wrap">
+<table class="dmo-table select-table compact-table" id="refControls">
+<thead>
+<tr>
+<th>Data</th>
+<th>Produção</th>
+<th>Máquina</th>
+<th>Lote</th>
+<th>Peso</th>
+<th>Revisão</th>
+<th>Estado</th>
+</tr>
+</thead>
+<tbody>
+<tr data-row data-status="pending">
+<td>15/08/2026</td>
+<td>202601</td>
+<td>B3</td>
+<td>L26</td>
+<td>155,98 g</td>
+<td>1</td>
+<td>
+<span class="dmo-pill">Pendente</span>
+</td>
+</tr>
+<tr data-row data-status="approved">
+<td>10/07/2026</td>
+<td>202512</td>
+<td>B3</td>
+<td>L24</td>
+<td>151,78 g</td>
+<td>2</td>
+<td>
+<span class="dmo-pill active">Aprovado</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="actions" style="margin-top:12px">
+<button class="dmo-button" id="editControl" disabled>Editar controlo</button>
+<button class="dmo-button" id="compareControl" disabled>Comparar</button>
+<button class="dmo-button" id="newControlRef">Novo controlo deste Job On</button>
+</div>
+</div>
+<div class="dmo-card card-pad editor" id="refEditor">
+<div class="section-head">
+<h3 id="editorTitle">Criar nova referência e primeiro lote</h3>
+<button class="dmo-button" id="closeEditor">Fechar edição</button>
+</div>
+<div class="editor-sections">
+<div class="grid3">
+<div class="dmo-field">
+<label>Referência base</label>
+<input value="9389">
+</div>
+<div class="dmo-field">
+<label>Número CM</label>
+<input value="9389">
+</div>
+<div class="dmo-field">
+<label>Neckring</label>
+<input value="T194">
+</div>
+</div>
+<div>
+<h4 style="margin:0 0 4px">Dados do primeiro lote</h4>
+<p class="hint" style="margin:0 0 10px">Processo e máquinas permitidas são definidos no lote do Peso e herdados pelo Job On, Novo controlo e Comparação.</p>
+</div>
+<div class="grid3">
+<div class="dmo-field">
+<label>Processo do lote</label>
+<select>
+<option>NNPB</option>
+<option>PS</option>
+</select>
+</div>
+<div class="dmo-field">
+<label>Lote predefinido</label>
+<input>
+</div>
+<div class="dmo-field">
+<label>Peso nominal</label>
+<input type="number" value="200">
+</div>
+</div>
+<div class="grid3">
+<div class="dmo-field" style="grid-column:span 2">
+<label>Subpasta dos relatórios</label>
+<input value="5447T173" placeholder="Ex.: 5447T173">
+<small>Nome relativo criado dentro do diretório principal; não introduza um caminho absoluto.</small>
+</div>
+<div class="dmo-field">
+<label>Caminho resolvido</label>
+<input value="Capacidades / 5447T173" readonly aria-readonly="true">
+</div>
+</div>
+<div class="dmo-field">
+<label>Máquinas permitidas</label>
+<p class="hint" style="margin:0 0 8px">Associe este lote às máquinas/linhas onde pode trabalhar. Esta associação já faz parte do registo operacional.</p>
+<div class="machine-grid">
+<button type="button" class="machine-choice selected">B1</button>
+<button type="button" class="machine-choice">B2</button>
+<button type="button" class="machine-choice selected">B3</button>
+<button type="button" class="machine-choice selected">C1</button>
+<button type="button" class="machine-choice">C2</button>
+<button type="button" class="machine-choice">C3</button>
+</div>
+</div>
+<div class="grid3">
+<div class="dmo-field">
+<label>Volume do punção</label>
+<input type="number">
+</div>
+<div class="dmo-field">
+<label>Volume da marisa</label>
+<input type="number">
+</div>
+<div class="dmo-field">
+<label>Volume do tampão</label>
+<input type="number" readonly value="0">
+</div>
+</div>
+<div class="dmo-field">
+<label>Nota da alteração</label>
+<input placeholder="Obrigatória ao alterar uma referência existente">
+</div>
+<div class="actions">
+<button class="dmo-button">Guardar referência</button>
+<button class="dmo-button">Ver histórico de alterações</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section class="view" id="history">
+<div class="page-head">
+<div>
+<h2>Histórico</h2>
+<p>Controlos já enviados para aprovação.</p>
+</div>
+</div>
+<div class="dmo-card card-pad">
+<div class="grid4">
+<div class="dmo-field">
+<label>Pesquisar</label>
+<input id="historySearch" placeholder="Referência, produção, lote ou máquina">
+</div>
+<div class="dmo-field">
+<label>Estado</label>
+<select>
+<option>Todos</option>
+<option>Pendente</option>
+<option>Aprovado</option>
+<option>Não aprovado</option>
+</select>
+</div>
+<div class="dmo-field"><label>Tipo</label><select id="historyTypeFilter"><option value="all">Todos</option><option value="control">Registo de peso</option><option value="comparison">Comparação</option></select></div>
+<div class="dmo-field">
+<label>Desde</label>
+<input type="date">
+</div>
+<div class="dmo-field">
+<label>Até</label>
+<input type="date">
+</div>
+</div>
+<div class="dmo-table-wrap" style="margin-top:14px">
+<table class="dmo-table select-table" id="historyTable">
+<thead>
+<tr>
+<th>Data</th>
+<th>Referência</th>
+<th>Produção</th>
+<th>Máquina</th>
+<th>Lote</th>
+<th>Peso</th>
+<th>Revisão</th>
+<th>Estado</th>
+</tr>
+</thead>
+<tbody>
+<tr data-row data-kind="control" data-status="approved">
+<td>15/08/2026</td>
+<td>9389T194</td>
+<td>202601</td>
+<td>B3</td>
+<td>L26</td>
+<td>230,97 g</td>
+<td>2</td>
+<td>
+<span class="dmo-pill approved">Aprovado</span>
+</td>
+</tr>
+<tr data-row data-kind="control" data-status="pending">
+<td>14/08/2026</td>
+<td>5447T173</td>
+<td>202600</td>
+<td>C1</td>
+<td>L18</td>
+<td>198,43 g</td>
+<td>1</td>
+<td>
+<span class="dmo-pill pending">Pendente</span>
+</td>
+</tr>
+<tr data-row data-kind="comparison" data-status="pending"><td>15/08/2026</td><td>9389T194</td><td>202512</td><td>B3</td><td>L24</td><td>225,68 g</td><td>Extra</td><td><span class="dmo-pill pending">Pendente</span></td></tr>
+</tbody>
+</table>
+</div>
+<div class="actions" style="margin-top:12px">
+<button class="dmo-button" id="generateDoc" disabled>Gerar folha de produção</button>
+<button class="dmo-button" id="sendMail" disabled>Enviar email para produção</button>
+</div>
+</div>
+</section>
+<section class="view" id="comparisons">
+<div class="page-head"><div><h2>Comparar CM em produção</h2><p>Registe os CM atualmente montados e compare-os com o controlo aprovado selecionado.</p></div><button class="dmo-button" id="backToRefs">Voltar às referências</button></div>
+<div class="stack">
+<section class="dmo-card card-pad"><div class="section-head"><h3>Contexto ativo do Job On</h3></div><div class="reference-summary"><div class="summary-item"><span>Job On</span><strong>JO-202601-B3</strong></div><div class="summary-item"><span>Produção</span><strong>202601</strong></div><div class="summary-item"><span>Referência</span><strong>9389T194</strong></div><div class="summary-item"><span>CM</span><strong>5447</strong></div><div class="summary-item"><span>Lote CM</span><strong>4</strong></div><div class="summary-item"><span>Processo do lote</span><strong>NNPB</strong></div><div class="summary-item"><span>Máquina atual</span><strong>B3</strong></div></div></section>
+<section class="dmo-card card-pad"><div class="section-head"><h3>Novo controlo aprovado deste Job On</h3><span class="dmo-pill active">Aprovado · Revisão 2</span></div><div class="comparison-context"><div><span>Job On</span><strong>JO-202601-B3</strong></div><div><span>Referência</span><strong>9389T194</strong></div><div><span>Produção</span><strong>202601</strong></div><div><span>CM</span><strong>5447</strong></div><div><span>Lote CM</span><strong>4</strong></div><div><span>Processo</span><strong>NNPB</strong></div><div><span>Máquina</span><strong>B3</strong></div></div><p class="hint">A Comparação mede os CM que já estão em produção e usa como base imutável o Novo controlo aprovado ligado a este Job On.</p></section>
+<section class="dmo-card card-pad"><div class="section-head"><div><h3>Comparação direta por CM</h3><p class="hint">Associe cada CM atual a um CM concreto da produção anterior. Não é usada a média global.</p></div><div class="actions"><button class="dmo-button" id="removeComparisonReading">Remover par</button><button class="dmo-button" id="addComparisonReading">Adicionar par</button></div></div><div class="formula-banner"><div><strong>Valor usado na comparação</strong><span class="hint">É o “Peso do vidro” já calculado e guardado por baixo de cada leitura no Novo Controlo.</span></div><code>CM + BQ − PU</code></div><div class="comparison-pairs" id="comparisonReadings"><div class="comparison-pair"><div class="dmo-field"><label>CM atual</label><select><option>12</option><option>21</option><option>45</option><option>54</option></select></div><div class="dmo-field"><label>Peso vidro atual</label><input value="231.41" readonly></div><div class="dmo-field"><label>CM anterior</label><select><option>61</option><option>95</option></select></div><div class="dmo-field"><label>Peso vidro anterior</label><input value="231.78" readonly></div><div class="pair-result"><span>Diferença / variação</span><strong>−0,37 g · −0,16%</strong></div></div><div class="comparison-pair"><div class="dmo-field"><label>CM atual</label><select><option>45</option><option>12</option><option>21</option><option>54</option></select></div><div class="dmo-field"><label>Peso vidro atual</label><input value="230.53" readonly></div><div class="dmo-field"><label>CM anterior</label><select><option>95</option><option>61</option></select></div><div class="dmo-field"><label>Peso vidro anterior</label><input value="230.05" readonly></div><div class="pair-result"><span>Diferença / variação</span><strong>+0,48 g · +0,21%</strong></div></div></div><div class="live"><div><span>Pares válidos</span><strong id="comparisonReadingCount">2</strong></div><div><span>Base</span><strong>Peso do vidro por CM</strong></div><div><span>Maior diferença</span><strong>+0,48 g</strong></div><div><span>Produção anterior</span><strong>202512 · B3</strong></div></div><hr style="border:0;border-top:1px solid var(--dmo-border);margin:18px 0"><div class="sap-grid"><div class="dmo-field"><label>Data do registo da comparação</label><input type="date" value="2026-08-15"></div><div class="dmo-field"><label>Produção anterior aprovada</label><input value="202512 · Revisão 2" readonly></div><div class="dmo-field"><label>Notas</label><input placeholder="Informação adicional relevante para esta comparação"></div></div></section>
+<section class="dmo-card card-pad"><div class="section-head"><div><h3>Resultados da comparação</h3><p class="hint">Um CM atual comparado diretamente com um CM aprovado da produção anterior.</p></div></div><div class="dmo-table-wrap"><table class="dmo-table compact-table"><thead><tr><th>CM atual</th><th>Peso vidro atual</th><th>CM anterior</th><th>Peso vidro anterior</th><th>Diferença</th><th>Variação</th></tr></thead><tbody id="comparisonPreview"><tr><td>12</td><td><strong>231,41 g</strong></td><td>61</td><td>231,78 g</td><td>−0,37 g</td><td>−0,16%</td></tr><tr><td>45</td><td><strong>230,53 g</strong></td><td>95</td><td>230,05 g</td><td>+0,48 g</td><td>+0,21%</td></tr></tbody></table></div><div class="comparison-actions"><a class="dmo-button" href="peso-folha-producao.html" target="_blank">Pré-visualizar folha</a><button class="dmo-button" id="calculateComparison">Calcular</button><button class="dmo-button" id="saveComparison">Enviar para aprovação</button></div></section>
+</div>
+</section>
+<section class="view" id="settings">
+<div class="stack">
+<div class="dmo-card card-pad">
+<div class="section-head"><div><h2>Diretório principal dos relatórios</h2><p class="hint">Os dados numéricos e o histórico ficam no servidor. Os PDFs aprovados são guardados neste computador.</p></div><button class="dmo-button">Selecionar diretório principal</button></div>
+<div class="comparison-context"><div><span>Estado local</span><strong>Autorizado</strong></div><div><span>Diretório</span><strong>Capacidades</strong></div><div><span>Exemplo resolvido</span><strong>Capacidades / 5447T173</strong></div></div>
+<p class="hint">A autorização pertence a este browser/computador e pode ter de ser renovada. A subpasta é definida quando se cria o lote.</p>
+</div>
+<div class="dmo-card card-pad">
+<h2>Sincronização</h2>
+<p class="hint">A sincronização dos registos estruturados com o servidor é automática. A interface apresenta separadamente o estado do servidor e o estado da gravação local do PDF.</p>
+</div>
+</div>
+</section>
+</main>
+<div class="dmo-modal-backdrop" id="sheet">
+<div class="dmo-modal" style="width:min(920px,100%)">
+<div class="dmo-modal-head">
+<div>
+<h2>Folha de controlo</h2>
+<p class="hint" style="margin:3px 0 0">9389T194 · Produção 202512 · B3 · Revisão 2</p>
+</div>
+<button class="dmo-button dmo-icon-button" data-close>×</button>
+</div>
+<div class="dmo-modal-body">
+<div class="sheet-context">
+<span class="dmo-pill active">Aprovado</span>
+<span class="dmo-pill">Peso 151,78 g</span>
+<span class="dmo-pill">Lote L24</span>
+</div>
+<div class="dmo-table-wrap">
+<table class="dmo-table">
+<thead>
+<tr>
+<th>CM</th>
+<th>Capacidade</th>
+<th>Desvio %</th>
+<th>Peso do vidro</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>12</td>
+<td>152,43</td>
+<td>+0,33%</td>
+<td>231,41</td>
+</tr>
+<tr>
+<td>45</td>
+<td>151,43</td>
+<td>-0,33%</td>
+<td>230,53</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="dmo-modal-foot">
+<button class="dmo-button" data-close>Fechar</button>
+<button class="dmo-button">Gerar folha</button>
+<button class="dmo-button">Enviar para produção</button>
+</div>
+</div>
+</div>
+<div class="dmo-toast" id="toast">
+</div>
+<script>
+const toast=document.querySelector('#toast');
+const sheet=document.querySelector('#sheet');
+const say=(text)=>{toast.textContent=text;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),2200)};
+const showView=(id,navId=id)=>{document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.view===navId));document.querySelector('#'+id).classList.add('active')};
+
+document.querySelectorAll('.tab').forEach(button=>button.onclick=()=>showView(button.dataset.view));
+document.querySelectorAll('.select-table tr[data-row]').forEach(row=>{
+  row.onclick=()=>{
+    row.closest('table').querySelectorAll('tr').forEach(x=>x.classList.remove('selected'));
+    row.classList.add('selected');
+    if(row.closest('#refControls')){document.querySelector('#editControl').disabled=false;document.querySelector('#compareControl').disabled=row.dataset.status!=='approved'}
+    if(row.closest('#historyTable')){const approved=row.dataset.status==='approved';document.querySelector('#generateDoc').disabled=!approved;document.querySelector('#sendMail').disabled=!approved}
+  };
+  row.ondblclick=()=>sheet.classList.add('open');
+});
+
+function normaliseDecimal(input){if(input.value==='')return;const value=Number(String(input.value).replace(',','.'));if(Number.isFinite(value))input.value=value.toFixed(2)}
+function formatPt(value){return Number(value).toFixed(2).replace('.',',')}
+function calculateReadingPreview(reading){const cmWeight=Number(reading.querySelectorAll('input')[1]?.value);const result=reading.querySelector('.reading-result');if(!result)return;if(!Number.isFinite(cmWeight)){result.textContent='Peso do vidro: —';result.classList.add('pending');return}const demoBqWeight=112.40,demoPuWeight=33.42,glassWeight=cmWeight+demoBqWeight-demoPuWeight;reading.dataset.glassWeight=glassWeight.toFixed(2);result.textContent=`Peso do vidro: ${formatPt(glassWeight)} g`;result.classList.remove('pending')}
+function prepareReading(reading){const inputs=reading.querySelectorAll('input');if(inputs[1]){inputs[1].classList.add('decimal-2');inputs[1].step='0.01';if(!reading.querySelector('.reading-result'))reading.insertAdjacentHTML('beforeend','<small class="reading-result pending">Peso do vidro: —</small>');inputs[1].addEventListener('input',()=>{calculateReadingPreview(reading);markEmbeddedComparisonStale()});inputs[1].addEventListener('blur',()=>{normaliseDecimal(inputs[1]);calculateReadingPreview(reading)});if(inputs[0])inputs[0].addEventListener('input',markEmbeddedComparisonStale);calculateReadingPreview(reading)}}
+function updateReadingCount(){document.querySelector('#readingCount').textContent=document.querySelectorAll('#readings .reading').length;document.querySelector('#comparisonReadingCount').textContent=document.querySelectorAll('#comparisonReadings .comparison-pair').length}
+function addReading(containerId){const container=document.querySelector(containerId);const index=container.querySelectorAll('.reading').length+1;const reading=document.createElement('div');reading.className='reading';reading.innerHTML=`<div class="dmo-field"><label>CM</label><input type="number" step="1" placeholder="Ex.: ${index*10}"></div><div class="dmo-field"><label>Peso (g)</label><input class="decimal-2" type="number" step="0.01" placeholder="0,00"></div>`;container.appendChild(reading);prepareReading(reading);updateReadingCount();markEmbeddedComparisonStale()}
+function removeReading(containerId){const items=document.querySelectorAll(`${containerId} .reading`);if(items.length<=1){say('É necessária pelo menos uma leitura');return}items[items.length-1].remove();updateReadingCount();markEmbeddedComparisonStale()}
+document.querySelectorAll('.reading').forEach(prepareReading);
+document.querySelectorAll('.decimal-2').forEach(input=>input.addEventListener('blur',()=>normaliseDecimal(input)));
+document.querySelector('#addReading').onclick=()=>addReading('#readings');
+document.querySelector('#removeReading').onclick=()=>removeReading('#readings');
+function addComparisonPair(){const pair=document.createElement('div');pair.className='comparison-pair';pair.innerHTML='<div class="dmo-field"><label>CM atual</label><select><option>21</option><option>12</option><option>45</option><option>54</option></select></div><div class="dmo-field"><label>Peso vidro atual</label><input value="231.41" readonly></div><div class="dmo-field"><label>CM anterior</label><select><option>36</option><option>61</option><option>95</option></select></div><div class="dmo-field"><label>Peso vidro anterior</label><input value="231.20" readonly></div><div class="pair-result"><span>Diferença / variação</span><strong>+0,21 g · +0,09%</strong></div>';document.querySelector('#comparisonReadings').appendChild(pair);updateReadingCount()}
+function removeComparisonPair(){const items=document.querySelectorAll('#comparisonReadings .comparison-pair');if(items.length<=1){say('É necessário pelo menos um par de CM');return}items[items.length-1].remove();updateReadingCount()}
+document.querySelector('#addComparisonReading').onclick=addComparisonPair;
+document.querySelector('#removeComparisonReading').onclick=removeComparisonPair;
+
+const previousProductionReadings={
+  '202512':[{cm:'61',weight:231.78},{cm:'95',weight:230.05},{cm:'63',weight:230.92},{cm:'36',weight:231.20}],
+  '202411':[{cm:'18',weight:232.04},{cm:'42',weight:230.81},{cm:'57',weight:231.12},{cm:'72',weight:230.44}]
+};
+let confirmedPreviousProduction=null;
+function markEmbeddedComparisonStale(){const result=document.querySelector('#embeddedComparisonResult');if(!result?.classList.contains('ready'))return;document.querySelector('#sendApproval').disabled=true;document.querySelector('#embeddedComparisonStatus').textContent='Leituras alteradas — recriar tabela'}
+function updateEmbeddedComparisonRow(row){const current=Number(row.dataset.currentWeight),select=row.querySelector('select'),option=select.selectedOptions[0],previous=Number(option.dataset.weight),difference=current-previous,variation=previous?difference/previous*100:0,sign=difference>=0?'+':'';row.querySelector('[data-previous-weight]').textContent=`${formatPt(previous)} g`;const differenceCell=row.querySelector('[data-difference]'),variationCell=row.querySelector('[data-variation]');differenceCell.textContent=`${sign}${formatPt(difference)} g`;variationCell.textContent=`${sign}${formatPt(variation)}%`;differenceCell.className=variationCell.className=difference>=0?'difference-positive':'difference-negative'}
+function createEmbeddedComparison(){if(!confirmedPreviousProduction){say('Confirme primeiro a produção anterior');return}const previous=previousProductionReadings[confirmedPreviousProduction.production]||[];const readings=[...document.querySelectorAll('#readings .reading')].map(reading=>({cm:reading.querySelectorAll('input')[0]?.value||'—',weight:Number(reading.dataset.glassWeight)})).filter(item=>Number.isFinite(item.weight));const body=document.querySelector('#embeddedComparisonBody');body.innerHTML=readings.map((reading,index)=>{const options=previous.map((item,previousIndex)=>`<option value="${item.cm}" data-weight="${item.weight}" ${previousIndex===index%previous.length?'selected':''}>${item.cm}</option>`).join('');return `<tr data-current-weight="${reading.weight}"><td><strong>${reading.cm}</strong></td><td>${formatPt(reading.weight)} g</td><td class="embedded-prior-cm"><select aria-label="CM anterior associado a CM ${reading.cm}">${options}</select></td><td data-previous-weight></td><td data-difference></td><td data-variation></td></tr>`}).join('');body.querySelectorAll('tr').forEach(row=>{row.querySelector('select').addEventListener('change',()=>updateEmbeddedComparisonRow(row));updateEmbeddedComparisonRow(row)});document.querySelector('#embeddedComparisonEmpty').hidden=true;document.querySelector('#embeddedComparisonResult').classList.add('ready');document.querySelector('#sendApproval').disabled=false;document.querySelector('#embeddedComparisonStatus').textContent='Tabela criada · pronta para rever';say('Tabela criada com os CM atuais e o snapshot aprovado anterior')}
+document.querySelector('#choosePreviousProduction').onclick=()=>document.querySelector('#previousProductionChooser').classList.toggle('open');
+document.querySelector('#confirmPreviousProduction').onclick=()=>{const select=document.querySelector('#previousProductionSelect'),option=select.selectedOptions[0];confirmedPreviousProduction={production:select.value,jobOnId:option.dataset.jobId,revisionId:option.dataset.revisionId,line:option.dataset.line,revision:option.dataset.revision};document.querySelector('#previousProductionLabel').textContent=`${select.value} · Linha ${option.dataset.line} · Revisão ${option.dataset.revision}`;document.querySelector('#previousProductionIdentity').textContent=`${option.dataset.jobId} · ${option.dataset.revisionId}`;document.querySelector('#embeddedComparisonStatus').textContent='Produção anterior confirmada';document.querySelector('#createEmbeddedComparison').disabled=false;document.querySelector('#sendApproval').disabled=true;document.querySelector('#embeddedComparisonResult').classList.remove('ready');document.querySelector('#embeddedComparisonEmpty').hidden=false;document.querySelector('#embeddedComparisonEmpty').textContent='Produção confirmada. Crie agora a tabela para associar os CM atuais aos CM anteriores.';document.querySelector('#previousProductionChooser').classList.remove('open');say(`Produção ${select.value} confirmada como base da comparação`)};
+document.querySelector('#createEmbeddedComparison').onclick=createEmbeddedComparison;
+
+document.querySelectorAll('[data-close]').forEach(button=>button.onclick=()=>sheet.classList.remove('open'));
+document.querySelector('#newRef').onclick=document.querySelector('#createRefFromNew').onclick=document.querySelector('#editActiveRef').onclick=()=>{showView('refs');document.querySelector('#refEditor').classList.add('open')};
+document.querySelector('#closeEditor').onclick=()=>document.querySelector('#refEditor').classList.remove('open');
+document.querySelectorAll('.machine-choice').forEach(button=>button.onclick=()=>button.classList.toggle('selected'));
+document.querySelector('#editControl').onclick=()=>{const row=document.querySelector('#refControls tr.selected');if(row?.dataset.status==='approved'){const reason=prompt('Justificação obrigatória para reabrir um controlo aprovado:');if(!reason)return;say('Revisão criada; nova aprovação necessária')}else say('Controlo aberto para edição')};
+document.querySelector('#compareControl').onclick=()=>showView('comparisons','refs');
+document.querySelector('#backToRefs').onclick=()=>showView('refs');
+document.querySelector('#referenceList').addEventListener('dmo:list-select',event=>say(`Referência ${event.detail.id} selecionada`));
+document.querySelector('#referenceList').addEventListener('dmo:list-open',event=>{document.querySelector('#historySearch').value=event.detail.id;showView('history');say(`Histórico filtrado por ${event.detail.id}`)});
+document.querySelector('#historyTypeFilter').onchange=event=>{const type=event.target.value;document.querySelectorAll('#historyTable tr[data-row]').forEach(row=>row.hidden=type!=='all'&&row.dataset.kind!==type)};
+document.querySelector('#newControlRef').onclick=()=>{showView('new');say('Novo controlo iniciado para 9389T194')};
+document.querySelector('#calculate').onclick=()=>say('Resultados calculados com duas casas decimais');
+document.querySelector('#sendApproval').onclick=()=>say(`Controlo e comparação com ${confirmedPreviousProduction?.production||'produção anterior'} enviados para aprovação`);
+document.querySelector('#calculateComparison').onclick=()=>{const pairs=[...document.querySelectorAll('#comparisonReadings .comparison-pair')];document.querySelector('#comparisonPreview').innerHTML=pairs.map(pair=>{const selects=pair.querySelectorAll('select'),inputs=pair.querySelectorAll('input'),current=Number(inputs[0].value),previous=Number(inputs[1].value),difference=current-previous,variation=previous?difference/previous*100:null,sign=difference>=0?'+':'';pair.querySelector('.pair-result strong').textContent=`${sign}${formatPt(difference)} g · ${sign}${formatPt(variation)}%`;return `<tr><td>${selects[0].value}</td><td><strong>${formatPt(current)} g</strong></td><td>${selects[1].value}</td><td>${formatPt(previous)} g</td><td>${sign}${formatPt(difference)} g</td><td>${sign}${formatPt(variation)}%</td></tr>`}).join('');say('Comparação atualizada por CM, sem média global')};
+document.querySelector('#saveComparison').onclick=()=>say('Comparação enviada para aprovação');
+document.querySelector('#generateDoc').onclick=()=>say('Folha de produção gerada');
+document.querySelector('#sendMail').onclick=()=>say('Email de produção preparado');
+</script>
+<script src="dmo-interactions.js">
+</script>
+</body>
+</html>
