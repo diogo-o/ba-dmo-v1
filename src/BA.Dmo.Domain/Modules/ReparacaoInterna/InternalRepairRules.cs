@@ -40,7 +40,6 @@ public static class InternalRepairRules
         {
             InternalRepairToolType.CM => context.CmLotIds,
             InternalRepairToolType.MF => context.MfLotIds,
-            InternalRepairToolType.BQ => context.BqLotIds,
             _ => (IReadOnlyList<Guid>?)null
         };
         return allowedLots is not null && allowedLots.Contains(pieceLotId.Value);

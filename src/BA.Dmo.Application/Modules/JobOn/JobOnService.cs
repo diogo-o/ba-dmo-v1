@@ -504,6 +504,9 @@ public sealed class JobOnService
     private static (JobOnRevision Revision, IReadOnlyList<JobOnComponent> Components) CopyRevisionForDuplication(
         Guid newJobOnId, JobOnRevision source, DateTime now, string actorId)
     {
+        // The duplicated revision is a NEW immutable snapshot (revision 1) with a new id.
+        var newRevisionId = Guid.NewGuid();
+
         var components = new List<JobOnComponent>();
         foreach (var sourceComponent in source.Components ?? Array.Empty<JobOnComponent>())
         {
@@ -528,9 +531,13 @@ public sealed class JobOnService
                 })
                 .ToList();
 
+            // Re-pin the copied component to the NEW revision id (not the source's), so the
+            // whole in-memory graph is consistent — the same re-pinning the repository applies
+            // on insert (R-002: all new child rows belong to the new revision).
             components.Add(sourceComponent with
             {
                 JobOnComponentId = componentId,
+                JobOnRevisionId = newRevisionId,
                 Fields = fields,
                 Rows = rows,
                 Verifications = verifications
@@ -539,7 +546,7 @@ public sealed class JobOnService
 
         var revision = new JobOnRevision
         {
-            JobOnRevisionId = Guid.NewGuid(),
+            JobOnRevisionId = newRevisionId,
             JobOnId = newJobOnId,
             RevisionNumber = 1,
             ProductionSnapshot = source.ProductionSnapshot,

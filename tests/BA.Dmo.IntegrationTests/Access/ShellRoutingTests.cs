@@ -436,6 +436,12 @@ public class ShellRoutingTests : IClassFixture<ShellRoutingTests.ShellFixture>
 
             public Task<IReadOnlyList<HistoricalProductionSummary>> GetHistoricalProductionsAsync(string? referenceFilter, string? machineFilter, DateTime? from, DateTime? to, CancellationToken cancellationToken = default) =>
                 Task.FromResult<IReadOnlyList<HistoricalProductionSummary>>(Array.Empty<HistoricalProductionSummary>());
+
+            public Task SaveRevisionGraphAsync(JobOnRevision revision, string eventType, string actorId, CancellationToken cancellationToken = default) =>
+                Task.CompletedTask;
+
+            public Task<Guid> DuplicateAtomicallyAsync(Domain.Modules.JobOn.JobOn newJobOn, JobOnRevision revision, Guid sourceJobOnId, string actorId, CancellationToken cancellationToken = default) =>
+                Task.FromResult(Guid.NewGuid());
         }
 
         private sealed class FakePesoRepository : IPesoRepository

@@ -153,9 +153,9 @@ public class JobOnRevisionImmutabilityIntegrationTests
         };
         var components = new List<JobOnComponent>
         {
-            new() { Family = ComponentFamily.MP_CM, ReferenceSnapshot = "5447", LotSnapshot = "4", TechnicalNameSnapshot = "Contra-molde" },
-            new() { Family = ComponentFamily.MF, ReferenceSnapshot = "MF-9", LotSnapshot = "2" },
-            new() { Family = ComponentFamily.BQ, ReferenceSnapshot = "T173", LotSnapshot = "4" }
+            new() { JobOnComponentId = Guid.NewGuid(), JobOnRevisionId = revision.JobOnRevisionId, Family = ComponentFamily.MP_CM, ReferenceSnapshot = "5447", LotSnapshot = "4", TechnicalNameSnapshot = "Contra-molde" },
+            new() { JobOnComponentId = Guid.NewGuid(), JobOnRevisionId = revision.JobOnRevisionId, Family = ComponentFamily.MF, ReferenceSnapshot = "MF-9", LotSnapshot = "2" },
+            new() { JobOnComponentId = Guid.NewGuid(), JobOnRevisionId = revision.JobOnRevisionId, Family = ComponentFamily.BQ, ReferenceSnapshot = "T173", LotSnapshot = "4" }
         };
         // Components are part of the revision object so reconstruct keeps them attached.
         revision = revision with { Components = components };

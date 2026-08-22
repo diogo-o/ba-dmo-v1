@@ -176,10 +176,24 @@ FROM warehouse_stock WHERE tool_lote_id = @ToolId;";
     {
         return await DapperUnitOfWork.RunAsync(_connectionFactory, async (conn, tx, _) =>
         {
-            // Transaction-safe 1:1 occupation guard (TOCTOU fix): before
-            // inserting, lock any active occupant of the target position so two
-            // concurrent Entradas for different tools cannot both pass. The
-            // exception rolls the transaction back (DapperUnitOfWork rethrows).
+            // Transaction-safe 1:1 occupation guard (TOCTOU fix): first lock the
+            // location row itself so concurrent Entradas into the SAME location
+            // serialize even when no active occupant exists yet. Without this,
+            // two different tools entering a currently-empty position could both
+            // see "no occupant" and both pass (no stock row exists to lock).
+            // Locking the always-present warehouse_locations row closes that gap.
+            const string lockLocationSql = @"
+SELECT warehouse_location_id
+FROM warehouse_locations
+WHERE warehouse_location_id = @LocationId
+FOR UPDATE;";
+            await Db.QuerySingleOrDefaultAsync<dynamic>(
+                conn, lockLocationSql, new { LocationId = stock.WarehouseLocationId }, tx, ct);
+
+            // With the location serialized, check any active occupant of the
+            // position. A different tool that occupies it must fail cleanly (no
+            // overwrite); the exception rolls the transaction back
+            // (DapperUnitOfWork rethrows).
             const string lockCheckSql = @"
 SELECT warehouse_stock_id, tool_lote_id
 FROM warehouse_stock

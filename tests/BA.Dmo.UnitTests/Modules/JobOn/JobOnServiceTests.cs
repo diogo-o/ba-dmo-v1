@@ -369,9 +369,10 @@ public class JobOnServiceTests
     private async Task<Guid> SeedPlaneadoWithRevision()
     {
         var id = await SeedRascunho();
+        var componentId = Guid.NewGuid();
         var component = new JobOnComponent
         {
-            JobOnComponentId = Guid.NewGuid(),
+            JobOnComponentId = componentId,
             JobOnRevisionId = Guid.NewGuid(),
             Family = ComponentFamily.MP_CM,
             ReferenceSnapshot = "CM 5447",
@@ -381,7 +382,7 @@ public class JobOnServiceTests
                 new JobOnVerificationOccurrence
                 {
                     JobOnVerificationOccurrenceId = Guid.NewGuid(),
-                    JobOnComponentId = Guid.NewGuid(),
+                    JobOnComponentId = componentId,
                     Status = "confirmada",
                     CompletedBy = "actor-1",
                     CompletedAtUtc = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc)
@@ -654,6 +655,187 @@ public class JobOnServiceTests
         Assert.Single(sourceRevisions);
         Assert.Equal("dir-imagens/artigo-9262T288", sourceRevisions[0].ImageAssetId);
         Assert.Equal("9262T288", sourceRevisions[0].ReferenceSnapshot);
+    }
+
+    [Fact]
+    public async Task Duplicate_CopiesFullComponentGraph_WithRePinnedIds_AndRegeneratedVerifications()
+    {
+        // Source carries a component with a field, a CAL row and an occurrence cheked as
+        // "confirmada" — the complete graph duplication contract (R-002): components,
+        // fields and CAL rows are copied verbatim under NEW ids pinned to the new revision;
+        // verification occurrences are regenerated as pendente (never copied with checks).
+        var sourceId = await CreateRascunhoAsync();
+
+        var sourceComponentId = Guid.NewGuid();
+        var sourceComponent = new JobOnComponent
+        {
+            JobOnComponentId = sourceComponentId,
+            JobOnRevisionId = Guid.NewGuid(),
+            Family = ComponentFamily.CAL,
+            ReferenceSnapshot = "REF-CAL",
+            DisplayOrder = 0,
+            Fields = new[]
+            {
+                new JobOnComponentField
+                {
+                    JobOnComponentFieldId = Guid.NewGuid(),
+                    JobOnComponentId = sourceComponentId,
+                    FieldKey = "pressao",
+                    ValueType = "decimal",
+                    ValueDecimal = 12.5m,
+                    DisplayOrder = 0
+                }
+            },
+            Rows = new[]
+            {
+                new JobOnComponentRow
+                {
+                    JobOnComponentRowId = Guid.NewGuid(),
+                    JobOnComponentId = sourceComponentId,
+                    ElementLabel = "E1",
+                    ValueText = "v1",
+                    MachineQuantity = 2m,
+                    DisplayOrder = 0
+                }
+            },
+            Verifications = new[]
+            {
+                new JobOnVerificationOccurrence
+                {
+                    JobOnVerificationOccurrenceId = Guid.NewGuid(),
+                    JobOnComponentId = sourceComponentId,
+                    RuleTextSnapshot = "Verificar pressão",
+                    Status = "confirmada",
+                    CompletedBy = "actor-1",
+                    CompletedAtUtc = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc)
+                }
+            }
+        };
+        var sourceRevision = new JobOnRevision
+        {
+            JobOnRevisionId = Guid.NewGuid(),
+            JobOnId = sourceId,
+            RevisionNumber = 1,
+            ReferenceSnapshot = "REF-CAL",
+            GeneralNotes = "orig",
+            Components = new[] { sourceComponent },
+            SavedBy = "test",
+            SavedAtUtc = DateTime.UtcNow
+        };
+        await _repository.SaveRevisionGraphAsync(sourceRevision, "jobon.guardar", "test");
+
+        var result = await _service.DuplicateAsync(new DuplicateJobOnRequest(
+            sourceId, "202699", "LINHA-9", Start.AddDays(9), Start.AddDays(9).AddHours(8)));
+
+        Assert.True(result.IsSuccess);
+        var duplicatedId = result.Value;
+
+        // Header pinned to the new job on; source unchanged.
+        Assert.Equal(duplicatedId, _repository.JobOns[duplicatedId].Id);
+        Assert.Equal(sourceId, _repository.JobOns[sourceId].Id);
+        Assert.Equal("202608", _repository.JobOns[sourceId].ProductionCode); // source unchanged
+
+        // Exactly one new revision belongs to the duplicate.
+        var dupRevisions = _repository.Revisions.Where(r => r.JobOnId == duplicatedId).ToList();
+        Assert.Single(dupRevisions);
+        var dupRevision = dupRevisions[0];
+
+        // Component copied (new id), re-pinned to the new revision, fields/rows copied verbatim.
+        var dupComponent = Assert.Single(dupRevision.Components ?? Array.Empty<JobOnComponent>());
+        Assert.NotEqual(sourceComponentId, dupComponent.JobOnComponentId);
+        Assert.Equal(dupRevision.JobOnRevisionId, dupComponent.JobOnRevisionId);
+        Assert.Equal("REF-CAL", dupComponent.ReferenceSnapshot);
+        Assert.Equal(ComponentFamily.CAL, dupComponent.Family);
+
+        var dupField = Assert.Single(dupComponent.Fields ?? Array.Empty<JobOnComponentField>());
+        Assert.Equal(dupComponent.JobOnComponentId, dupField.JobOnComponentId);
+        Assert.Equal("pressao", dupField.FieldKey);
+        Assert.Equal(12.5m, dupField.ValueDecimal);
+
+        var dupRow = Assert.Single(dupComponent.Rows ?? Array.Empty<JobOnComponentRow>());
+        Assert.Equal(dupComponent.JobOnComponentId, dupRow.JobOnComponentId);
+        Assert.Equal("E1", dupRow.ElementLabel);
+
+        // Verification regenerated as pendente (never copied with checks).
+        var dupVerification = Assert.Single(dupComponent.Verifications ?? Array.Empty<JobOnVerificationOccurrence>());
+        Assert.Equal("pendente", dupVerification.Status);
+        Assert.Null(dupVerification.CompletedBy);
+        Assert.Null(dupVerification.CompletedAtUtc);
+
+        // Source component graph remains untouched (reload from persistence path).
+        var reloadedSource = await _repository.GetByIdAsync(sourceId);
+        Assert.NotNull(reloadedSource);
+        var srcComponent = Assert.Single(reloadedSource!.CurrentRevision!.Components ?? Array.Empty<JobOnComponent>());
+        Assert.Equal(sourceComponentId, srcComponent.JobOnComponentId);
+        var srcVerification = Assert.Single(srcComponent.Verifications ?? Array.Empty<JobOnVerificationOccurrence>());
+        Assert.Equal("confirmada", srcVerification.Status);
+        Assert.Equal("actor-1", srcVerification.CompletedBy); // source check preserved
+    }
+
+    [Fact]
+    public async Task SaveRevision_PersistsCompleteComponentGraph_AndAdvancesCurrent()
+    {
+        // SaveRevisionGraphAsync persists revision + components + fields + CAL rows +
+        // verifications + advances current_revision_id + audit atomically. This mirrors the
+        // real repository contract exercised through the fake (R-003): a saved revision's full
+        // child graph must be stored, not just its header/snapshot.
+        var jobOnId = await CreateRascunhoAsync();
+
+        var componentId = Guid.NewGuid();
+        var component = new JobOnComponent
+        {
+            JobOnComponentId = componentId,
+            JobOnRevisionId = Guid.NewGuid(),
+            Family = ComponentFamily.MP_CM,
+            ReferenceSnapshot = "CM 5447",
+            Fields = new[]
+            {
+                new JobOnComponentField
+                {
+                    JobOnComponentFieldId = Guid.NewGuid(),
+                    JobOnComponentId = componentId,
+                    FieldKey = "peso",
+                    ValueText = "1.0",
+                    DisplayOrder = 0
+                }
+            },
+            Rows = new[]
+            {
+                new JobOnComponentRow
+                {
+                    JobOnComponentRowId = Guid.NewGuid(),
+                    JobOnComponentId = componentId,
+                    ElementLabel = "CAL1",
+                    DisplayOrder = 0
+                }
+            },
+            Verifications = new[]
+            {
+                new JobOnVerificationOccurrence
+                {
+                    JobOnVerificationOccurrenceId = Guid.NewGuid(),
+                    JobOnComponentId = componentId,
+                    RuleTextSnapshot = "Compatível",
+                    Status = "pendente",
+                    CreatedAtUtc = DateTime.UtcNow
+                }
+            }
+        };
+
+        var result = await _service.SaveRevisionAsync(new SaveJobOnRevisionRequest(
+            jobOnId, "Notas", null, null, new[] { component }));
+
+        Assert.True(result.IsSuccess);
+        var revision = Assert.Single(_repository.Revisions);
+        Assert.Contains(_repository.CurrentRevisionUpdates, u => u.RevisionId == revision.JobOnRevisionId);
+
+        // The full child graph was persisted for the saved revision.
+        var storedComponent = Assert.Single(_repository.Components.Where(c => c.JobOnRevisionId == revision.JobOnRevisionId));
+        Assert.Equal(componentId, storedComponent.JobOnComponentId);
+        Assert.NotEmpty(_repository.Fields.Where(f => f.JobOnComponentId == componentId));
+        Assert.NotEmpty(_repository.Rows.Where(r => r.JobOnComponentId == componentId));
+        Assert.NotEmpty(_repository.Verifications.Where(v => v.JobOnComponentId == componentId));
+        Assert.Contains(_repository.AuditEvents, a => a.EventType == "jobon.guardar");
     }
 
     [Fact]

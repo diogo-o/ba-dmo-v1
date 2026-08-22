@@ -211,9 +211,13 @@ VALUES (@Id, @ValuesJson, @Active, @CreatedAtUtc, @CreatedBy);";
 
     public async Task<TampaoSaldo?> GetSaldoInTransactionAsync(IDbUnitOfWork uow, Guid configurationId, CancellationToken ct = default)
     {
+        // Take an exclusive row lock (SELECT ... FOR UPDATE) so the read→compute→absolute
+        // rewrite in SetSaldoAsync is serialized against concurrent transformations on the
+        // same configuration (GLM-TP balance atomicity / lost-update hardening A4). The lock
+        // is held for the life of the shared transaction and released on commit/rollback.
         const string sql = @"
 SELECT tampao_saldo_id, tampao_configuration_id, enchidos, por_encher, updated_at_utc
-FROM tampao_saldos WHERE tampao_configuration_id = @Id;";
+FROM tampao_saldos WHERE tampao_configuration_id = @Id FOR UPDATE;";
         dynamic? row = await Db.QuerySingleOrDefaultAsync<dynamic>(uow.Connection, sql, new { Id = configurationId }, uow.Transaction, cancellationToken: ct);
         return row is null ? null : MapSaldo(row);
     }

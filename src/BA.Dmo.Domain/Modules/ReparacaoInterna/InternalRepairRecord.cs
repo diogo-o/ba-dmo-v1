@@ -5,12 +5,12 @@ namespace BA.Dmo.Domain.Modules.ReparacaoInterna;
 /// <summary>
 /// R009 — Reparação Interna aggregate root (N08/N22 <c>internal_repair_records</c>;
 /// GLM-RI-07 + OWNER DECISION). A record captures a quick in-turn repair fact on a line:
-/// Linha + Tipo CM/MF/BQ + número individual, enriched automatically with the effective
+/// Linha + Tipo CM/MF + número individual, enriched automatically with the effective
 /// production context when resolvable. The record NEVER rewrites other domains (position,
 /// useful-life, technical state, Job On or master data) (GLM-RI-01).
 ///
 /// R009 changes over the earlier model:
-/// - Tool type is CM | MF | BQ.
+/// - Tool type is CM | MF (BQ is NOT an internal repair type).
 /// - NO operational hard blocks: context is assistance. If the effective production
 ///   context cannot be resolved, the record is still saved (context empty/unknown).
 /// - The exact historical production context is persisted on the record
@@ -113,6 +113,13 @@ public sealed class InternalRepairRecord
                 "REPINT_OPERATOR_REQUIRED",
                 "Não foi possível resolver o operador autenticado."));
 
+        // Owner decision CM/MF-only: BQ is NOT recordable as an internal repair type. Reject
+        // any non-CM/MF value (a legacy BQ value or an out-of-range enum) so a BQ internal
+        // repair record can never be created.
+        if (toolType is not (InternalRepairToolType.CM or InternalRepairToolType.MF))
+            return Result<InternalRepairRecord, DomainError>.Failure(DomainError.Validation(
+                "REPINT_INVALID_TYPE", "Tipo de Reparação Interna inválido (apenas CM ou MF)."));
+
         return Result<InternalRepairRecord, DomainError>.Success(new InternalRepairRecord
         {
             InternalRepairRecordId = Guid.NewGuid(),
@@ -180,6 +187,11 @@ public sealed class InternalRepairRecord
             return Result<InternalRepairRecord, DomainError>.Failure(DomainError.Forbidden(
                 "REPINT_CORRECTOR_REQUIRED",
                 "Não foi possível resolver o utilizador autorizado a corrigir."));
+
+        // Owner decision CM/MF-only: a correction cannot introduce BQ as a repair type.
+        if (toolType is not (InternalRepairToolType.CM or InternalRepairToolType.MF))
+            return Result<InternalRepairRecord, DomainError>.Failure(DomainError.Validation(
+                "REPINT_INVALID_TYPE", "Tipo de Reparação Interna inválido (apenas CM ou MF)."));
 
         return Result<InternalRepairRecord, DomainError>.Success(new InternalRepairRecord
         {

@@ -8,7 +8,7 @@ namespace BA.Dmo.Application.Modules.ReparacaoInterna;
 /// R009 — Register one or more internal repair facts on a line. <see cref="Numbers"/>
 /// may contain REPEATED values; each value is persisted as its own occurrence record with
 /// the same context (5,5,7 → three records). Repeated numbers are valid and never
-/// deduplicated. Tool type is CM | MF | BQ.
+/// deduplicated. Tool type is CM | MF (BQ is not an internal repair type).
 /// </summary>
 public sealed record RegisterReparacaoRequest(
     string Line,

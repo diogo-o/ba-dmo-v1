@@ -167,18 +167,30 @@ public sealed class FakeJobOnRepository : IJobOnRepository
     {
         var newId = Guid.NewGuid();
 
+        // Construct the duplicated header via its public constructor, then hydrate the
+        // readonly fields (copied_from, article_reference, timestamps, lifecycle) through
+        // FromRow, mirroring the real repository — these fields have private setters and
+        // cannot be assigned through an object initializer.
+        dynamic row = new System.Dynamic.ExpandoObject();
+        row.job_on_id = newId;
+        row.current_revision_id = (Guid?)null;
+        row.copied_from_job_on_id = sourceJobOnId;
+        row.article_reference_id = newJobOn.ArticleReferenceId;
+        row.created_at_utc = DateTime.UtcNow;
+        row.status = JobOnLifecycleStateCodec.ToStorage(newJobOn.LifecycleState);
+        row.closed_at_utc = newJobOn.ClosedAtUtc;
+        row.canceled_at_utc = newJobOn.CancelledAtUtc;
+        row.canceled_by = newJobOn.CancelledBy;
+        row.cancel_reason = newJobOn.CancelReason;
+        row.production_folder = newJobOn.ProductionFolder;
+
         var header = new JobOnEntity(
             newJobOn.ProductionCode,
             newJobOn.MachineCode,
             newJobOn.PlannedStartAt,
             newJobOn.PlannedEndAt,
-            Array.Empty<JobOnRevision>())
-        {
-            CopiedFromJobOnId = sourceJobOnId,
-            CreatedAtUtc = DateTime.UtcNow,
-            ArticleReferenceId = newJobOn.ArticleReferenceId
-        };
-        header.SetId(newId);
+            Array.Empty<JobOnRevision>());
+        header.FromRow(row);
         JobOns[newId] = header;
 
         var pinnedRevision = revision with { JobOnId = newId };

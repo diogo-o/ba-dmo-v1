@@ -223,6 +223,8 @@ public class JobOnLandingTests : IClassFixture<JobOnLandingTests.LandingFixture>
             public Task UpdateCurrentRevisionAsync(Guid jobOnId, Guid revisionId, CancellationToken cancellationToken = default) => Task.CompletedTask;
             public Task InsertAuditEventAsync(Guid jobId, Guid? revisionId, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken cancellationToken = default) => Task.CompletedTask;
             public Task InsertImageMutationAsync(JobOnRevision newRevision, Guid jobOnId, string eventType, string? beforeImageAssetId, string? afterImageAssetId, string actorId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+            public Task SaveRevisionGraphAsync(JobOnRevision revision, string eventType, string actorId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+            public Task<Guid> DuplicateAtomicallyAsync(JobOn newJobOn, JobOnRevision revision, Guid sourceJobOnId, string actorId, CancellationToken cancellationToken = default) => Task.FromResult(Guid.NewGuid());
         }
     }
 }

@@ -1050,12 +1050,14 @@ app.MapPost("/api/reparacao-externa/line-defaults", async (
 // read-only; no Armazém / Ferramentas / Job On write ever happens here.
 // ============================================================================
 
+// Internal repair type parser: only CM/MF are recordable internal repair types.
+// "BQ" is deliberately NOT mapped here — BQ is not accepted as an internal repair type
+// (owner decision CM/MF-only); it may remain only as production/reference context elsewhere.
 static BA.Dmo.Domain.Modules.ReparacaoInterna.InternalRepairToolType? ParseInternalToolType(string? value) =>
     value?.Trim().ToUpperInvariant() switch
     {
         "CM" => BA.Dmo.Domain.Modules.ReparacaoInterna.InternalRepairToolType.CM,
         "MF" => BA.Dmo.Domain.Modules.ReparacaoInterna.InternalRepairToolType.MF,
-        "BQ" => BA.Dmo.Domain.Modules.ReparacaoInterna.InternalRepairToolType.BQ,
         _ => null
     };
 

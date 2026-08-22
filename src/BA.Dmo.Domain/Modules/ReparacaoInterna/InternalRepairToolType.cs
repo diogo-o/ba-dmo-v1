@@ -2,26 +2,32 @@ namespace BA.Dmo.Domain.Modules.ReparacaoInterna;
 
 /// <summary>
 /// Tool types of the Reparação Interna workflow (N22 <c>internal_repair_records</c>
-/// CHECK <c>tool_type IN ('CM','MF','BQ')</c>; OWNER DECISION R009). CM, MF and BQ are
-/// distinct and never fused — an internal repair targets exactly one type (TD-22 number
-/// model). BQ is a third recordable type: the production reference is common to all three;
-/// the type-specific lot/context and repaired numbers may vary.
+/// CHECK <c>tool_type IN ('CM','MF','BQ')</c>; OWNER DECISION R009 / 34_REPARACAO_INTERNA
+/// 03_OWNER_DECISION_CM_MF_ONLY). Only <c>CM</c> and <c>MF</c> are recordable internal
+/// repair types — the settled functional rule is that BQ is NOT selectable, accepted,
+/// parsed, persisted or corrected as an internal repair type. BQ remains present only as
+/// production/reference CONTEXT (e.g. a full reference like <c>5447T173</c> where <c>T173</c>
+/// is context-only) and inside other modules (Job On, Ferramentas, Boquilhas, production
+/// context) — it is simply not an internal-repair recordable type here.
 /// </summary>
 public enum InternalRepairToolType
 {
     CM,
-    MF,
-    BQ
+    MF
 }
 
-/// <summary>Codec between the domain enum and the stored text discriminator.</summary>
+/// <summary>
+/// Codec between the domain enum and the stored text discriminator. Only CM/MF are
+/// recordable. <see cref="FromStorage"/> rejects any other persisted value (a legacy
+/// <c>'BQ'</c> internal-repair row is invalid under CM/MF-only and must be reconciled at
+/// the clean baseline — it is never reinterpreted as a recordable value here).
+/// </summary>
 public static class InternalRepairToolTypeCodec
 {
     public static string ToStorage(InternalRepairToolType type) => type switch
     {
         InternalRepairToolType.CM => "CM",
         InternalRepairToolType.MF => "MF",
-        InternalRepairToolType.BQ => "BQ",
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, $"Unknown internal repair tool type: {type}")
     };
 
@@ -29,7 +35,6 @@ public static class InternalRepairToolTypeCodec
     {
         "CM" => InternalRepairToolType.CM,
         "MF" => InternalRepairToolType.MF,
-        "BQ" => InternalRepairToolType.BQ,
-        _ => throw new InvalidOperationException($"Unknown persisted internal repair tool type: {value}")
+        _ => throw new InvalidOperationException($"Invalid internal repair tool type: {value} (only CM/MF are recordable; BQ is not an internal repair type)")
     };
 }

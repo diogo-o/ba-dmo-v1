@@ -10,7 +10,7 @@ namespace BA.Dmo.Application.Modules.ReparacaoInterna;
 /// <summary>
 /// R009 — Reparação Interna application service (OWNER DECISION; supersedes the earlier
 /// GLM-RI-01..12 hard-block wording for this module). Registers quick in-turn repair facts
-/// (CM | MF | BQ) enriched automatically with the effective production context of the line.
+/// (CM | MF) enriched automatically with the effective production context of the line.
 ///
 /// R009 behavior (authoritative):
 /// - Production activation: most recent start date activated at 09:00 local factory,
@@ -144,6 +144,13 @@ public sealed class ReparacaoInternaService
             return Result<IReadOnlyList<Guid>, DomainError>.Failure(DomainError.Validation(
                 "REPINT_NUMBER_REQUIRED", "Introduza pelo menos um número individual."));
 
+        // R009 owner decision (CM/MF-only): only CM and MF are internal repair types.
+        // BQ is not accepted/parsed/persisted as an internal repair type — a full reference
+        // such as 5447T173 keeps its context-only suffix, but BQ is never a recordable type.
+        if (request.ToolType is not (InternalRepairToolType.CM or InternalRepairToolType.MF))
+            return Result<IReadOnlyList<Guid>, DomainError>.Failure(DomainError.Validation(
+                "REPINT_INVALID_TYPE", "Tipo de Reparação Interna inválido (apenas CM ou MF)."));
+
         var now = _clock.UtcNow;
 
         // Auto-context is assistance: Single → prefill; None/Ambiguous → record with null context.
@@ -164,7 +171,7 @@ public sealed class ReparacaoInternaService
                 // never used to override reality or modify Job On.
                 var lotId = !string.IsNullOrWhiteSpace(request.OverrideReference)
                     ? null
-                    : await ResolveEffectiveLotIdAsync(request.ToolType, number, context, ct);
+                    : await ResolveEffectiveLotIdAsync(request.ToolType, number, ct);
 
                 var recordResult = InternalRepairRecord.Create(
                     request.Line,
@@ -329,10 +336,10 @@ public sealed class ReparacaoInternaService
             if (request.JobOnRevisionId is null) targetRevision = resolved?.JobOnRevisionId;
             if (request.ProductionCode is null) targetProduction = resolved?.ProductionCode;
             if (request.Reference is null) targetReference = resolved?.Reference;
-            if (request.LotId is null)
-                targetLot = resolved is not null && request.ToolType == InternalRepairToolType.BQ && resolved.BqLotIds.Count == 1
-                    ? resolved.BqLotIds[0]
-                    : null;
+            // Lot is never auto-derived: CM/MF-only internal repair; an explicit operator
+            // lot override always wins, otherwise the new line's lot stays null (auto-context
+            // is assistance and never invents a repair lot for a line move).
+            if (request.LotId is null) targetLot = null;
         }
 
         var correctionResult = original.CreateCorrection(
@@ -377,15 +384,12 @@ public sealed class ReparacaoInternaService
 
     /// <summary>
     /// Best-effort effective lot for the number/type: CM/MF resolve via the read-only
-    /// Ferramentas piece lookup (the piece's parent lot); BQ uses the context's BQ lot when
-    /// exactly one exists. NEVER blocks; returns null when not resolvable.
+    /// Ferramentas piece lookup (the piece's parent lot). BQ is NOT an internal repair type
+    /// and has no lot-resolution branch here. NEVER blocks; returns null when not resolvable.
     /// </summary>
     private async Task<Guid?> ResolveEffectiveLotIdAsync(
-        InternalRepairToolType type, string number, InternalRepairContext? context, CancellationToken ct)
+        InternalRepairToolType type, string number, CancellationToken ct)
     {
-        if (type == InternalRepairToolType.BQ)
-            return context is not null && context.BqLotIds.Count == 1 ? context.BqLotIds[0] : null;
-
         if (!TryMapToFerramentas(type, out var ferramentasType))
             return null;
 

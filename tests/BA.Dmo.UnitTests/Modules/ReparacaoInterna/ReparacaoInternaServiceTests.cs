@@ -10,8 +10,9 @@ namespace BA.Dmo.UnitTests.Modules.ReparacaoInterna;
 /// own occurrence fact under the same context (repeated numbers preserved, no dedupe); NO
 /// hard blocks (none/ambiguous context and lot/number mismatches still record); the exact
 /// production context (job_on/revision/production/reference/lot) is persisted and history
-/// reads it (never re-derives from current Job On); BQ is a valid type; correction/override
-/// creates a NEW record and never modifies Job On. All collaborators are in-memory fakes.
+/// reads it (never re-derives from current Job On); BQ is REJECTED as an internal repair type
+/// (CM/MF-only); correction/override creates a NEW record and never modifies Job On.
+/// All collaborators are in-memory fakes.
 /// </summary>
 public class ReparacaoInternaServiceTests
 {
@@ -119,17 +120,38 @@ public class ReparacaoInternaServiceTests
     }
 
     [Fact]
-    public async Task Register_BQ_RecordsAsBQType()
+    public async Task Register_BQ_IsRejectedAsRepairType_CM_MF_Only()
     {
         var (service, repo, ctx, pieces) = Build();
         SeedSingleContext(ctx, "C1");
 
-        var result = await service.RegistrarReparacoesAsync(Req("C1", InternalRepairToolType.BQ, "77"));
+        // BQ is not an internal repair type (owner decision CM/MF-only). With BQ removed
+        // from the enum, the recordable boundary rejects any non-CM/MF value (the same path
+        // that rejects "BQ" at the request boundary).
+        var result = await service.RegistrarReparacoesAsync(Req("C1", (InternalRepairToolType)99, "77"));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("REPINT_INVALID_TYPE", result.Error.Code);
+        Assert.Empty(repo.Records); // nothing persisted
+    }
+
+    [Fact]
+    public async Task Register_FullReference_KeepsContextOnlySuffix()
+    {
+        var (service, repo, ctx, pieces) = Build();
+        // A full reference like 5447T173 carries a context-only suffix (T173). The internal
+        // repair record preserves the complete reference string; only the recordable TOOL TYPE
+        // is constrained to CM/MF, never the reference context.
+        var jobOnId = Guid.NewGuid();
+        ctx.SeedSingle("C1", FakeJobOnActiveContextLookup.Context(
+            "C1", jobOnId, "5447T173", "202608", new List<Guid>(), new List<Guid>(), revisionId: Guid.NewGuid()));
+        pieces.Seed("5447T173", "1234", Guid.NewGuid(), FerramentasToolType.CM);
+
+        var result = await service.RegistrarReparacoesAsync(Req("C1", InternalRepairToolType.CM, "1234"));
 
         Assert.True(result.IsSuccess);
         var record = Assert.Single(repo.Records);
-        Assert.Equal(InternalRepairToolType.BQ, record.ToolType);
-        Assert.Equal("77", record.IndividualNumber);
+        Assert.Equal("5447T173", record.Reference); // full reference preserved verbatim
     }
 
     [Fact]

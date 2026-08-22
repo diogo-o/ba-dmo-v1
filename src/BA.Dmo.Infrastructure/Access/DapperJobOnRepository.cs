@@ -635,7 +635,7 @@ VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot, @AfterSnapshot, @Actor
     public async Task<Guid> DuplicateAtomicallyAsync(
         JobOn newJobOn,
         JobOnRevision revision,
-        string sourceJobOnId,
+        Guid sourceJobOnId,
         string actorId,
         CancellationToken cancellationToken = default)
     {
@@ -666,7 +666,7 @@ VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot, @AfterSnapshot, @Actor
 
             await InsertAuditEventCoreAsync(
                 connection, transaction, newJobOnId, null, "jobon.duplicar",
-                null, sourceJobOnId, actorId, ct);
+                null, sourceJobOnId.ToString(), actorId, ct);
 
             return newJobOnId;
         }, cancellationToken);
@@ -1057,8 +1057,8 @@ ORDER BY revision_number ASC;";
         {
             content.TryGetValue(revision.JobOnRevisionId, out var grouped);
 
-            var components = grouped?.Components ?? Array.Empty<JobOnComponent>();
-            var verifications = grouped?.Verifications ?? Array.Empty<JobOnVerificationOccurrence>();
+            var components = grouped?.Components ?? new List<JobOnComponent>();
+            var verifications = grouped?.Verifications ?? new List<JobOnVerificationOccurrence>();
 
             hydrated.Add(revision with
             {

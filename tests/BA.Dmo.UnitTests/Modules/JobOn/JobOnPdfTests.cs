@@ -47,6 +47,9 @@ public class JobOnPdfTests
         var jobOnId = createResult.Value;
 
         // Save a revision with components
+        var cmComponentId = Guid.NewGuid();
+        var tpComponentId = Guid.NewGuid();
+        var calComponentId = Guid.NewGuid();
         var revResult = await _jobOnService.SaveRevisionAsync(new SaveJobOnRevisionRequest(
             jobOnId,
             GeneralNotes: "Notas de teste para impressão",
@@ -56,8 +59,7 @@ public class JobOnPdfTests
             {
                 new JobOnComponent
                 {
-                    JobOnComponentId = Guid.NewGuid(),
-                    JobOnRevisionId = Guid.NewGuid(),
+                    JobOnComponentId = cmComponentId,
                     Family = ComponentFamily.MP_CM,
                     ReferenceSnapshot = "9400",
                     LotSnapshot = "10",
@@ -68,7 +70,7 @@ public class JobOnPdfTests
                         new JobOnComponentField
                         {
                             JobOnComponentFieldId = Guid.NewGuid(),
-                            JobOnComponentId = Guid.NewGuid(),
+                            JobOnComponentId = cmComponentId,
                             FieldKey = "diametro_exterior",
                             ValueType = "text",
                             ValueText = "136,3"
@@ -76,7 +78,7 @@ public class JobOnPdfTests
                         new JobOnComponentField
                         {
                             JobOnComponentFieldId = Guid.NewGuid(),
-                            JobOnComponentId = Guid.NewGuid(),
+                            JobOnComponentId = cmComponentId,
                             FieldKey = "tipo",
                             ValueType = "text",
                             ValueText = "Teste Tipo"
@@ -87,7 +89,6 @@ public class JobOnPdfTests
                 new JobOnComponent
                 {
                     JobOnComponentId = Guid.NewGuid(),
-                    JobOnRevisionId = Guid.NewGuid(),
                     Family = ComponentFamily.MF,
                     ReferenceSnapshot = "9400",
                     LotSnapshot = "10",
@@ -99,7 +100,6 @@ public class JobOnPdfTests
                 new JobOnComponent
                 {
                     JobOnComponentId = Guid.NewGuid(),
-                    JobOnRevisionId = Guid.NewGuid(),
                     Family = ComponentFamily.BQ,
                     ReferenceSnapshot = "T282",
                     LotSnapshot = "77",
@@ -110,8 +110,7 @@ public class JobOnPdfTests
                 },
                 new JobOnComponent
                 {
-                    JobOnComponentId = Guid.NewGuid(),
-                    JobOnRevisionId = Guid.NewGuid(),
+                    JobOnComponentId = tpComponentId,
                     Family = ComponentFamily.TP,
                     ReferenceSnapshot = "",
                     LotSnapshot = null,
@@ -121,7 +120,7 @@ public class JobOnPdfTests
                         new JobOnComponentField
                         {
                             JobOnComponentFieldId = Guid.NewGuid(),
-                            JobOnComponentId = Guid.NewGuid(),
+                            JobOnComponentId = tpComponentId,
                             FieldKey = "diametro",
                             ValueType = "text",
                             ValueText = "36,85"
@@ -129,7 +128,7 @@ public class JobOnPdfTests
                         new JobOnComponentField
                         {
                             JobOnComponentFieldId = Guid.NewGuid(),
-                            JobOnComponentId = Guid.NewGuid(),
+                            JobOnComponentId = tpComponentId,
                             FieldKey = "bacia",
                             ValueType = "text",
                             ValueText = "6.7"
@@ -139,8 +138,7 @@ public class JobOnPdfTests
                 },
                 new JobOnComponent
                 {
-                    JobOnComponentId = Guid.NewGuid(),
-                    JobOnRevisionId = Guid.NewGuid(),
+                    JobOnComponentId = calComponentId,
                     Family = ComponentFamily.CAL,
                     ReferenceSnapshot = "",
                     Notes = "",
@@ -150,7 +148,7 @@ public class JobOnPdfTests
                         new JobOnComponentRow
                         {
                             JobOnComponentRowId = Guid.NewGuid(),
-                            JobOnComponentId = Guid.NewGuid(),
+                            JobOnComponentId = calComponentId,
                             ElementLabel = "Tampão",
                             ValueText = "31,45",
                             MachineQuantity = 3m
@@ -158,7 +156,7 @@ public class JobOnPdfTests
                         new JobOnComponentRow
                         {
                             JobOnComponentRowId = Guid.NewGuid(),
-                            JobOnComponentId = Guid.NewGuid(),
+                            JobOnComponentId = calComponentId,
                             ElementLabel = "Pinças",
                             ValueText = "P 73,2 / M 72,6",
                             MachineQuantity = 3m

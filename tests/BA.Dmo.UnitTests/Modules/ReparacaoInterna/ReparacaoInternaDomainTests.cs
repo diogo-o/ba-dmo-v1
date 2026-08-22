@@ -8,8 +8,9 @@ namespace BA.Dmo.UnitTests.Modules.ReparacaoInterna;
 /// block (context is nullable assistance; only structural facts are mandatory); the exact
 /// historical production context (job_on_id/job_on_revision_id/production/reference/lot) is
 /// persisted so history never depends on current_revision_id; CreateCorrection produces a NEW
-/// record (original preserved, GLM-DATA-07) and rejects re-correcting a correction; BQ is a
-/// valid third type; repeated numbers (distinct rows) are structurally valid.
+/// record (original preserved, GLM-DATA-07) and rejects re-correcting a correction; BQ is
+/// NOT a recordable internal repair type (CM/MF-only); repeated numbers (distinct rows) are
+/// structurally valid.
 /// </summary>
 public class ReparacaoInternaDomainTests
 {
@@ -51,14 +52,18 @@ public class ReparacaoInternaDomainTests
     }
 
     [Fact]
-    public void Create_BQIsAValidThirdType()
+    public void Create_NonCMorMFType_IsRejected()
     {
+        // Owner decision CM/MF-only: BQ is not a recordable internal repair type. With BQ
+        // removed from the enum, the domain rejects any non-CM/MF value (the same boundary
+        // that rejects a "BQ" request). Codec round-trip holds for CM and MF only.
         var result = InternalRepairRecord.Create(
             "C1", null, null, null, "REF-1", null,
-            InternalRepairToolType.BQ, "77", "repan-actor", When, When);
-        Assert.True(result.IsSuccess);
-        Assert.Equal(InternalRepairToolType.BQ, result.Value.ToolType);
-        Assert.Equal("BQ", InternalRepairToolTypeCodec.ToStorage(result.Value.ToolType));
+            (InternalRepairToolType)99, "77", "repan-actor", When, When);
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("CM", InternalRepairToolTypeCodec.ToStorage(InternalRepairToolType.CM));
+        Assert.Equal("MF", InternalRepairToolTypeCodec.ToStorage(InternalRepairToolType.MF));
     }
 
     [Theory]
