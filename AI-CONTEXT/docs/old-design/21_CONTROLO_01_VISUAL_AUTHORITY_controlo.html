@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Controlo — Portal DMO</title>
+  <link rel="stylesheet" href="0_ASSET_CANONICAL_DESIGN_SYSTEM.css">
+  <link rel="stylesheet" href="0_ASSET_INTEGRATED_MOCKUP.css">
+</head>
+<body>
+  <header class="app-header dmo-app-header">
+    <img class="logo" src="0_ASSET_LOGO.png" alt="BA">
+    <div class="brand dmo-app-header__page"><strong>Controlo</strong><span>Resumo, Peso, Comparação e Pegamentos por produção</span></div>
+    <div class="user"><strong>Ana Martins</strong><span>Responsável operacional</span></div>
+  </header>
+  <nav class="module-nav dmo-primary-nav" aria-label="Tarefas principais"><a href="20_JOB_ON_01_VISUAL_AUTHORITY_job-on.html">Job On</a><a class="active" href="21_CONTROLO_01_VISUAL_AUTHORITY_controlo.html" aria-current="page">Controlo</a><a href="34_REPARACAO_INTERNA_01_VISUAL_AUTHORITY_reparacao-interna.html">Reparação Interna</a><a href="31_BOQUILHAS_01_VISUAL_AUTHORITY_boquilhas.html">Boquilhas</a><a href="32_ARMAZEM_01_VISUAL_AUTHORITY_armazem.html">Armazém</a></nav>
+  <main class="page">
+    <div class="page-head"><div><h1>Folha de Controlo</h1><p>Produção e revisão recebidas automaticamente do Job On de onde o utilizador abriu o Controlo.</p></div></div>
+    <section class="active-production-card surface" data-active-production>
+      <div class="active-production-copy"><span>Produção selecionada</span><strong>202602 · 7080C002 · C3</strong></div>
+      <div class="active-production-actions"><span class="status ok">Ligado automaticamente</span></div>
+    </section>
+    <section class="surface context-grid"><div><span>Referência</span><strong>7080C002</strong></div><div><span>Produção</span><strong>202602</strong></div><div><span>Máquina</span><strong>C3</strong></div><div><span>Revisão Job On</span><strong>3</strong></div><div><span>Estado folha</span><strong>Submetida</strong></div><div><span>Processo</span><strong>NNPB</strong></div></section>
+    <section class="surface" data-tabs>
+      <nav class="tabs dmo-secondary-nav"><button class="active" data-tab="summary">Resumo</button><button data-tab="weight">Peso</button><button data-tab="comparison">Comparação</button><button data-tab="gluing">Pegamentos</button><button data-tab="history">Histórico</button></nav>
+      <section class="tab-panel active" data-panel="summary">
+        <div class="context-anchor"><div><strong>Resumo desta produção</strong><span>Decisões das peças e acessos aos controlos associados a job-c3-202602 · revisão 3</span></div><button class="button">Guardar Resumo</button></div>
+        <div class="summary-control-links"><article class="surface summary-control-link"><div><span>Peso</span><strong>230,97 g · Aprovado</strong><small>Controlo Peso · revisão 2</small></div><a class="button" href="22_PESO_OPERADOR_01_VISUAL_AUTHORITY_peso-operador.html">Abrir Peso</a></article><article class="surface summary-control-link"><div><span>Pegamentos</span><strong>Em preparação</strong><small>CM, BQ e MF desta revisão</small></div><a class="button secondary" href="24_PEGAMENTOS_01_VISUAL_AUTHORITY_pegamentos.html">Abrir Pegamentos</a></article></div>
+        <div class="section-head" style="padding-inline:0;margin-top:15px"><div><h2>Resultado por ferramenta</h2><p>CM, MF, BQ, PU e CS com OK/NOK, comentário e ligação MCaliper.</p></div></div>
+        <div class="tool-grid">
+          <article class="tool-card" data-control-piece="CM" data-component-id="cm-7080-01"><header><div><h3>CM</h3><span>7080 · Lote 01</span></div><button class="more">•••</button></header><span class="status ok">OK</span><label class="field control-comment"><span>Comentário</span><textarea>Folga e diâmetros confirmados.</textarea></label><div class="mcaliper-link"><label class="field"><span>Ligação MCaliper</span><input data-mcaliper-url value="mcaliper://CM-7080-01" placeholder="Colar ligação do controlo detalhado"></label><div class="mcaliper-actions"><button class="button secondary" data-mcaliper-save>Atualizar ligação</button><button class="button" data-mcaliper-open>Abrir MCaliper</button></div><small data-mcaliper-state>Ligação associada a esta peça.</small></div></article>
+          <article class="tool-card" data-control-piece="MF" data-component-id="mf-7080-01"><header><div><h3>MF</h3><span>7080 · Lote 01</span></div><button class="more">•••</button></header><span class="status bad">NOK</span><label class="field control-comment"><span>Comentário</span><textarea>Rever gravações antes do arranque.</textarea></label><div class="mcaliper-link"><label class="field"><span>Ligação MCaliper</span><input data-mcaliper-url value="mcaliper://MF-7080-01" placeholder="Colar ligação do controlo detalhado"></label><div class="mcaliper-actions"><button class="button secondary" data-mcaliper-save>Atualizar ligação</button><button class="button" data-mcaliper-open>Abrir MCaliper</button></div><small data-mcaliper-state>Ligação associada a esta peça.</small></div></article>
+          <article class="tool-card" data-control-piece="BQ" data-component-id="bq-c002-518"><header><div><h3>BQ</h3><span>C002 · Lote 518</span></div><button class="more">•••</button></header><span class="status ok">OK</span><label class="field control-comment"><span>Comentário</span><textarea>Folga AN/BQ dentro da tolerância.</textarea></label><div class="mcaliper-link"><label class="field"><span>Ligação MCaliper</span><input data-mcaliper-url value="mcaliper://BQ-C002-518" placeholder="Colar ligação do controlo detalhado"></label><div class="mcaliper-actions"><button class="button secondary" data-mcaliper-save>Atualizar ligação</button><button class="button" data-mcaliper-open>Abrir MCaliper</button></div><small data-mcaliper-state>Ligação associada a esta peça.</small></div></article>
+          <article class="tool-card" data-control-piece="PU" data-component-id="pu-7080-ap7080pa8l-b"><header><div><h3>PU</h3><span>AP7080PA8L-B</span></div><button class="more">•••</button></header><span class="status ok">OK</span><label class="field control-comment"><span>Comentário</span><textarea>Marcação confirmada.</textarea></label><div class="mcaliper-link"><label class="field"><span>Ligação MCaliper</span><input data-mcaliper-url placeholder="Colar ligação do controlo detalhado"></label><div class="mcaliper-actions"><button class="button secondary" data-mcaliper-save>Adicionar ligação</button><button class="button" data-mcaliper-open disabled>Abrir MCaliper</button></div><small data-mcaliper-state>Nenhuma ligação adicionada.</small></div></article>
+          <article class="tool-card" data-control-piece="CS" data-component-id="cs-c002-4x4"><header><div><h3>CS</h3><span>C002 · 4 × 4</span></div><button class="more">•••</button></header><span class="status bad">NOK</span><label class="field control-comment"><span>Comentário</span><textarea placeholder="Adicionar comentário"></textarea></label><div class="mcaliper-link"><label class="field"><span>Ligação MCaliper</span><input data-mcaliper-url placeholder="Colar ligação do controlo detalhado"></label><div class="mcaliper-actions"><button class="button secondary" data-mcaliper-save>Adicionar ligação</button><button class="button" data-mcaliper-open disabled>Abrir MCaliper</button></div><small data-mcaliper-state>Nenhuma ligação adicionada.</small></div></article>
+        </div>
+      </section>
+      <section class="tab-panel" data-panel="weight"><div class="page-head"><div><h2>Peso desta produção</h2><p>Controlo associado à produção selecionada.</p></div><a class="button" href="22_PESO_OPERADOR_01_VISUAL_AUTHORITY_peso-operador.html">Criar/abrir Peso</a></div><div class="empty"><strong>Pronto para registar</strong><span>7080C002 · 202602 · C3 · CM 7080/01 · NNPB</span></div></section>
+      <section class="tab-panel" data-panel="comparison"><div class="page-head"><div><h2>Comparação desta produção</h2><p>CM em produção comparado com a base aprovada.</p></div><a class="button" href="22_PESO_OPERADOR_01_VISUAL_AUTHORITY_peso-operador.html">Criar/abrir Comparação</a></div><div class="empty"><strong>Pronto para comparar</strong><span>7080C002 · 202602 · C3</span></div></section>
+      <section class="tab-panel" data-panel="gluing"><div class="page-head"><div><h2>Pegamentos desta produção</h2><p>Ferramentas associadas à produção selecionada.</p></div><a class="button" href="24_PEGAMENTOS_01_VISUAL_AUTHORITY_pegamentos.html">Criar/abrir Pegamentos</a></div><div class="empty"><strong>Pronto para registar</strong><span>CM 7080/01 · BQ C002/518 · MF 7080/01</span></div></section>
+      <section class="tab-panel" data-panel="history">
+        <div class="section-head history-title"><div><h2>Histórico do Controlo</h2><p>Consulte documentos e eventos por dia, Produção e tipo de controlo.</p></div></div>
+        <div class="control-history-browser">
+          <aside class="history-calendar surface">
+            <div class="history-calendar-head"><button class="more" aria-label="Mês anterior">‹</button><strong>Agosto 2026</strong><button class="more" aria-label="Mês seguinte">›</button></div>
+            <div class="history-week"><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span><span>Dom</span></div>
+            <div class="history-days" data-control-history-calendar></div>
+            <small>Os pontos indicam dias com documentos ou eventos.</small>
+          </aside>
+          <section class="history-results">
+            <div class="history-document-filters surface">
+              <label class="field"><span>Produção</span><select data-history-production><option value="202602">202602 · 7080C002 · C3</option><option value="202601">202601 · 7080C002 · C3</option></select></label>
+              <fieldset><legend>Documentos</legend><label><input type="checkbox" value="summary" data-history-kind checked> Resumo</label><label><input type="checkbox" value="weight" data-history-kind checked> Peso</label><label><input type="checkbox" value="gluing" data-history-kind checked> Pegamentos</label></fieldset>
+              <label class="field"><span>Estado</span><select><option>Todos</option><option>Disponível</option><option>A aguardar aprovação</option></select></label>
+              <button class="button secondary" data-history-clear>Limpar filtros</button>
+            </div>
+            <section class="document-manifest history-documents"><div class="section-head"><div><h2 data-history-documents-title>Documentos de 18 de agosto</h2><p>Snapshots e PDFs associados à Produção selecionada.</p></div><span class="status ok">202602 · revisão Job On 3</span></div><div class="document-row" data-history-document="summary" data-history-production-id="202602"><div><span>Resumo</span><strong>Página consolidada · revisão 3</strong><small>202602_7080C002_C3_Resumo.pdf</small></div><span class="status ok">Disponível</span><button class="button secondary">Abrir página</button><button class="button">Exportar PDF</button></div><div class="document-row" data-history-document="weight" data-history-production-id="202602"><div><span>Peso</span><strong>Snapshot aprovado · revisão 2</strong><small>202602_7080C002_C3_Peso.pdf</small></div><span class="status ok">Disponível</span><button class="button secondary">Abrir controlo</button><button class="button">Abrir PDF</button></div><div class="document-row" data-history-document="gluing" data-history-production-id="202602"><div><span>Pegamentos</span><strong>Snapshot em preparação · revisão 2</strong><small>202602_7080C002_C3_Pegamentos.pdf</small></div><span class="status warn">A aguardar aprovação</span><button class="button secondary">Abrir controlo</button><button class="button" disabled>Exportar PDF</button></div><div class="history-no-results" hidden>Nenhum documento corresponde aos filtros selecionados.</div></section>
+          </section>
+        </div>
+        <div class="section-head event-history-heading"><div><h2>Eventos da folha</h2><p>Append-only: reabrir, submeter e decidir criam novos eventos.</p></div></div><div class="timeline"><div class="event"><span>18/08 · 11:12</span><i></i><div><strong>Folha submetida</strong><small>João Silva · nota de submissão</small></div></div><div class="event"><span>18/08 · 10:44</span><i></i><div><strong>Resultado MF alterado para NOK</strong><small>Comentário e ligação MCaliper preservados</small></div></div><div class="event"><span>17/08 · 15:40</span><i></i><div><strong>Peso aprovado</strong><small>Ana Martins · registo 202602-P02</small></div></div></div>
+      </section>
+    </section>
+  </main>
+  <script src="0_ASSET_INTEGRATED_MOCKUP.js"></script>
+</body>
+</html>

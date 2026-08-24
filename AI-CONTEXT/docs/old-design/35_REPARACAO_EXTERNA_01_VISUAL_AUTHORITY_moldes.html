@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="pt-PT">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Moldes — Portal DMO</title>
+    <link rel="stylesheet" href="0_ASSET_CANONICAL_DESIGN_SYSTEM.css" />
+    <style>
+      :root {
+        --b: #3c73a8;
+        --bd: #193046;
+        --bs: #e8eff7;
+        --page: #f6f9fc;
+        --sub: #f1f6fa;
+        --line: #d9e6f2;
+        --text: #172d42;
+        --muted: #64778a;
+        --green: #527c72;
+        --green-s: #e5f0eb;
+        --warn: #a97943;
+        --warn-s: #f7f0e7;
+        --red: #9a625d;
+        --disabled: #cbd5df;
+        --r: 12px;
+        --shadow: 0 8px 24px rgba(25, 48, 70, 0.06);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font:
+          14px/1.45 Inter,
+          "Segoe UI",
+          sans-serif;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+      .header {
+        min-height: 76px;
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        padding: 10px 28px;
+        background: #fff;
+        border-bottom: 1px solid var(--line);
+      }
+      .logo {
+        width: 44px;
+        height: 44px;
+        object-fit: contain;
+        border-radius: 50%;
+      }
+      .head h1 {
+        margin: 0;
+        font-size: 18px;
+      }
+      .head p,
+      .muted {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .user {
+        margin-left: auto;
+        padding-left: 18px;
+        text-align: right;
+        border-left: 1px solid var(--line);
+      }
+      .user strong,
+      .user span {
+        display: block;
+      }
+      .user span {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .tabs {
+        height: 52px;
+        display: flex;
+        gap: 25px;
+        padding: 0 28px;
+        background: #fff;
+        border-bottom: 1px solid var(--line);
+      }
+      .tab {
+        border: 0;
+        border-bottom: 3px solid transparent;
+        background: none;
+        color: var(--muted);
+        font-weight: 750;
+        cursor: pointer;
+      }
+      .tab.active {
+        color: var(--b);
+        border-color: var(--b);
+      }
+      .tab.settings {
+        margin-left: auto;
+      }
+      .main {
+        max-width: 1360px;
+        margin: auto;
+        padding: 26px;
+      }
+      .view {
+        display: none;
+      }
+      .view.active {
+        display: block;
+      }
+      .page-head,
+      .panel-head,
+      .footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .page-head {
+        align-items: end;
+        margin-bottom: 16px;
+      }
+      .page-head h2,
+      .panel-head h3 {
+        margin: 0;
+      }
+      .card {
+        padding: 18px;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: var(--r);
+        box-shadow: var(--shadow);
+      }
+      .btn {
+        min-height: 36px;
+        padding: 7px 12px;
+        border: 1px solid var(--b);
+        border-radius: 8px;
+        background: var(--b);
+        color: #fff;
+        font-weight: 750;
+        cursor: pointer;
+      }
+      .btn:hover,
+      .btn:focus-visible {
+        background: #fff;
+        color: var(--b);
+        outline: none;
+      }
+      .btn:disabled {
+        border-color: var(--disabled);
+        background: var(--disabled);
+        color: #fff;
+        cursor: not-allowed;
+      }
+      .btn.icon {
+        width: 36px;
+        padding: 0;
+      }
+      .type-switch {
+        display: flex;
+        gap: 8px;
+      }
+      .type-switch .btn {
+        background: #fff;
+        color: var(--b);
+      }
+      .type-switch .btn:hover,
+      .type-switch .btn:focus-visible,
+      .type-switch .btn.active {
+        background: var(--b);
+        color: #fff;
+      }
+      .production-grid {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .production-card {
+        min-width: 0;
+        padding: 11px;
+        border: 1px solid var(--b);
+        border-radius: 9px;
+        background: var(--b);
+        color: #fff;
+        text-align: left;
+        cursor: pointer;
+      }
+      .production-card:hover,
+      .production-card.active {
+        background: #fff;
+        color: var(--b);
+      }
+      .production-card strong,
+      .production-card span,
+      .production-card small {
+        display: block;
+      }
+      .production-card strong {
+        font-size: 13px;
+      }
+      .production-card span {
+        margin-top: 3px;
+        font-weight: 750;
+      }
+      .production-card small {
+        margin-top: 2px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        opacity: 0.82;
+      }
+      .search {
+        display: grid;
+        grid-template-columns: 2fr 150px 150px 100px auto;
+        gap: 9px;
+        align-items: end;
+        margin-top: 16px;
+      }
+      .field label {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 750;
+      }
+      .field input,
+      .field select,
+      .field textarea {
+        width: 100%;
+        min-height: 40px;
+        padding: 9px 11px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        color: var(--text);
+      }
+      .search > .btn,
+      .filters > .btn {
+        min-height: 40px;
+      }
+      .context {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+        margin-top: 16px;
+      }
+      .context div {
+        padding: 11px;
+        border-left: 3px solid var(--b);
+        border-radius: 8px;
+        background: var(--sub);
+      }
+      .context span {
+        display: block;
+        color: var(--muted);
+        font-size: 9px;
+      }
+      .context strong {
+        font-size: 14px;
+      }
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .inline {
+        display: none;
+        margin-top: 16px;
+      }
+      .inline.open {
+        display: block;
+      }
+      .form-grid {
+        display: grid;
+        grid-template-columns: 2fr 120px 120px 150px;
+        gap: 10px;
+        align-items: end;
+      }
+      .tool-picker { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+      .tool-picker-head { display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px; }
+      .tool-picker-head h4 { margin:0;font-size:15px; }
+      .tool-add-grid { display:grid;grid-template-columns:1.4fr 120px 150px 120px auto;gap:10px;align-items:end; }
+      .draft-empty { padding:22px;text-align:center;color:var(--muted); }
+      .remove-tool { min-height:30px;padding:4px 9px;border:1px solid var(--red);border-radius:7px;background:#fff;color:var(--red);font-weight:750;cursor:pointer; }
+      .table-wrap {
+        overflow: auto;
+        margin-top: 14px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        white-space: nowrap;
+      }
+      th {
+        padding: 10px 12px;
+        background: var(--sub);
+        color: var(--muted);
+        font-size: 10px;
+        text-align: left;
+        text-transform: uppercase;
+      }
+      td {
+        padding: 11px 12px;
+        border-top: 1px solid var(--line);
+      }
+      tr[data-dmo-row] {
+        cursor: pointer;
+      }
+      tr[data-dmo-row]:hover {
+        background: var(--page);
+      }
+      tr.selected {
+        background: var(--line);
+      }
+      .pill {
+        display: inline-flex;
+        padding: 4px 8px;
+        border-radius: 99px;
+        background: var(--bs);
+        color: #315d88;
+        font-size: 10px;
+        font-weight: 800;
+      }
+      .pill.green {
+        background: var(--green-s);
+        color: var(--green);
+      }
+      .footer {
+        padding-top: 11px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .pager {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .filters {
+        display: grid;
+        grid-template-columns: 2fr repeat(4, 150px) 100px auto;
+        gap: 9px;
+        align-items: end;
+      }
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .toast {
+        position: fixed;
+        right: 22px;
+        bottom: 22px;
+        padding: 11px 15px;
+        border-radius: 9px;
+        background: #0f1d2a;
+        color: #fff;
+        opacity: 0;
+        transform: translateY(50px);
+        transition: 0.2s;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: none;
+      }
+      @media (max-width: 950px) {
+        .production-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .filters {
+          grid-template-columns: repeat(3, 1fr);
+        }
+        .split {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 650px) {
+        .header {
+          padding: 10px 14px;
+        }
+        .user {
+          display: none;
+        }
+        .tabs {
+          padding: 0 12px;
+          gap: 14px;
+          overflow: auto;
+        }
+        .tab {
+          white-space: nowrap;
+        }
+        .tab.settings {
+          margin-left: 0;
+        }
+        .main {
+          padding: 16px 12px;
+        }
+        .production-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .search,
+        .form-grid,
+        .tool-add-grid,
+        .filters,
+        .context {
+          grid-template-columns: 1fr 1fr;
+        }
+        .search .btn,
+        .filters .btn {
+          grid-column: 1/-1;
+        }
+        .table-wrap table {
+          min-width: 920px;
+        }
+        .footer {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        .pager {
+          align-self: flex-end;
+        }
+        .actions {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+        }
+        .actions .btn {
+          min-height: 44px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="header dmo-app-header">
+      <img class="logo" src="0_ASSET_LOGO.png" alt="BA" />
+      <div class="head dmo-app-header__page">
+        <h1>Moldes</h1>
+        <p>Contra moldes e Moldes finais</p>
+      </div>
+      <div class="user dmo-app-header__user">
+        <strong>Ana Martins</strong><span>Responsável de moldes</span>
+      </div>
+    </header>
+    <nav class="dmo-primary-nav" aria-label="Tarefas principais"><a href="20_JOB_ON_01_VISUAL_AUTHORITY_job-on.html">Job On</a><a href="21_CONTROLO_01_VISUAL_AUTHORITY_controlo.html">Controlo</a><a href="34_REPARACAO_INTERNA_01_VISUAL_AUTHORITY_reparacao-interna.html">Reparação Interna</a><a href="31_BOQUILHAS_01_VISUAL_AUTHORITY_boquilhas.html">Boquilhas</a><a href="32_ARMAZEM_01_VISUAL_AUTHORITY_armazem.html">Armazém</a></nav>
+    <nav class="tabs dmo-secondary-nav" aria-label="Áreas de Moldes">
+      <button class="tab active" data-view="registo">Registo</button
+      ><button class="tab" data-view="ferramentas">Ferramentas</button
+      ><button class="tab" data-view="historico">Histórico</button
+      ><button class="tab settings" data-view="definicoes">Definições</button>
+    </nav>
+    <main class="main">
+      <section class="view active" id="registo">
+        <div class="page-head">
+          <div>
+            <h2>Preparar reparação de Moldes</h2>
+            <p class="muted">Crie antecipadamente a lista de ferramentas para uma produção futura.</p>
+          </div>
+          <div class="type-switch">
+            <button class="btn active" data-type="CM">Contra moldes</button
+            ><button class="btn" data-type="MF">Moldes finais</button>
+          </div>
+        </div>
+        <section class="card">
+          <div class="search">
+            <div class="field">
+              <label>Procurar Referência, lote ou número individual</label><input placeholder="Ex.: 5774T173, lote 01 ou CM 34" />
+            </div>
+            <div class="field">
+              <label>Período</label><select><option>Próximos 30 dias</option><option>Próximos 60 dias</option></select>
+            </div>
+            <div class="field">
+              <label>Máquina</label
+              ><select>
+                <option>B1</option>
+                <option>B2</option>
+                <option>B3</option>
+                <option>C1</option>
+                <option>C2</option>
+                <option>C3</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Linhas</label
+              ><select>
+                <option>20</option>
+                <option>40</option>
+                <option>60</option>
+              </select>
+            </div>
+            <button class="btn">Pesquisar</button>
+          </div>
+          <div class="actions">
+            <button class="btn" id="newList">Criar lista de reparação</button>
+          </div>
+          <div class="card inline" id="listForm">
+            <div class="panel-head">
+              <div>
+                <h3>Nova lista de reparação · <span id="formType">CM</span></h3>
+                <p class="muted">A produção, Referência e máquina vêm do planeamento selecionado.</p>
+              </div>
+              <button class="btn icon" data-close>×</button>
+            </div>
+            <div class="form-grid">
+              <div class="field"><label>Produção prevista</label><select><option>202604 · 5774T173 · B1 · 22/08</option><option>202605 · 9389T194 · B3 · 24/08</option></select></div>
+              <div class="field">
+                <label>Reparador</label><select><option>Externo A</option><option>Externo B</option></select>
+              </div>
+              <div class="field">
+                <label>Ferramentas</label><input id="selectedToolCount" value="0 adicionadas" readonly />
+              </div>
+              <div class="field">
+                <label>Enviar até</label><input type="date" value="2026-08-19" />
+              </div>
+            </div>
+            <section class="tool-picker" aria-labelledby="toolPickerTitle">
+              <div class="tool-picker-head"><div><h4 id="toolPickerTitle">Adicionar CM à lista</h4><p class="muted">Adicione as ferramentas concretas, uma a uma. CM e MF nunca são misturados na mesma lista.</p></div><span class="pill" id="draftTypePill">CM</span></div>
+              <div class="tool-add-grid">
+                <div class="field"><label for="draftReference">Referência</label><select id="draftReference"><option>5774T173</option><option>9389T194</option><option>5447T173</option></select></div>
+                <div class="field"><label for="draftLot">Lote</label><input id="draftLot" value="01" /></div>
+                <div class="field"><label for="draftNumber">Número individual</label><input id="draftNumber" inputmode="numeric" placeholder="Ex.: 34" /></div>
+                <div class="field"><label for="draftPosition">Posição atual</label><input id="draftPosition" placeholder="Opcional" /></div>
+                <button class="btn" id="addToolToList" type="button">Adicionar CM</button>
+              </div>
+              <div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Referência</th><th>Lote</th><th>N.º individual</th><th>Posição</th><th>Ação</th></tr></thead><tbody id="draftToolRows"><tr id="draftToolsEmpty"><td colspan="6"><div class="draft-empty">Ainda não adicionou nenhum CM.</div></td></tr></tbody></table></div>
+            </section>
+            <div class="actions">
+              <button class="btn" id="saveList" disabled>Criar lista</button>
+            </div>
+          </div>
+        </section>
+        <section class="card" style="margin-top: 16px">
+          <div class="panel-head">
+            <div>
+              <h3>Listas de reparação programadas</h3>
+              <p class="muted">Um clique seleciona; duplo clique abre a lista completa.</p>
+            </div>
+            <div class="field" style="width: 100px">
+              <label>Linhas</label
+              ><select>
+                <option>20</option>
+                <option>40</option>
+                <option>60</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table data-dmo-list>
+              <thead>
+                <tr>
+                  <th>Lista</th>
+                  <th>Tipo</th>
+                  <th>Referência</th>
+                  <th>Produção</th><th>Linha</th><th>Início produção</th><th>Reparador</th><th>Itens</th><th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr data-dmo-row data-id="rep-cm-42"><td><strong>REP-CM-0042</strong></td><td>CM</td><td><strong>5774T173</strong></td><td>202604</td><td>B1</td><td>22/08</td><td>Externo A</td><td>15</td><td><span class="pill">A retirar</span></td></tr>
+                <tr data-dmo-row data-id="rep-mf-41"><td><strong>REP-MF-0041</strong></td><td>MF</td><td><strong>9389T194</strong></td><td>202605</td><td>B3</td><td>24/08</td><td>Externo B</td><td>12</td><td><span class="pill green">Enviado</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="footer">
+            <span>2 listas · Página 1 de 1</span>
+            <div class="pager">
+              <button class="btn" disabled id="correct">Editar lista</button
+              ><button class="btn icon" disabled>‹</button><span>1 / 1</span
+              ><button class="btn icon" disabled>›</button>
+            </div>
+          </div>
+        </section>
+      </section>
+      <section class="view" id="ferramentas">
+        <div class="page-head">
+          <div>
+            <h2>Ferramentas e lotes</h2>
+            <p class="muted">
+              CM e MF usam listas separadas, com o mesmo comportamento canónico.
+            </p>
+          </div>
+          <div class="type-switch">
+            <button class="btn active">Contra moldes</button
+            ><button class="btn">Moldes finais</button>
+          </div>
+        </div>
+        <section class="card">
+          <div class="filters">
+            <div class="field">
+              <label>Referência, lote ou número</label
+              ><input placeholder="Pesquisar" />
+            </div>
+            <div class="field">
+              <label>Tipo</label
+              ><select>
+                <option>CM</option>
+                <option>MF</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Estado</label
+              ><select>
+                <option>Todos</option>
+                <option>Produção</option>
+                <option>Armazém</option>
+                <option>Reparação</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Máquina</label
+              ><select>
+                <option>Todas</option>
+                <option>B1</option>
+                <option>B2</option>
+                <option>B3</option>
+                <option>C1</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Lote</label><input placeholder="Todos" />
+            </div>
+            <div class="field">
+              <label>Linhas</label
+              ><select>
+                <option>20</option>
+                <option>40</option>
+                <option>60</option>
+              </select>
+            </div>
+            <button class="btn">Limpar</button>
+          </div>
+          <div class="table-wrap">
+            <table data-dmo-list>
+              <thead>
+                <tr>
+                  <th>Referência</th>
+                  <th>Lote</th>
+                  <th>Tipo</th>
+                  <th>Quantidade</th>
+                  <th>Em produção</th>
+                  <th>Armazém</th>
+                  <th>Reparação</th>
+                  <th>Máquinas</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr data-dmo-row data-id="lot-cm-1">
+                  <td><strong>5774T173</strong></td>
+                  <td>01</td>
+                  <td>CM</td>
+                  <td>96</td>
+                  <td>24</td>
+                  <td>60</td>
+                  <td>12</td>
+                  <td>B1 · B3</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="footer">
+            <span>1 lote · Página 1 de 1</span>
+            <div class="pager">
+              <button class="btn icon" disabled>‹</button><span>1 / 1</span
+              ><button class="btn icon" disabled>›</button>
+            </div>
+          </div>
+        </section>
+      </section>
+      <section class="view" id="historico">
+        <div class="page-head">
+          <div>
+            <h2>Histórico de Moldes</h2>
+            <p class="muted">Consulta e comparação de movimentos CM/MF.</p>
+          </div>
+        </div>
+        <section class="card">
+          <div class="filters">
+            <div class="field">
+              <label>Referência, lote, número ou operador</label
+              ><input placeholder="Pesquisar" />
+            </div>
+            <div class="field">
+              <label>Tipo</label
+              ><select>
+                <option>Todos</option>
+                <option>CM</option>
+                <option>MF</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Movimento</label
+              ><select>
+                <option>Todos</option>
+                <option>Entrada</option>
+                <option>Saída</option>
+              </select>
+            </div>
+            <div class="field"><label>Desde</label><input type="date" /></div>
+            <div class="field"><label>Até</label><input type="date" /></div>
+            <div class="field">
+              <label>Linhas</label
+              ><select>
+                <option>20</option>
+                <option>40</option>
+                <option>60</option>
+              </select>
+            </div>
+            <button class="btn">Limpar</button>
+          </div>
+          <div class="table-wrap">
+            <table data-dmo-list id="historyList">
+              <thead>
+                <tr>
+                  <th>Data/hora</th>
+                  <th>Tipo</th>
+                  <th>Referência</th>
+                  <th>Lote</th>
+                  <th>N.º</th>
+                  <th>Movimento</th>
+                  <th>Origem</th>
+                  <th>Destino</th>
+                  <th>Linha</th>
+                  <th>Operador</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr data-dmo-row data-id="hist-cm-1">
+                  <td>18/08 · 14:32</td>
+                  <td>CM</td>
+                  <td>5774T173</td>
+                  <td>01</td>
+                  <td>34</td>
+                  <td>Entrada</td>
+                  <td>Produção</td>
+                  <td>Armazém</td>
+                  <td>B1</td>
+                  <td>João Silva</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="footer">
+            <span>1 movimento · Página 1 de 1</span>
+            <div class="pager">
+              <button class="btn" id="historyCorrect" disabled>
+                Corrigir movimento</button
+              ><button class="btn icon" disabled>‹</button><span>1 / 1</span
+              ><button class="btn icon" disabled>›</button>
+            </div>
+          </div>
+        </section>
+      </section>
+      <section class="view" id="definicoes">
+        <div class="page-head">
+          <div>
+            <h2>Definições de Moldes</h2>
+            <p class="muted">Reparadores e associações por tipo e máquina.</p>
+          </div>
+        </div>
+        <div class="split">
+          <section class="card">
+            <div class="panel-head">
+              <h3>Reparadores</h3>
+              <button class="btn">Adicionar reparador</button>
+            </div>
+            <div class="table-wrap">
+              <table data-dmo-list>
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Tipo</th>
+                    <th>Máquinas</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr data-dmo-row>
+                    <td>Externo A</td>
+                    <td>CM</td>
+                    <td>B1 · B3</td>
+                    <td><span class="pill green">Ativo</span></td>
+                  </tr>
+                  <tr data-dmo-row>
+                    <td>Externo B</td>
+                    <td>MF</td>
+                    <td>C1 · C3</td>
+                    <td><span class="pill green">Ativo</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section class="card">
+            <div class="panel-head"><h3>Regra de separação</h3></div>
+            <p>
+              Contra moldes e Moldes finais podem partilhar uma Referência de
+              produção, mas mantêm:
+            </p>
+            <ul>
+              <li>tipos e IDs diferentes;</li>
+              <li>lotes e números individuais próprios;</li>
+              <li>movimentos e históricos separados;</li>
+              <li>reparadores permitidos independentes.</li>
+            </ul>
+          </section>
+        </div>
+      </section>
+    </main>
+    <div class="toast" id="toast"></div>
+    <script>
+      const $ = (s) => document.querySelector(s),
+        $$ = (s) => [...document.querySelectorAll(s)],
+        draftTools = { CM: [], MF: [] },
+        escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]),
+        say = (t) => {
+          const x = $("#toast");
+          x.textContent = t;
+          x.classList.add("show");
+          setTimeout(() => x.classList.remove("show"), 2200);
+        };
+      const activeDraftType = () => $("#formType").textContent.trim();
+      const renderDraftTools = () => {
+        const type = activeDraftType();
+        const items = draftTools[type];
+        $("#toolPickerTitle").textContent = `Adicionar ${type} à lista`;
+        $("#draftTypePill").textContent = type;
+        $("#addToolToList").textContent = `Adicionar ${type}`;
+        $("#selectedToolCount").value = `${items.length} adicionada${items.length === 1 ? "" : "s"}`;
+        $("#saveList").disabled = items.length === 0;
+        $("#draftToolRows").innerHTML = items.length ? items.map((item, index) => `<tr><td><strong>${type}</strong></td><td>${escapeHtml(item.reference)}</td><td>${escapeHtml(item.lot)}</td><td><strong>${escapeHtml(item.number)}</strong></td><td>${escapeHtml(item.position || "—")}</td><td><button class="remove-tool" type="button" data-remove-draft="${index}">Remover</button></td></tr>`).join("") : `<tr id="draftToolsEmpty"><td colspan="6"><div class="draft-empty">Ainda não adicionou nenhum ${type}.</div></td></tr>`;
+      };
+      $$(".tab").forEach(
+        (t) =>
+          (t.onclick = () => {
+            $$(".tab,.view").forEach((x) => x.classList.remove("active"));
+            t.classList.add("active");
+            $("#" + t.dataset.view).classList.add("active");
+          }),
+      );
+      $$("[data-type]").forEach(
+        (b) =>
+          (b.onclick = () => {
+            $$("[data-type]").forEach((x) => x.classList.remove("active"));
+            b.classList.add("active");
+            $("#formType").textContent = b.dataset.type;
+            renderDraftTools();
+          }),
+      );
+      $("#newList").onclick = () => { $("#listForm").classList.add("open"); renderDraftTools(); };
+      $$("[data-close]").forEach(
+        (b) =>
+          (b.onclick = () => b.closest(".inline").classList.remove("open")),
+      );
+      $("#addToolToList").onclick = () => {
+        const type = activeDraftType();
+        const item = { reference: $("#draftReference").value, lot: $("#draftLot").value.trim(), number: $("#draftNumber").value.trim(), position: $("#draftPosition").value.trim() };
+        if (!item.number) { say(`Introduza o número individual do ${type}`); $("#draftNumber").focus(); return; }
+        if (draftTools[type].some(existing => existing.reference === item.reference && existing.lot === item.lot && existing.number === item.number)) { say(`${type} ${item.number} já está nesta lista`); return; }
+        draftTools[type].push(item);
+        $("#draftNumber").value = "";
+        $("#draftPosition").value = "";
+        renderDraftTools();
+        $("#draftNumber").focus();
+        say(`${type} ${item.number} adicionado à lista`);
+      };
+      $("#draftToolRows").onclick = (event) => {
+        const button = event.target.closest("[data-remove-draft]");
+        if (!button) return;
+        draftTools[activeDraftType()].splice(Number(button.dataset.removeDraft), 1);
+        renderDraftTools();
+      };
+      $("#saveList").onclick = () => {
+        const type = activeDraftType();
+        const count = draftTools[type].length;
+        if (!count) { say(`Adicione pelo menos um ${type}`); return; }
+        $("#listForm").classList.remove("open");
+        say(`Lista de ${type} preparada com ${count} ferramenta${count === 1 ? "" : "s"}`);
+      };
+      document.addEventListener("click", (e) => {
+        const row = e.target.closest("[data-dmo-row]");
+        if (row) {
+          const table = row.closest("[data-dmo-list]");
+          table
+            .querySelectorAll("[data-dmo-row]")
+            .forEach((x) => x.classList.remove("selected"));
+          row.classList.add("selected");
+          $("#correct").disabled = false;
+          if (table.id === "historyList") $("#historyCorrect").disabled = false;
+        }
+      });
+      document.addEventListener("dblclick", (e) => {
+        const row = e.target.closest("[data-dmo-row]");
+        if (row) say("Abrir detalhe " + row.dataset.id);
+      });
+    </script>
+  </body>
+</html>
