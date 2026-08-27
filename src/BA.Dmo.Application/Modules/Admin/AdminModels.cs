@@ -15,27 +15,27 @@ public sealed record AdminUserRow
     }
 
     public AdminUserRow(
-        string actorId,
-        Guid? authUserId,
-        string displayName,
-        string? profileTitle,
-        string templateId,
-        bool active,
-        DateTimeOffset updatedAtUtc,
-        string? authEmail = null,
-        string? modulesOverrideJson = null,
-        string[]? templateIds = null)
+        string ActorId,
+        Guid? AuthUserId,
+        string DisplayName,
+        string? ProfileTitle,
+        string TemplateId,
+        bool Active,
+        DateTimeOffset UpdatedAtUtc,
+        string? AuthEmail = null,
+        string? ModulesOverrideJson = null,
+        string[]? TemplateIds = null)
     {
-        ActorId = actorId;
-        AuthUserId = authUserId;
-        DisplayName = displayName;
-        ProfileTitle = profileTitle;
-        TemplateId = templateId;
-        Active = active;
-        UpdatedAtUtc = updatedAtUtc;
-        AuthEmail = authEmail;
-        ModulesOverrideJson = modulesOverrideJson;
-        TemplateIds = templateIds;
+        this.ActorId = ActorId;
+        this.AuthUserId = AuthUserId;
+        this.DisplayName = DisplayName;
+        this.ProfileTitle = ProfileTitle;
+        this.TemplateId = TemplateId;
+        this.Active = Active;
+        this.UpdatedAtUtc = UpdatedAtUtc;
+        this.AuthEmail = AuthEmail;
+        this.ModulesOverrideJson = ModulesOverrideJson;
+        this.TemplateIds = TemplateIds;
     }
 
     public string ActorId { get; set; } = string.Empty;
