@@ -110,7 +110,7 @@ public class EditModel : PageModel
         }
 
         var hasAdmin = grants.Any(g => g.ModuleId == CanonicalModuleCatalog.AdminModuleId);
-        if (profile == FunctionalProfile.Admin)
+        if (profile == BA.Dmo.Domain.Shared.Access.FunctionalProfile.Admin)
         {
             if (!hasAdmin || grants.Any(g => g.ModuleId != CanonicalModuleCatalog.AdminModuleId))
             {
