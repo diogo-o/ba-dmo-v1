@@ -1,23 +1,34 @@
 @{
-    // Single Admin sub-navigation. It is rendered by every Admin page and uses
-    // the shared tab contract instead of button-style navigation. The active
-    // tab is derived only from the current server route.
+    // Canonical Admin navigation. The layout renders this once for the whole
+    // /admin scope. Older page-level partial calls are intentionally kept
+    // harmless during reconciliation: this request marker prevents a second
+    // menu from being emitted.
+    const string renderKey = "BA_DMO_ADMIN_NAV_RENDERED";
+    var shouldRender = !Context.Items.ContainsKey(renderKey);
+    if (shouldRender)
+    {
+        Context.Items[renderKey] = true;
+    }
+
     var path = Context.Request.Path.Value ?? string.Empty;
 
     bool IsActive(string prefix) =>
         path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
 }
-<nav class="dmo-module-tabs admin-tabs" aria-label="Administração">
-    <a href="/admin/users"
-       class="dmo-module-tab @(IsActive("/admin/users") ? "active" : null)"
-       aria-current="@(IsActive("/admin/users") ? "page" : null)">Utilizadores</a>
-    <a href="/admin/templates"
-       class="dmo-module-tab @(IsActive("/admin/templates") ? "active" : null)"
-       aria-current="@(IsActive("/admin/templates") ? "page" : null)">Modelos</a>
-    <a href="/admin/applications"
-       class="dmo-module-tab @(IsActive("/admin/applications") ? "active" : null)"
-       aria-current="@(IsActive("/admin/applications") ? "page" : null)">Aplicações</a>
-    <a href="/admin/audit"
-       class="dmo-module-tab @(IsActive("/admin/audit") ? "active" : null)"
-       aria-current="@(IsActive("/admin/audit") ? "page" : null)">Auditoria</a>
-</nav>
+@if (shouldRender)
+{
+    <nav class="dmo-module-tabs admin-tabs" aria-label="Administração">
+        <a href="/admin/users"
+           class="dmo-module-tab @(IsActive("/admin/users") ? "active" : null)"
+           aria-current="@(IsActive("/admin/users") ? "page" : null)">Utilizadores</a>
+        <a href="/admin/templates"
+           class="dmo-module-tab @(IsActive("/admin/templates") ? "active" : null)"
+           aria-current="@(IsActive("/admin/templates") ? "page" : null)">Templates</a>
+        <a href="/admin/applications"
+           class="dmo-module-tab @(IsActive("/admin/applications") ? "active" : null)"
+           aria-current="@(IsActive("/admin/applications") ? "page" : null)">Aplicações</a>
+        <a href="/admin/audit"
+           class="dmo-module-tab @(IsActive("/admin/audit") ? "active" : null)"
+           aria-current="@(IsActive("/admin/audit") ? "page" : null)">Auditoria</a>
+    </nav>
+}
