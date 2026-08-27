@@ -6,9 +6,8 @@ using BA.Dmo.Domain.Shared.Kernel;
 namespace BA.Dmo.UnitTests.Shared.Identity;
 
 /// <summary>
-/// U-05 identity resolution tests (Plan-V3 GLM-ACC-01, GLM-ARCH-18):
-/// authoritative pipeline auth_user_id → internal_users → template → U-04
-/// access; fail-closed behavior; no role-name routing; Job On landing.
+/// Identity resolution tests for the final access model:
+/// one reusable template per user, one functional profile, fail-closed access.
 /// </summary>
 public class IdentityResolutionServiceTests
 {
@@ -52,10 +51,9 @@ public class IdentityResolutionServiceTests
         Assert.True(result.IsSuccess);
         var resolved = result.Value;
         Assert.Equal("actor-1", resolved.ActorId);
-        Assert.Equal(FunctionalProfileNames.OperatorController, resolved.ProfileTitle);
+        Assert.Equal("Template 1", resolved.ProfileTitle);
         Assert.Equal(AuthUserId, resolved.User.InternalUserId);
         Assert.True(resolved.User.HasModule("boquilhas"));
-        // Job On is explicitly assigned; the profile derives its behavior.
         Assert.True(resolved.User.HasModule("jobon"));
         Assert.True(resolved.User.HasCapability("jobon.view"));
         Assert.False(resolved.User.HasModule("admin"));
@@ -117,7 +115,7 @@ public class IdentityResolutionServiceTests
     }
 
     [Fact]
-    public async Task MultipleAssignedTemplates_AreResolvedAsOneModuleUnion()
+    public async Task MultipleAssignedTemplates_FailClosedAsAmbiguous()
     {
         _repository.User = Record(modulesJson: "[]") with
         {
@@ -134,11 +132,9 @@ public class IdentityResolutionServiceTests
 
         var result = await _service.ResolveAsync(AuthUserId);
 
-        Assert.True(result.IsSuccess);
-        Assert.True(result.Value.Access.HasModule(CanonicalModuleCatalog.JobonModuleId));
-        Assert.True(result.Value.Access.HasModule(CanonicalModuleCatalog.ControloAreaId));
-        Assert.True(result.Value.Access.HasModule(CanonicalModuleCatalog.PesoModuleId));
-        Assert.True(result.Value.Access.HasModule(CanonicalModuleCatalog.PegamentosModuleId));
+        Assert.True(result.IsFailure);
+        Assert.Equal("ACCESS_TEMPLATE_AMBIGUOUS", result.Error.Code);
+        Assert.Equal(ErrorCategory.Unauthorized, result.Error.Category);
     }
 
     [Fact]
@@ -176,18 +172,17 @@ public class IdentityResolutionServiceTests
     [Fact]
     public async Task AdminGrants_LandOnAdmin_InsteadOfJobOn()
     {
-        // Owner decision: an Administrator's only working area is the Admin
-        // page. It is NOT granted jobon.view, so it lands on /admin (not the
-        // universal Job On work landing).
         _repository.User = Record(modulesJson:
             "[{\"moduleId\":\"admin\",\"capabilities\":[]}]") with
         {
-            ProfileTitle = FunctionalProfileNames.Admin
+            ProfileTitle = FunctionalProfileNames.Admin,
+            TemplateName = "Administrador"
         };
 
         var result = await _service.ResolveAsync(AuthUserId);
 
         Assert.Equal("/admin", result.Value.FirstPage.Page!.Route);
+        Assert.Equal("Administrador", result.Value.ProfileTitle);
         Assert.False(result.Value.Access.HasCapability("jobon.view"));
         Assert.True(result.Value.Access.HasModule("admin"));
         Assert.True(result.Value.Access.HasCapability("admin.gerir"));
@@ -211,20 +206,17 @@ public class IdentityResolutionServiceTests
     }
 
     [Fact]
-    public async Task TemplateNames_DoNotInfluenceResolution()
+    public async Task TemplateNames_DoNotGrantPermissions()
     {
-        // Identical grants under role-sounding template names resolve
-        // identically: behavior derives from grants only.
-        _repository.User = Record();
-        var operador = await _service.ResolveAsync(AuthUserId);
+        _repository.User = Record() with { TemplateName = "Administrador" };
 
-        _repository.User = Record() with { TemplateId = "tpl-2", TemplateName = "Administrador" };
-        var administrador = await _service.ResolveAsync(AuthUserId);
+        var result = await _service.ResolveAsync(AuthUserId);
 
-        Assert.Equal(operador.Value.FirstPage.Page!.Route, administrador.Value.FirstPage.Page!.Route);
-        Assert.Equal(
-            operador.Value.Access.AuthorizedModuleIds.OrderBy(x => x),
-            administrador.Value.Access.AuthorizedModuleIds.OrderBy(x => x));
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Administrador", result.Value.ProfileTitle);
+        Assert.True(result.Value.Access.HasModule("jobon"));
+        Assert.True(result.Value.Access.HasModule("boquilhas"));
+        Assert.False(result.Value.Access.HasModule("admin"));
     }
 
     [Fact]
@@ -241,9 +233,6 @@ public class IdentityResolutionServiceTests
     [Fact]
     public async Task AmbiguousIdentity_FailsClosed_AsIdentityAmbiguous_NotBackendUnavailable()
     {
-        // HI-2: duplicate internal rows for one auth_user_id is a
-        // data-integrity condition. It must NOT be misclassified as a
-        // backend outage (that diagnosis points at a healthy database).
         _repository.ThrowAmbiguous = true;
 
         var result = await _service.ResolveAsync(AuthUserId);
@@ -266,9 +255,7 @@ public class IdentityResolutionServiceTests
     private sealed class FakeInternalUserRepository : IInternalUserRepository
     {
         public InternalUserRecord? User { get; set; }
-
         public bool ThrowOnFind { get; set; }
-
         public bool ThrowAmbiguous { get; set; }
 
         public Task<InternalUserRecord?> FindByAuthUserIdAsync(
