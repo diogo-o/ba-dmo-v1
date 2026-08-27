@@ -87,15 +87,8 @@ public sealed class MigrationDiscoveryTests : IDisposable
     }
 
     [Fact]
-    public void ShippedFreshBuildFamily_IsComplete_N01ThroughN30()
+    public void ShippedFreshBuildFamily_IsComplete_N01ThroughN31()
     {
-        // The authoritative family from 06_DATA §2 must ship whole and ordered.
-        // N25 = deployment-readiness remediation (owner decisions D1-D7);
-        // N26 = dormant per-user module grant override storage.
-        // N27 = corrected multi-template/profile access convergence.
-        // N28 = Reparação Interna CM/MF-only database convergence.
-        // N29 = reference-owned Job On article image association.
-        // N30 = covering index for the N29 updated_by foreign key.
         var familyDirectory = ResolveRepositoryMigrationsDirectory();
 
         var discovered = MigrationDiscovery.Discover(familyDirectory);
@@ -107,7 +100,7 @@ public sealed class MigrationDiscoveryTests : IDisposable
                 "N09_armazem.sql", "N10_tampoes.sql", "N11_partilhado.sql", "N12_rls.sql",
                 "N13_jobon_production_folder.sql", "N14_pegamentos_documents.sql",
                 "N15_pegamentos_tool_number.sql", "N16_pegamentos_component_nominals.sql",
-                "N17_pegamentos_notas.sql", "N18_bq_repairer.sql", "N19_tool_usage.sql", "N20_repairer_repair_types.sql", "N21_tampoes_machines.sql", "N22_reparacao_interna_context.sql", "N23_controlo_folha.sql", "N24_jobon_user_current.sql", "N25_remediation.sql", "N26_user_modules_override.sql", "N27_access_convergence.sql", "N28_reparacao_interna_cm_mf_only.sql", "N29_jobon_reference_images.sql", "N30_jobon_reference_image_updated_by_index.sql"
+                "N17_pegamentos_notas.sql", "N18_bq_repairer.sql", "N19_tool_usage.sql", "N20_repairer_repair_types.sql", "N21_tampoes_machines.sql", "N22_reparacao_interna_context.sql", "N23_controlo_folha.sql", "N24_jobon_user_current.sql", "N25_remediation.sql", "N26_user_modules_override.sql", "N27_access_convergence.sql", "N28_reparacao_interna_cm_mf_only.sql", "N29_jobon_reference_images.sql", "N30_jobon_reference_image_updated_by_index.sql", "N31_template_profiles_single_assignment.sql"
             ],
             discovered.Select(m => m.FileName).ToArray());
     }
@@ -151,6 +144,19 @@ public sealed class MigrationDiscoveryTests : IDisposable
         Assert.Contains("ix_article_reference_images_updated_by", sql, StringComparison.Ordinal);
         Assert.Contains("ON article_reference_images (updated_by)", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("DROP", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void N31_EnforcesSingleTemplateAndClosedProfile()
+    {
+        var sql = File.ReadAllText(Path.Combine(
+            ResolveRepositoryMigrationsDirectory(),
+            "N31_template_profiles_single_assignment.sql"));
+
+        Assert.Contains("access_template_profiles", sql, StringComparison.Ordinal);
+        Assert.Contains("'Admin', 'Operador / Controlador', 'Responsável'", sql, StringComparison.Ordinal);
+        Assert.Contains("ux_internal_user_access_templates_actor", sql, StringComparison.Ordinal);
+        Assert.Contains("UPDATE internal_users", sql, StringComparison.Ordinal);
     }
 
     private static string ResolveRepositoryMigrationsDirectory()
