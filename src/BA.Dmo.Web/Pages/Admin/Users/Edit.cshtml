@@ -27,7 +27,7 @@ else
     <div class="dmo-page-head">
         <div>
             <h2>Editar utilizador</h2>
-            <p>Nome, perfil funcional, template de acesso e estado.</p>
+            <p>O template escolhido assume o título/função, o perfil funcional e os módulos.</p>
         </div>
         <a class="dmo-button" href="/admin/users">Voltar à lista</a>
     </div>
@@ -62,26 +62,22 @@ else
                         <label for="displayName">Nome</label>
                         <input id="displayName" name="displayName" type="text" required value="@Model.Entry.DisplayName" />
                     </div>
-                    <div class="dmo-field">
-                        <label for="templateIds">Templates de acesso</label>
-                        <select id="templateIds" name="templateIds" required multiple size="5">
+                    <div class="dmo-field span2">
+                        <label for="templateId">Template</label>
+                        <select id="templateId" name="templateId" required>
                             @foreach (var template in Model.Templates)
                             {
-                                <option value="@template.TemplateId" selected="@(Model.Entry.AssignedTemplateIds.Contains(template.TemplateId))">
-                                    @template.Name (@(template.Active ? "ativo" : "inativo"))
+                                <option value="@template.TemplateId" selected="@(Model.Entry.TemplateId == template.TemplateId)">
+                                    @template.Name — @Model.ProfileFor(template.TemplateId) — @(template.Active ? "ativo" : "inativo")
                                 </option>
                             }
                         </select>
-                        <p class="dmo-field__helper">Selecione um ou mais templates.</p>
+                        <p class="dmo-field__helper">Apenas um template pode estar associado. Ao mudar o template, o perfil e os módulos mudam em conjunto.</p>
                     </div>
-                    <div class="dmo-field span2">
-                        <label for="profileTitle">Perfil funcional</label>
-                        <select id="profileTitle" name="profileTitle" required>
-                            <option value="Admin" selected="@(Model.Entry.ProfileTitle == "Admin")">Admin</option>
-                            <option value="Operador / Controlador" selected="@(Model.Entry.ProfileTitle == "Operador / Controlador")">Operador / Controlador</option>
-                            <option value="Responsável" selected="@(Model.Entry.ProfileTitle == "Responsável")">Responsável</option>
-                        </select>
-                        <p class="dmo-field__helper">O perfil determina o comportamento dentro dos módulos atribuídos pelos templates.</p>
+                    <div class="dmo-field">
+                        <label>Perfil atual</label>
+                        <input type="text" value="@Model.Entry.ProfileTitle" readonly tabindex="-1" />
+                        <p class="dmo-field__helper">É definido pelo template e não é editado individualmente.</p>
                     </div>
                     <div class="dmo-field">
                         <label for="active">Estado</label>
@@ -99,11 +95,6 @@ else
             </form>
         </div>
     </div>
-    @* Password reset: initiated entirely from the Admin UI through the
-       privileged server-side adapter (04_ACC §9; TD-16). Interaction is the
-       reference one (admin.html): explicit native confirmation before the
-       submit; cancel aborts. The message travels as an HTML-encoded data
-       attribute so the display name is never injected into script. *@
     <form method="post" asp-page-handler="ResetPassword"
           data-dmo-confirm-message="Iniciar reset de password para @Model.Entry.DisplayName?">
         <input type="hidden" name="id" value="@Model.Entry.ActorId" />
