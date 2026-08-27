@@ -10,8 +10,9 @@ namespace BA.Dmo.UnitTests.Shared.Identity;
 /// D-1/D-2): the user's single effective template comes from the canonical
 /// direct FK (internal_users.template_id) and the functional profile comes
 /// from the template (access_template_profiles). The N27 junction and the
-/// legacy internal_users.profile_title mirror are NOT authorities — resolution
-/// fails closed on invalid/inconsistent data and never merges templates.
+/// legacy user-level profile mirror column (retired in SCHEMA-RAT-03B) are
+/// NOT authorities — resolution fails closed on invalid/inconsistent data
+/// and never merges templates.
 /// </summary>
 public class IdentityResolutionServiceTests
 {
@@ -156,7 +157,7 @@ public class IdentityResolutionServiceTests
     [Fact]
     public async Task ProfileMirrorDivergence_FollowsTemplateProfile_NotProfileTitleMirror()
     {
-        // Legacy mirror (internal_users.profile_title) says Operador /
+        // The legacy profile mirror value says Operador /
         // Controlador; the template-owned profile (access_template_profiles)
         // says Responsável. Authorization MUST follow the template profile.
         _repository.User = Record(modulesJson:

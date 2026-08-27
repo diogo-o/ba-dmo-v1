@@ -4,8 +4,9 @@ namespace BA.Dmo.Application.Shared.Shell;
 
 /// <summary>
 /// Per-request shell state (Plan-V3 GLM-SHL-01/02): the identity presentation
-/// (display name + profile_title — never a permission source, UD-02) and the
-/// navigation derived from the server-side resolved grants (GLM-SHL-03).
+/// (display name + profile title — presentation only, never a permission
+/// source, UD-02) and the navigation derived from the server-side resolved
+/// grants (GLM-SHL-03).
 /// </summary>
 public sealed record ShellState(
     string DisplayName,

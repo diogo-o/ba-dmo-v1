@@ -16,12 +16,17 @@ namespace BA.Dmo.Infrastructure.Access;
 /// admin path is counted, and a zero count rolls the write back.
 ///
 /// SCHEMA-RAT-03A (D-1/D-2): user assignment is single-template and the
-/// canonical store is internal_users.template_id (direct FK) — the N27
-/// junction is maintained as a ONE-WAY mirror only (max one row per user,
-/// written in the same transaction as the FK). The functional profile is
-/// template-owned (access_template_profiles): template create/update write
-/// the profile in the same transaction and re-derive internal_users.
-/// profile_title one-way (compatibility mirror; never a user-level edit).
+/// canonical store is internal_users.template_id (direct FK). The functional
+/// profile is template-owned (access_template_profiles): template create/
+/// update write the profile in the same transaction; the admin user
+/// projections read it through a join — never from a user-level column.
+///
+/// SCHEMA-RAT-03B: the legacy mirror structures (the N27 junction table and
+/// the user-level profile mirror column) are RETIRED. No runtime statement in
+/// this file reads or writes either structure;
+/// N33_legacy_access_mirror_quiescence.sql revokes ba_dmo_app privileges on
+/// both as the mechanical kill switch. Both structures stay physically
+/// present until the later, separately designed destructive phase.
 /// </summary>
 public sealed class DapperAdminRepository : IAdminRepository
 {
@@ -38,7 +43,7 @@ public sealed class DapperAdminRepository : IAdminRepository
         u.actor_id        AS ActorId,
         u.auth_user_id    AS AuthUserId,
         u.display_name    AS DisplayName,
-        u.profile_title   AS ProfileTitle,
+        pt.functional_profile AS ProfileTitle,
         u.template_id     AS TemplateId,
         u.active          AS Active,
         u.updated_at_utc  AS UpdatedAtUtc,
@@ -74,14 +79,14 @@ public sealed class DapperAdminRepository : IAdminRepository
         var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
         try
         {
-            var sql = $"SELECT {UserColumns} FROM internal_users u";
+            var sql = $"SELECT {UserColumns} FROM internal_users u LEFT JOIN access_template_profiles pt ON pt.template_id = u.template_id";
             object? parameters = null;
             if (!string.IsNullOrWhiteSpace(search))
             {
                 sql += """
                         WHERE u.display_name ILIKE @Search
                            OR u.actor_id ILIKE @Search
-                           OR u.profile_title ILIKE @Search
+                           OR pt.functional_profile ILIKE @Search
                         """;
                 parameters = new { Search = $"%{search.Trim()}%" };
             }
@@ -115,7 +120,7 @@ public sealed class DapperAdminRepository : IAdminRepository
         {
             return await Db.QuerySingleOrDefaultAsync<AdminUserRow>(
                 connection,
-                $"SELECT {UserColumns} FROM internal_users u WHERE u.actor_id = @ActorId;",
+                $"SELECT {UserColumns} FROM internal_users u LEFT JOIN access_template_profiles pt ON pt.template_id = u.template_id WHERE u.actor_id = @ActorId;",
                 new { ActorId = actorId },
                 cancellationToken: cancellationToken);
         }
@@ -162,29 +167,21 @@ public sealed class DapperAdminRepository : IAdminRepository
         var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
         try
         {
+            // SCHEMA-RAT-03B: the insert writes the canonical direct FK only.
+            // The profile mirror column is left NULL for new rows (the
+            // retired mirror — N33 makes the column nullable; deploy order is
+            // migrate N33 BEFORE this build's first user write) and the
+            // junction mirror is no longer written at all.
             await Db.ExecuteAsync(connection,
                 """
-                WITH inserted AS (
-                    INSERT INTO internal_users (actor_id, auth_user_id, template_id,
-                                                display_name, profile_title, active,
-                                                created_at_utc, updated_at_utc)
-                    VALUES (@ActorId, @AuthUserId, @TemplateId,
-                            @DisplayName,
-                            (SELECT functional_profile
-                               FROM access_template_profiles
-                              WHERE template_id = @TemplateId),
-                            @Active,
-                            @CreatedAtUtc, @CreatedAtUtc)
-                    ON CONFLICT (actor_id) DO NOTHING
-                    RETURNING actor_id
-                )
-                INSERT INTO internal_user_access_templates (
-                    actor_id, template_id, assigned_at_utc, assigned_by)
-                SELECT actor_id, @TemplateId, @CreatedAtUtc, NULL
-                FROM inserted
-                ON CONFLICT (actor_id) DO UPDATE
-                SET template_id = EXCLUDED.template_id,
-                    assigned_at_utc = EXCLUDED.assigned_at_utc;
+                INSERT INTO internal_users (actor_id, auth_user_id, template_id,
+                                            display_name, active,
+                                            created_at_utc, updated_at_utc)
+                VALUES (@ActorId, @AuthUserId, @TemplateId,
+                        @DisplayName,
+                        @Active,
+                        @CreatedAtUtc, @CreatedAtUtc)
+                ON CONFLICT (actor_id) DO NOTHING;
                 """,
                 new
                 {
@@ -249,6 +246,8 @@ public sealed class DapperAdminRepository : IAdminRepository
                 async (connection, transaction, ct) =>
                 {
                     // 1. Canonical single assignment: internal_users.template_id.
+                    // (SCHEMA-RAT-03B: the N27 junction mirror is RETIRED — no
+                    // mirror row is written or updated here anymore.)
                     var rows = await Db.ExecuteAsync(connection,
                         """
                         UPDATE internal_users
@@ -266,21 +265,7 @@ public sealed class DapperAdminRepository : IAdminRepository
                         }, transaction: transaction, cancellationToken: ct);
                     ConcurrencyGuard.EnsureSingleRowUpdated(rows, "utilizador interno");
 
-                    // 2. One-way legacy mirror: exactly one junction row per
-                    // user mirroring the direct FK (never an authority).
-                    await Db.ExecuteAsync(connection,
-                        """
-                        INSERT INTO internal_user_access_templates (
-                            actor_id, template_id, assigned_at_utc, assigned_by)
-                        VALUES (@ActorId, @TemplateId, @UpdatedAtUtc, NULL)
-                        ON CONFLICT (actor_id) DO UPDATE
-                        SET template_id = EXCLUDED.template_id,
-                            assigned_at_utc = EXCLUDED.assigned_at_utc;
-                        """,
-                        new { ActorId = actorId, TemplateId = templateId, UpdatedAtUtc = updatedAtUtc },
-                        transaction: transaction, cancellationToken: ct);
-
-                    // 3. Self-lockout invariant (GLM-ACC-10).
+                    // 2. Self-lockout invariant (GLM-ACC-10).
                     var admins = await CountActiveAdminsOnAsync(
                         connection, transaction, excludeActorId: null, ct);
                     if (admins == 0)
@@ -606,11 +591,13 @@ public sealed class DapperAdminRepository : IAdminRepository
                         transaction: transaction, cancellationToken: ct);
                     ConcurrencyGuard.EnsureSingleRowUpdated(rows, "template de acesso");
 
-                    // Template-owned functional profile (D-1) + one-way user
-                    // profile_title mirror, all in the same transaction. The
-                    // mirror update intentionally does NOT touch
-                    // internal_users.updated_at_utc (no concurrency-version
-                    // churn on the users of the template).
+                    // Template-owned functional profile (D-1), written in the
+                    // same transaction. SCHEMA-RAT-03B: the one-way user
+                    // profile mirror is RETIRED — the profile authority write
+                    // below is the ONLY profile write; users of the template
+                    // resolve their profile through the read join.
+                    // (The mirror update never touched
+                    // internal_users.updated_at_utc — that no longer applies.)
                     await Db.ExecuteAsync(connection,
                         """
                         INSERT INTO access_template_profiles (template_id, functional_profile, updated_at_utc)
@@ -618,11 +605,6 @@ public sealed class DapperAdminRepository : IAdminRepository
                         ON CONFLICT (template_id) DO UPDATE
                         SET functional_profile = EXCLUDED.functional_profile,
                             updated_at_utc = EXCLUDED.updated_at_utc;
-
-                        UPDATE internal_users
-                        SET profile_title = @FunctionalProfile
-                        WHERE template_id = @TemplateId
-                          AND profile_title IS DISTINCT FROM @FunctionalProfile;
                         """,
                         new
                         {

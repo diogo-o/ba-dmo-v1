@@ -8,7 +8,9 @@ namespace BA.Dmo.UnitTests.Shared.Admin;
 /// Tracks writes/audits and can simulate the self-lockout rejection and
 /// optimistic-concurrency conflict behaviors. SCHEMA-RAT-03A (D-1/D-2):
 /// single-template assignment (internal_users.template_id is the canonical
-/// store) and template-owned functional profiles (TemplateProfiles dictionary).
+/// store) and template-owned functional profiles (TemplateProfiles
+/// dictionary). SCHEMA-RAT-03B: no legacy-mirror side effects exist — a
+/// row's ProfileTitle simply mirrors what the authority read join returns.
 /// </summary>
 public sealed class FakeAdminRepository : IAdminRepository
 {
@@ -22,8 +24,6 @@ public sealed class FakeAdminRepository : IAdminRepository
     public List<AuditEntry> Audits { get; } = [];
 
     public List<string> Writes { get; } = [];
-
-    public List<MirrorEntryInput> SavedMirrorEntries { get; } = [];
 
     /// <summary>When true, the next guarded write is rejected as self-lockout.</summary>
     public bool LockoutNextWrite { get; set; }
@@ -79,11 +79,13 @@ public sealed class FakeAdminRepository : IAdminRepository
         }
 
         Writes.Add($"create:{actorId}");
-        var mirrorProfile = TemplateProfiles.TryGetValue(templateId, out var profile)
-            ? profile
+        // The row's profile is the template-owned profile (what the read join
+        // returns); no legacy mirror write is simulated (SCHEMA-RAT-03B).
+        var profile = TemplateProfiles.TryGetValue(templateId, out var functionalProfile)
+            ? functionalProfile
             : null;
         Users[actorId] = new AdminUserRow(
-            actorId, authUserId, displayName, mirrorProfile, templateId, active, createdAtUtc)
+            actorId, authUserId, displayName, profile, templateId, active, createdAtUtc)
         {
             TemplateIds = [templateId]
         };
@@ -98,7 +100,7 @@ public sealed class FakeAdminRepository : IAdminRepository
         ThrowIfConcurrencySimulated();
         Writes.Add($"update:{actorId}");
         var user = Users[actorId];
-        // D-1: the user write never touches the functional profile (mirror).
+        // D-1: the user write never touches the profile (template-owned).
         Users[actorId] = user with
         {
             DisplayName = displayName,
@@ -120,6 +122,8 @@ public sealed class FakeAdminRepository : IAdminRepository
 
         Writes.Add($"change_templates:{actorId}");
         var user = Users[actorId];
+        // SCHEMA-RAT-03B: no legacy mirror write — the row's profile is
+        // simply what the authority read returns for the new template.
         Users[actorId] = user with
         {
             TemplateId = templateId,
@@ -208,7 +212,9 @@ public sealed class FakeAdminRepository : IAdminRepository
         Templates[templateId] = new AdminTemplateRow(
             templateId, name, modulesJson, active, updatedAtUtc);
         TemplateProfiles[templateId] = functionalProfile;
-        // One-way mirror: all users of the template follow the new profile.
+        // Read-side contract (SCHEMA-RAT-03B): users of the template resolve
+        // the new profile through the authority read — the stored row profile
+        // follows the template-owned profile, exactly like the real join.
         foreach (var actorId in Users.Keys.ToList())
         {
             var user = Users[actorId];

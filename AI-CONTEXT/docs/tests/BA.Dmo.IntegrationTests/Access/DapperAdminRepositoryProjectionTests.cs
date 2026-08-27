@@ -37,7 +37,9 @@ public class DapperAdminRepositoryProjectionTests
         // auth.users access at the runtime connection; no per-user override set):
         // TemplateIds is the SINGLE canonical assignment projection
         // (ARRAY[u.template_id], SCHEMA-RAT-03A D-2 — the N27 junction is NOT
-        // consulted for the effective template).
+        // consulted for the effective template); ProfileTitle is the
+        // template-owned functional profile resolved through the read join
+        // (SCHEMA-RAT-03B — the user-level profile mirror column is retired).
         var table = new DataTable();
         table.Columns.Add("ActorId", typeof(string));
         table.Columns.Add("AuthUserId", typeof(Guid));
@@ -72,6 +74,13 @@ public class DapperAdminRepositoryProjectionTests
         // FK — the N27 junction must not appear in the admin user projection.
         Assert.Contains("ARRAY[u.template_id]", connection.IssuedSql, StringComparison.Ordinal);
         Assert.DoesNotContain("internal_user_access_templates", connection.IssuedSql, StringComparison.Ordinal);
+        // SCHEMA-RAT-03B: the profile is read from the template-owned
+        // authority table through a join — never from a user-level column.
+        Assert.Contains(
+            "LEFT JOIN access_template_profiles pt ON pt.template_id = u.template_id",
+            connection.IssuedSql, StringComparison.Ordinal);
+        Assert.Contains("pt.functional_profile AS ProfileTitle", connection.IssuedSql, StringComparison.Ordinal);
+        Assert.DoesNotContain("u.profile_title", connection.IssuedSql, StringComparison.Ordinal);
 
         var row = Assert.Single(rows);
         Assert.Equal("user-1", row.ActorId);

@@ -95,10 +95,23 @@ transaction (gateway convention — no explicit BEGIN/COMMIT):
    — no runtime reader or writer can touch the junction anymore. (Migration
    owner / Supabase admin role is unaffected, so future migrations and the
    N31/N32-style guards still run.)
-3. **profile_title kill switch** (column-level grants):
-   `REVOKE SELECT (profile_title), UPDATE (profile_title) ON internal_users FROM ba_dmo_app;`
-   — any residual read/write of the column fails loudly with a permissions
-   error instead of silently maintaining the mirror.
+3. **profile_title kill switch** (privilege REFACTOR — the originally planned
+   column-level REVOKE alone cannot close the hole: `ba_dmo_app` holds
+   TABLE-LEVEL `SELECT`/`INSERT`/`UPDATE` on `internal_users`, and
+   table-level grants imply access to every column, `profile_title`
+   included; table-level `INSERT` would also still permit writing the
+   retired mirror). Actual N33 §3:
+   - `REVOKE SELECT, INSERT, UPDATE ON internal_users FROM ba_dmo_app;`
+   - then re-grant the same three privileges at COLUMN level for every
+     current `internal_users` column EXCEPT `profile_title` — explicit
+     list, no dynamic discovery, no `profile_title` grant through any path:
+     `GRANT SELECT (actor_id, auth_user_id, template_id, display_name, active, created_at_utc, updated_at_utc, modules_override) ON internal_users TO ba_dmo_app;`
+     (likewise `INSERT` and `UPDATE`);
+   - `DELETE` remains untouched (table-level, exactly as before);
+   - result: `profile_title` `SELECT`/`INSERT`/`UPDATE` are inaccessible to
+     `ba_dmo_app` (any residual read/write/insert of the column fails
+     loudly with a permissions error instead of silently maintaining the
+     mirror), while canonical columns keep their privileges.
 4. **Self-documentation block** restating the non-destructive bounds (mirrors
    stay physical; N33+ removal phase is separate; N31/N32 guards remain
    migration-only readers).

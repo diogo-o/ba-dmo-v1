@@ -10,9 +10,12 @@ namespace BA.Dmo.Application.Modules.Admin;
 /// canonical store is internal_users.template_id (direct FK). The functional
 /// profile is TEMPLATE-owned (access_template_profiles): template create/
 /// update write the profile in the same transaction as the template row and
-/// maintain internal_users.profile_title as a one-way compatibility mirror.
-/// The N27 junction is maintained one-way only (max one row per user); it is
-/// not a runtime authority.
+/// admin user projections read it through a join.
+///
+/// SCHEMA-RAT-03B: the legacy mirrors (the N27 junction and the user-level
+/// profile mirror column) are RETIRED — no runtime write or read touches
+/// either structure; N33_legacy_access_mirror_quiescence.sql revokes
+/// ba_dmo_app privileges on both as the mechanical kill switch.
 /// </summary>
 public interface IAdminRepository
 {
@@ -27,10 +30,9 @@ public interface IAdminRepository
 
     /// <summary>
     /// Inserts the internal user (idempotent-safe for the create flow) with a
-    /// single template assignment (internal_users.template_id). The
-    /// profile_title compatibility mirror is derived from the template's
-    /// functional profile in the same statement; the junction mirror is
-    /// maintained one-way (max one row per user).
+    /// single template assignment (internal_users.template_id). The legacy
+    /// mirrors (junction + user-level profile mirror column) are RETIRED and
+    /// are not written here (SCHEMA-RAT-03B).
     /// </summary>
     Task CreateInternalUserAsync(
         string actorId,
@@ -43,8 +45,8 @@ public interface IAdminRepository
 
     /// <summary>
     /// Guarded update of identity/display fields (WHERE updated_at = expected).
-    /// NEVER writes the functional profile: the profile is template-owned and
-    /// user profile_title is a mirror. Throws
+    /// NEVER writes the functional profile: the profile is template-owned.
+    /// Throws
     /// <see cref="BA.Dmo.Application.Shared.Persistence.ConcurrencyConflictException"/>
     /// on stale writes.
     /// </summary>
@@ -58,9 +60,9 @@ public interface IAdminRepository
     /// <summary>
     /// Guarded SINGLE-TEMPLATE change with the self-lockout invariant
     /// validated in the same transaction (GLM-ACC-10). Replaces
-    /// internal_users.template_id (the canonical assignment) and re-derives
-    /// the one-way junction mirror. Returns false (write rolled back) when the
-    /// change would leave no functional admin path.
+    /// internal_users.template_id (the canonical assignment). Returns false
+    /// (write rolled back) when the change would leave no functional admin
+    /// path. The legacy junction mirror is not written (SCHEMA-RAT-03B).
     /// </summary>
     Task<bool> ChangeUserTemplateAsync(
         string actorId,
@@ -138,10 +140,10 @@ public interface IAdminRepository
     /// <summary>
     /// Guarded template update with the self-lockout invariant validated in
     /// the same transaction (GLM-ACC-10). Writes access_templates, upserts
-    /// access_template_profiles and re-derives the users' profile_title
-    /// compatibility mirror ONE-WAY — all in the same transaction. Returns
-    /// false (write rolled back) when the change would leave no functional
-    /// admin path.
+    /// access_template_profiles — the only profile write; the legacy user
+    /// profile mirror is not re-derived (SCHEMA-RAT-03B). Returns false
+    /// (write rolled back) when the change would leave no functional admin
+    /// path.
     /// </summary>
     Task<bool> UpdateTemplateAsync(
         string templateId,

@@ -87,7 +87,7 @@ public sealed class MigrationDiscoveryTests : IDisposable
     }
 
     [Fact]
-    public void ShippedFreshBuildFamily_IsComplete_N01ThroughN32()
+    public void ShippedFreshBuildFamily_IsComplete_N01ThroughN33()
     {
         var familyDirectory = ResolveRepositoryMigrationsDirectory();
 
@@ -100,7 +100,7 @@ public sealed class MigrationDiscoveryTests : IDisposable
                 "N09_armazem.sql", "N10_tampoes.sql", "N11_partilhado.sql", "N12_rls.sql",
                 "N13_jobon_production_folder.sql", "N14_pegamentos_documents.sql",
                 "N15_pegamentos_tool_number.sql", "N16_pegamentos_component_nominals.sql",
-                "N17_pegamentos_notas.sql", "N18_bq_repairer.sql", "N19_tool_usage.sql", "N20_repairer_repair_types.sql", "N21_tampoes_machines.sql", "N22_reparacao_interna_context.sql", "N23_controlo_folha.sql", "N24_jobon_user_current.sql", "N25_remediation.sql", "N26_user_modules_override.sql", "N27_access_convergence.sql", "N28_reparacao_interna_cm_mf_only.sql", "N29_jobon_reference_images.sql", "N30_jobon_reference_image_updated_by_index.sql", "N31_template_profiles_single_assignment.sql", "N32_access_authority_convergence.sql"
+                "N17_pegamentos_notas.sql", "N18_bq_repairer.sql", "N19_tool_usage.sql", "N20_repairer_repair_types.sql", "N21_tampoes_machines.sql", "N22_reparacao_interna_context.sql", "N23_controlo_folha.sql", "N24_jobon_user_current.sql", "N25_remediation.sql", "N26_user_modules_override.sql", "N27_access_convergence.sql", "N28_reparacao_interna_cm_mf_only.sql", "N29_jobon_reference_images.sql", "N30_jobon_reference_image_updated_by_index.sql", "N31_template_profiles_single_assignment.sql", "N32_access_authority_convergence.sql", "N33_legacy_access_mirror_quiescence.sql"
             ],
             discovered.Select(m => m.FileName).ToArray());
     }
@@ -229,6 +229,72 @@ public sealed class MigrationDiscoveryTests : IDisposable
             ResolveRepositoryMigrationsDirectory(),
             "N32_access_authority_convergence.sql"));
 
+        Assert.DoesNotContain("BEGIN;", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("COMMIT;", sql, StringComparison.Ordinal);
+    }
+
+    // ------------------------------------------------------------------
+    // N33 — legacy access mirror quiescence (SCHEMA-RAT-03B)
+    // Source guards only: they read the migration FILE. Executed
+    // PostgreSQL behaviour is covered by the env-guarded
+    // RemediationGuardTests.N33_* probes (BA_DMO_TEST_DATABASE).
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void N33_IsNonDestructive_AndQuiescesBothLegacyMirrors()
+    {
+        var sql = File.ReadAllText(Path.Combine(
+            ResolveRepositoryMigrationsDirectory(),
+            "N33_legacy_access_mirror_quiescence.sql"));
+
+        // 1. Relaxes the retired mirror column to NULLABLE (N27 made it NOT
+        // NULL) — the column itself stays physical with its fossil values.
+        Assert.Contains("ALTER TABLE internal_users", sql, StringComparison.Ordinal);
+        Assert.Contains("ALTER COLUMN profile_title DROP NOT NULL", sql, StringComparison.Ordinal);
+        // 2. Junction kill switch: ba_dmo_app loses ALL privileges.
+        Assert.Contains(
+            "REVOKE ALL PRIVILEGES ON TABLE internal_user_access_templates FROM ba_dmo_app",
+            sql, StringComparison.Ordinal);
+        // 3. profile_title kill switch (privilege REFACTOR): ba_dmo_app held
+        // TABLE-LEVEL SELECT/INSERT/UPDATE on internal_users — a table-level
+        // grant implies every column, so a column-level REVOKE alone could
+        // never close the mirror. The correction revokes those three
+        // table-level grants and restores them at COLUMN level for every
+        // current internal_users column EXCEPT profile_title (explicit
+        // list; DELETE stays table-level, untouched).
+        Assert.Contains(
+            "REVOKE SELECT, INSERT, UPDATE ON internal_users FROM ba_dmo_app",
+            sql, StringComparison.Ordinal);
+        var grantColumns =
+            "actor_id, auth_user_id, template_id, display_name, "
+            + "active, created_at_utc, updated_at_utc, modules_override";
+        foreach (var privilege in new[] { "SELECT", "INSERT", "UPDATE" })
+        {
+            Assert.Contains(
+                $"GRANT {privilege} ({grantColumns}) ON internal_users TO ba_dmo_app",
+                sql, StringComparison.Ordinal);
+        }
+        // The insufficient column-level REVOKE approach is gone; no GRANT
+        // names the retired mirror column; DELETE is never revoked.
+        Assert.DoesNotContain("REVOKE SELECT (profile_title)", sql, StringComparison.Ordinal);
+        foreach (var line in sql.Split('\n'))
+        {
+            var trimmed = line.TrimStart();
+            if (trimmed.StartsWith("GRANT ", StringComparison.Ordinal)
+                || trimmed.StartsWith("EXECUTE 'GRANT ", StringComparison.Ordinal))
+            {
+                Assert.DoesNotContain("profile_title", trimmed, StringComparison.Ordinal);
+            }
+        }
+        Assert.DoesNotContain("REVOKE DELETE", sql, StringComparison.Ordinal);
+
+        // Non-destructive bounds: no drops/renames of tables, columns or
+        // indexes; no data rewrites; no transaction-control debt.
+        Assert.DoesNotContain("DROP TABLE", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP COLUMN", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP INDEX", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP SCHEMA", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DELETE FROM", sql, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("BEGIN;", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("COMMIT;", sql, StringComparison.Ordinal);
     }

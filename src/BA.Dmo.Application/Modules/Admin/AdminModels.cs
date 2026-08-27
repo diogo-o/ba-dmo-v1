@@ -5,8 +5,10 @@ namespace BA.Dmo.Application.Modules.Admin;
 /// the U-02 schema exactly; no permission data is duplicated on users —
 /// grants live only in templates (GLM-ACC-02). SCHEMA-RAT-03A (D-1/D-2):
 /// users carry exactly one template (internal_users.template_id); the
-/// functional profile is template-owned (access_template_profiles) and
-/// AdminUserRow.ProfileTitle is the legacy compatibility mirror only.
+/// functional profile is template-owned (access_template_profiles).
+/// SCHEMA-RAT-03B: AdminUserRow.ProfileTitle is resolved through the
+/// template-owned profile read join — the legacy user-level profile mirror
+/// column is retired.
 /// </summary>
 public sealed record AdminUserRow
 {

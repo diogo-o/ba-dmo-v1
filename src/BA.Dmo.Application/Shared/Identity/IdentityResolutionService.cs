@@ -27,8 +27,8 @@ public sealed record ResolvedIdentity(
 ///      -> access_template_profiles.functional_profile  (functional authority)
 ///      -> AccessResolver (template modules + profile-derived capabilities)
 ///
-/// The N27 junction (internal_user_access_templates) is NOT consulted and the
-/// legacy internal_users.profile_title mirror is NOT a functional-access
+/// The N27 junction is NOT consulted and the legacy user-level profile
+/// mirror column (retired in SCHEMA-RAT-03B) is NOT a functional-access
 /// authority. Invalid/inconsistent data fails closed — never merged.
 /// </summary>
 public sealed class IdentityResolutionService
@@ -104,7 +104,8 @@ public sealed class IdentityResolutionService
                     "The access template is missing or inactive."));
 
         // D-1: the functional profile is template-owned (access_template_profiles).
-        // internal_users.profile_title is NOT the authority and is never parsed here.
+        // The legacy user-level profile mirror (retired in SCHEMA-RAT-03B) is
+        // NOT the authority and is never parsed here.
         if (!FunctionalProfileNames.TryParse(record.FunctionalProfile, out var profile))
             return Result<ResolvedIdentity, DomainError>.Failure(
                 DomainError.Unauthorized(

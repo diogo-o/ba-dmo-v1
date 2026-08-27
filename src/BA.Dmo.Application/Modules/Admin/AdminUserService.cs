@@ -264,8 +264,8 @@ public sealed class AdminUserService
         try
         {
             // D-1: the functional profile is template-owned; the user-level
-            // write updates identity/display fields only (profile_title mirror
-            // is never touched here).
+            // write updates identity/display fields only (the legacy profile
+            // mirror was retired in SCHEMA-RAT-03B and is never touched).
             await _repository.UpdateUserAsync(
                 request.ActorId,
                 request.DisplayName.Trim(),

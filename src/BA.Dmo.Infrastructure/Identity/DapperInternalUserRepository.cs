@@ -13,10 +13,13 @@ namespace BA.Dmo.Infrastructure.Identity;
 ///
 /// SCHEMA-RAT-03A (D-1/D-2): identity is resolved through the canonical
 /// direct assignment internal_users.template_id -> access_templates ->
-/// access_template_profiles. The N27 junction is NOT joined for identity and
-/// is maintained as a one-way mirror only (bootstrap). The legacy
-/// internal_users.profile_title column is read back solely as a compatibility
-/// mirror (record.ProfileTitle) and is never the functional authority.
+/// access_template_profiles. The N27 junction is NOT joined for identity.
+///
+/// SCHEMA-RAT-03B: the legacy mirrors are RETIRED. No statement in this file
+/// reads or writes either legacy mirror structure (the N27 junction table or
+/// the user-level profile mirror column); the record's ProfileTitle slot is
+/// always NULL (kept only for shape compatibility — it was never a
+/// functional-access authority).
 /// </summary>
 public sealed class DapperInternalUserRepository : IInternalUserRepository
 {
@@ -25,7 +28,7 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
         SELECT u.actor_id             AS ActorId,
                u.auth_user_id         AS AuthUserId,
                u.display_name         AS DisplayName,
-               u.profile_title        AS ProfileTitle,
+               NULL::text             AS ProfileTitle, -- retired mirror (SCHEMA-RAT-03B): always NULL
                u.active               AS UserActive,
                t.template_id          AS TemplateId,
                t.name                 AS TemplateName,
@@ -64,27 +67,18 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
     private const string InsertInternalUserSql =
         """
         INSERT INTO internal_users (actor_id, auth_user_id, template_id,
-                                    display_name, profile_title, active,
+                                    display_name, active,
                                     created_at_utc, updated_at_utc)
         VALUES (@ActorId, @AuthUserId, @TemplateId,
                 @DisplayName,
-                (SELECT functional_profile
-                   FROM access_template_profiles
-                  WHERE template_id = @TemplateId),
                 TRUE,
                 @CreatedAtUtc, @CreatedAtUtc)
         ON CONFLICT (actor_id) DO NOTHING;
         """;
 
-    private const string InsertUserTemplateSql =
-        """
-        INSERT INTO internal_user_access_templates (
-            actor_id, template_id, assigned_at_utc, assigned_by)
-        VALUES (@ActorId, @TemplateId, @CreatedAtUtc, @ActorId)
-        ON CONFLICT (actor_id) DO UPDATE
-        SET template_id = EXCLUDED.template_id,
-            assigned_at_utc = EXCLUDED.assigned_at_utc;
-        """;
+    // SCHEMA-RAT-03B: the N27 junction mirror insert (previously
+    // InsertUserTemplateSql) is REMOVED — bootstrap no longer writes the
+    // legacy junction table. The direct FK is the only assignment.
 
     private const string InsertAuditEventSql =
         """
@@ -179,10 +173,10 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
     {
         ArgumentNullException.ThrowIfNull(creation);
 
-        // Atomic: template + internal user + junction mirror + audit event in
-        // ONE transaction. The direct FK (internal_users.template_id) is the
-        // authority; the junction row and profile_title mirror are one-way
-        // derived from it in the same transaction (SCHEMA-RAT-03A D-1/D-2).
+        // Atomic: template + internal user + audit event in ONE transaction.
+        // The direct FK (internal_users.template_id) is the authority.
+        // SCHEMA-RAT-03B: the junction row and the user profile mirror column
+        // are RETIRED — bootstrap no longer writes either legacy mirror.
         await DapperUnitOfWork.RunAsync<int>(_connectionFactory, async (connection, transaction, ct) =>
         {
             await Db.ExecuteAsync(connection, InsertTemplateSql, new
@@ -199,13 +193,6 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
                 creation.AuthUserId,
                 creation.TemplateId,
                 creation.DisplayName,
-                creation.CreatedAtUtc
-            }, transaction: transaction, cancellationToken: ct);
-
-            await Db.ExecuteAsync(connection, InsertUserTemplateSql, new
-            {
-                creation.ActorId,
-                creation.TemplateId,
                 creation.CreatedAtUtc
             }, transaction: transaction, cancellationToken: ct);
 

@@ -40,7 +40,7 @@ public class AdminUserServiceTests
             new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
 
         // Template-owned functional profiles (D-1): the authority the service
-        // validates against and the source of the profile_title mirror.
+        // validates against and the source of the displayed profile.
         _repository.TemplateProfiles["tpl-active"] = FunctionalProfileNames.OperatorController;
         _repository.TemplateProfiles["tpl-second"] = FunctionalProfileNames.Responsible;
         _repository.TemplateProfiles["tpl-inactive"] = FunctionalProfileNames.OperatorController;
@@ -102,10 +102,11 @@ public class AdminUserServiceTests
     }
 
     [Fact]
-    public async Task CreateUser_AssignsExactlyOneTemplate_AndMirrorsTemplateProfile()
+    public async Task CreateUser_AssignsExactlyOneTemplate_AndProfileComesFromTemplateProfile()
     {
         // D-2: exactly ONE template is assigned (internal_users.template_id).
-        // D-1: the profile_title mirror comes from the template's profile.
+        // D-1: the displayed profile comes from the template-owned profile
+        // (read join) — no legacy mirror write exists (SCHEMA-RAT-03B).
         var result = await _service.CreateUserAsync(new CreateAdminUserRequest(
             "novo@ba-dmo.example", "password", "Novo Utilizador", "tpl-active"));
 
@@ -243,11 +244,12 @@ public class AdminUserServiceTests
     }
 
     [Fact]
-    public async Task UpdateUser_DoesNotWriteTheFunctionalProfileMirror()
+    public async Task UpdateUser_NeverChangesProfile_WhichIsTemplateOwned()
     {
         // D-1: the functional profile is template-owned; a user edit never
-        // rewrites the profile_title mirror — divergences are healed by the
-        // template-owned profile resolution, not by user-level writes.
+        // rewrites the profile (the legacy user-level mirror was retired in
+        // SCHEMA-RAT-03B) — divergences are healed by the template-owned
+        // profile resolution, not by user-level writes.
         var result = await _service.UpdateUserAsync(new UpdateAdminUserRequest(
             "user-1", "Nome Novo", Version("user-1")));
 

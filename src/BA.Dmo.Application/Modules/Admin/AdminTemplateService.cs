@@ -19,8 +19,9 @@ namespace BA.Dmo.Application.Modules.Admin;
 /// SCHEMA-RAT-03A (D-1/D-2): the functional profile is TEMPLATE-owned. Each
 /// template carries exactly one profile (Admin / Operador / Controlador /
 /// Responsável); create/update persist it in the same transaction as the
-/// template row (one authoritative write path) and the repository re-derives
-/// the users' profile_title mirror one-way. Product rules are enforced
+/// template row (one authoritative write path). SCHEMA-RAT-03B: the legacy
+/// user profile mirror is retired — the repository no longer re-derives any
+/// user-level mirror column. Product rules are enforced
 /// server-side here: Admin profile ⇔ admin module only; operational profiles
 /// cannot include the admin module.
 /// </summary>

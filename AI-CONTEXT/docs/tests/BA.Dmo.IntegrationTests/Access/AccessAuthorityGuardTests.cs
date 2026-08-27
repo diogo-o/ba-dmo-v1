@@ -1,14 +1,16 @@
 namespace BA.Dmo.IntegrationTests.Access;
 
 /// <summary>
-/// SCHEMA-RAT-03A access-authority source guards (D-1/D-2).
+/// SCHEMA-RAT-03A/03B access-authority source guards (D-1/D-2 + mirror
+/// quiescence).
 ///
 /// These are SOURCE guards, not executed PostgreSQL tests: they read the
 /// repository's C# source to pin the authority contract of the identity and
 /// admin persistence SQL (which lives in private consts not reachable at
 /// runtime). Executed PostgreSQL behaviour is covered by the env-guarded
-/// <c>RemediationGuardTests.N32_*</c> probes (BA_DMO_TEST_DATABASE) and by the
-/// ADO.NET-double projections (<c>DapperAdminRepositoryProjectionTests</c>).
+/// <c>RemediationGuardTests.N32_*</c>/<c>N33_*</c> probes
+/// (BA_DMO_TEST_DATABASE) and by the ADO.NET-double projections
+/// (<c>DapperAdminRepositoryProjectionTests</c>).
 /// </summary>
 public sealed class AccessAuthorityGuardTests
 {
@@ -25,11 +27,10 @@ public sealed class AccessAuthorityGuardTests
             sql, StringComparison.Ordinal);
 
         // The N27 junction must NOT participate in identity resolution SQL.
-        // (The only junction SQL left in the file is the bootstrap one-way
-        // mirror insert, which lives in InsertUserTemplateSql — so we assert
-        // the absence of any JOIN on the junction.)
-        Assert.DoesNotContain("JOIN internal_user_access_templates", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("LEFT JOIN internal_user_access_templates", sql, StringComparison.OrdinalIgnoreCase);
+        // SCHEMA-RAT-03B: the junction is fully retired — no statement in the
+        // identity repository references it at all (the bootstrap one-way
+        // mirror insert was removed too).
+        Assert.DoesNotContain("internal_user_access_templates", sql, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -38,7 +39,10 @@ public sealed class AccessAuthorityGuardTests
         var sql = Read("DapperInternalUserRepository.cs");
 
         Assert.Contains("p.functional_profile   AS FunctionalProfile", sql, StringComparison.Ordinal);
-        Assert.DoesNotContain("SELECT u.profile_title AS FunctionalProfile", sql, StringComparison.Ordinal);
+        // SCHEMA-RAT-03B: the retired user-level profile mirror column is not
+        // read at all — the record's ProfileTitle slot is always NULL.
+        Assert.Contains("NULL::text             AS ProfileTitle", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("u.profile_title", sql, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -64,7 +68,15 @@ public sealed class AccessAuthorityGuardTests
         var sql = Read("DapperAdminRepository.cs");
 
         Assert.Contains("ARRAY[u.template_id] AS TemplateIds", sql, StringComparison.Ordinal);
-        Assert.DoesNotContain("FROM internal_user_access_templates ut", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("internal_user_access_templates", sql, StringComparison.OrdinalIgnoreCase);
+        // SCHEMA-RAT-03B: the admin projection reads the profile from the
+        // template-owned authority table through a join — never from a
+        // user-level column.
+        Assert.Contains(
+            "LEFT JOIN access_template_profiles pt ON pt.template_id = u.template_id",
+            sql, StringComparison.Ordinal);
+        Assert.Contains("pt.functional_profile AS ProfileTitle", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("u.profile_title", sql, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -83,19 +95,36 @@ public sealed class AccessAuthorityGuardTests
     }
 
     [Fact]
-    public void TemplateProfileWrites_AreTemplateOwned_AndMirrorIsOneWay()
+    public void TemplateProfileWrites_AreTemplateOwned_AndNeverTouchUsers()
     {
         var adminSql = Read("DapperAdminRepository.cs");
 
-        // Profile authority is written on access_template_profiles only, in the
-        // template write transaction; the mirror is a one-way UPDATE of
-        // internal_users.profile_title (which never feeds authorization).
+        // SCHEMA-RAT-03B: the profile authority is written on
+        // access_template_profiles only, in the template write transaction.
+        // The one-way user profile mirror UPDATE is REMOVED — no runtime
+        // statement in the admin repository writes the retired mirror column.
         Assert.Contains("INSERT INTO access_template_profiles", adminSql, StringComparison.Ordinal);
-        Assert.Contains("UPDATE internal_users\n                        SET profile_title = @FunctionalProfile", adminSql, StringComparison.Ordinal);
-        // The mirror update must not rewrite the user concurrency version.
-        Assert.DoesNotContain(
-            "SET profile_title = @FunctionalProfile,\n                            updated_at_utc",
-            adminSql, StringComparison.Ordinal);
+        Assert.DoesNotContain("profile_title", adminSql, StringComparison.Ordinal);
+        Assert.DoesNotContain("UPDATE internal_users\n                        SET profile_title", adminSql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BothRepositories_HaveNoLegacyMirrorReferences()
+    {
+        // SCHEMA-RAT-03B: neither repository reads or writes the legacy
+        // mirror structures (the N27 junction table and the user-level
+        // profile mirror column) — writes AND reads are both gone.
+        var adminSql = Read("DapperAdminRepository.cs");
+        var identitySql = Read("DapperInternalUserRepository.cs");
+
+        Assert.DoesNotContain("profile_title", adminSql, StringComparison.Ordinal);
+        Assert.DoesNotContain("profile_title", identitySql, StringComparison.Ordinal);
+        Assert.DoesNotContain("internal_user_access_templates", adminSql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("internal_user_access_templates", identitySql, StringComparison.OrdinalIgnoreCase);
+        // No INSERT/UPDATE/DELETE targets the junction table anywhere in the
+        // runtime repositories.
+        Assert.DoesNotContain("INSERT INTO internal_user_access_templates", adminSql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("INSERT INTO internal_user_access_templates", identitySql, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string Read(string fileName)

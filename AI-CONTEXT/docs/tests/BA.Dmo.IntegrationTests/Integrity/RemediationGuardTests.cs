@@ -11,8 +11,11 @@ namespace BA.Dmo.IntegrationTests.Integrity;
 /// (Npgsql keyword/value connection string). When the variable is absent the
 /// tests skip (return) — the suite stays green in DB-less environments, and
 /// the CI/freeze environment supplies the variable so the guards are proven.
-/// The schema is assumed to be fully migrated (N01-N25); tests are isolated
-/// by using fresh GUID keys per run.
+/// The schema is assumed to be fully migrated (N01-N33); tests are isolated
+/// by using fresh GUID keys per run. The N33_* probes self-skip when the test
+/// database is still at N32 (retired mirror column still NOT NULL). The
+/// connection role is expected to be the migration/owner role (can create
+/// roles when absent and SET ROLE to ba_dmo_app).
 /// </summary>
 public sealed class RemediationGuardTests
 {
@@ -75,6 +78,74 @@ public sealed class RemediationGuardTests
         await using var cmd = new NpgsqlCommand(sql, conn);
         var value = await cmd.ExecuteScalarAsync();
         return value as string;
+    }
+
+    private static async Task<int> ScalarInt(string cs, string sql)
+    {
+        var value = await CaptureScalar(cs, sql);
+        return int.TryParse(value, out var n) ? n : -1;
+    }
+
+    private static async Task EnsureRoleExistsAsync(string cs, string role)
+    {
+        await Exec(cs, $@"
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{role}') THEN
+        CREATE ROLE {role} NOLOGIN;
+    END IF;
+END $$;");
+    }
+
+    /// <summary>
+    /// True when N33 has NOT been applied to the test database (the retired
+    /// profile mirror column is still NOT NULL). Used to self-skip the N33
+    /// probes on databases stopped at N32.
+    /// </summary>
+    private static async Task<bool> ProfileTitleStillNotNull(string cs)
+    {
+        var value = await CaptureScalar(cs, $@"
+SELECT is_nullable FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'internal_users'
+  AND column_name = 'profile_title';");
+        return !string.Equals(value, "YES", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Executes <paramref name="sql"/> in a session switched to
+    /// <paramref name="role"/> and returns the SQLSTATE of the first
+    /// PostgresException (null when the statement succeeded). The role
+    /// switch is undone afterwards; a failure inside the probe never leaves
+    /// the session role changed.
+    /// </summary>
+    private static async Task<string?> CaptureSqlStateAs(string cs, string role, string sql)
+    {
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        try
+        {
+            await using (var setRole = new NpgsqlCommand($"SET ROLE {role}", conn))
+                await setRole.ExecuteNonQueryAsync();
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            await cmd.ExecuteNonQueryAsync();
+            return null;
+        }
+        catch (PostgresException ex)
+        {
+            return ex.SqlState;
+        }
+        finally
+        {
+            try
+            {
+                await using var reset = new NpgsqlCommand("RESET ROLE", conn);
+                await reset.ExecuteNonQueryAsync();
+            }
+            catch
+            {
+                // Session may be aborted; closing the connection resets it.
+            }
+        }
     }
 
     private static async Task EnsureTemplateAsync(string cs, string templateId)
@@ -525,5 +596,139 @@ ON CONFLICT (template_id) DO NOTHING;");
         var mirror = await CaptureScalar(cs,
             $"SELECT profile_title FROM internal_users WHERE actor_id = '{tpl}-user';");
         Assert.Equal("Admin", mirror);
+    }
+
+    // ----------------------------------------------------------------------
+    // N33 — legacy access mirror quiescence (SCHEMA-RAT-03B).
+    // Executed-PostgreSQL probes: after N33, ba_dmo_app holds NO privilege on
+    // the junction table, has no SELECT/INSERT/UPDATE path to
+    // internal_users.profile_title (its table-level SELECT/INSERT/UPDATE
+    // grants were revoked and re-issued at COLUMN level for every column
+    // except the retired mirror; DELETE stays table-level), and new user
+    // rows may be inserted without a value for the retired mirror column.
+    // Self-skipping: when the test database is still at N32 (column still
+    // NOT NULL) these probes skip. The connection role is expected to be the
+    // migration/owner role (can create roles when absent and SET ROLE).
+    // ----------------------------------------------------------------------
+
+    [Fact]
+    public async Task N33_JunctionPrivileges_AreRevoked_FromBaDmoApp()
+    {
+        if (SkipIfNoDatabase()) return;
+        var cs = Cs!;
+        await EnsureRoleExistsAsync(cs, "ba_dmo_app");
+        if (await ProfileTitleStillNotNull(cs)) return; // N33 not applied
+
+        // Catalog probe: no table privilege left for ba_dmo_app.
+        var grants = await ScalarInt(cs, $@"
+SELECT count(*) FROM information_schema.table_privileges
+WHERE table_schema = 'public'
+  AND table_name = 'internal_user_access_templates'
+  AND grantee = 'ba_dmo_app';");
+        Assert.Equal(0, grants);
+
+        // Behaviour probe: a ba_dmo_app session is denied DML on the junction
+        // (the privilege check fails before any FK/constraint evaluation).
+        var state = await CaptureSqlStateAs(cs, "ba_dmo_app", $@"
+INSERT INTO internal_user_access_templates (actor_id, template_id, assigned_at_utc)
+VALUES ('n33-probe-{Guid.NewGuid():N}', 'tpl-n33-{Guid.NewGuid():N}', now());");
+        Assert.Equal("42501", state);
+    }
+
+    [Fact]
+    public async Task N33_ProfileTitleColumnPrivileges_AreRevoked_FromBaDmoApp()
+    {
+        if (SkipIfNoDatabase()) return;
+        var cs = Cs!;
+        await EnsureRoleExistsAsync(cs, "ba_dmo_app");
+        if (await ProfileTitleStillNotNull(cs)) return; // N33 not applied
+
+        // Catalog probe: the retired mirror column is inaccessible for
+        // SELECT/INSERT/UPDATE. (A table-level grant would imply all three —
+        // the N33 correction revokes table-level SELECT/INSERT/UPDATE and
+        // restores them column-level excluding the mirror.)
+        var mirrorGrants = await ScalarInt(cs, $@"
+SELECT count(*) FROM (VALUES
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'profile_title', 'SELECT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'profile_title', 'INSERT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'profile_title', 'UPDATE'))) v(ok)
+WHERE ok;");
+        Assert.Equal(0, mirrorGrants);
+
+        // Catalog probe: representative canonical columns keep the intended
+        // column-level privileges (SELECT/INSERT/UPDATE).
+        var canonicalMissing = await ScalarInt(cs, $@"
+SELECT count(*) FROM (VALUES
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'template_id', 'SELECT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'template_id', 'INSERT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'template_id', 'UPDATE')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'display_name', 'SELECT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'display_name', 'INSERT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'display_name', 'UPDATE')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'active', 'SELECT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'active', 'INSERT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'active', 'UPDATE'))) v(ok)
+WHERE NOT ok;");
+        Assert.Equal(0, canonicalMissing);
+
+        // Behaviour probes from a ba_dmo_app session: UPDATE, INSERT and
+        // SELECT of the retired mirror column are each denied (42501).
+        Assert.Equal("42501", await CaptureSqlStateAs(cs, "ba_dmo_app",
+            "UPDATE internal_users SET profile_title = 'Admin' WHERE FALSE;"));
+        Assert.Equal("42501", await CaptureSqlStateAs(cs, "ba_dmo_app", $@"
+INSERT INTO internal_users (actor_id, auth_user_id, template_id, display_name, profile_title)
+VALUES ('n33-probe-{Guid.NewGuid():N}', NULL, 'tpl-n33-{Guid.NewGuid():N}', 'N33 Mirror Insert', 'Admin');"));
+        Assert.Equal("42501", await CaptureSqlStateAs(cs, "ba_dmo_app",
+            "SELECT profile_title FROM internal_users WHERE FALSE;"));
+
+        // Behaviour probe: reading the canonical columns as ba_dmo_app
+        // succeeds (no privilege regression).
+        Assert.Null(await CaptureSqlStateAs(cs, "ba_dmo_app",
+            "SELECT template_id, display_name, active FROM internal_users WHERE FALSE;"));
+    }
+
+    [Fact]
+    public async Task N33_NewUserRows_MayBeInserted_WithoutRetiredMirrorValue()
+    {
+        if (SkipIfNoDatabase()) return;
+        var cs = Cs!;
+        await EnsureRoleExistsAsync(cs, "ba_dmo_app");
+        if (await ProfileTitleStillNotNull(cs)) return; // N33 not applied
+
+        var tpl = "tpl-n33-null-" + Guid.NewGuid().ToString("N")[..8];
+        await EnsureTemplateAsync(cs, tpl);
+        var actor = "n33-null-" + Guid.NewGuid().ToString("N")[..8];
+
+        // The whole probe runs as ba_dmo_app inside ONE transaction that is
+        // ROLLED BACK, so the shared test database is left untouched.
+        string? state = null;
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        await using var tx = await conn.BeginTransactionAsync();
+        try
+        {
+            await using (var setRole = new NpgsqlCommand("SET ROLE ba_dmo_app", conn, tx))
+                await setRole.ExecuteNonQueryAsync();
+
+            try
+            {
+                await using var insert = new NpgsqlCommand($@"
+INSERT INTO internal_users (actor_id, auth_user_id, template_id, display_name)
+VALUES ('{actor}', '{Guid.NewGuid()}', '{tpl}', 'N33 Null Mirror');", conn, tx);
+                await insert.ExecuteNonQueryAsync();
+            }
+            catch (PostgresException ex)
+            {
+                state = ex.SqlState;
+            }
+        }
+        finally
+        {
+            await tx.RollbackAsync(); // data + role switch all restored
+        }
+
+        // Inserting a user WITHOUT the retired mirror column succeeds under
+        // the N33 schema (column nullable; no mirror writer required).
+        Assert.Null(state);
     }
 }

@@ -7,15 +7,16 @@ namespace BA.Dmo.Application.Shared.Identity;
 /// canonical direct FK internal_users.template_id) and that template's
 /// functional profile (access_template_profiles, template-owned authority).
 ///
-/// Authority contract (owner decisions D-1/D-2):
+/// Authority contract (owner decisions D-1/D-2, SCHEMA-RAT-03A/03B):
 ///   * TemplateId              — the user's single effective template
 ///                                (internal_users.template_id, canonical).
 ///   * FunctionalProfile       — the functional profile resolved through the
 ///                                template (access_template_profiles), the
 ///                                only profile consumed by authorization.
-///   * ProfileTitle            — legacy compatibility mirror
-///                                (internal_users.profile_title). Never a
-///                                functional-access authority.
+///   * ProfileTitle            — retired legacy mirror slot; always NULL since
+///                                SCHEMA-RAT-03B (the legacy user-level
+///                                profile mirror column is no longer read).
+///                                Never a functional-access authority.
 ///   * ModulesOverrideJson     — dormant N26 legacy data; never consulted by
 ///                                resolution.
 ///
@@ -60,9 +61,9 @@ public interface IInternalUserRepository
     /// <summary>
     /// Creates the bootstrap admin (minimal admin.gerir template + active
     /// internal user + audit event) atomically. Never grants functional
-    /// modules automatically (GLM-ACC-13). The user's profile_title mirror is
-    /// derived from the template's functional profile; the junction is
-    /// maintained one-way only (direct FK remains authority).
+    /// modules automatically (GLM-ACC-13). SCHEMA-RAT-03B: the legacy
+    /// mirrors (the N27 junction and the user-level profile mirror column)
+    /// are RETIRED — bootstrap persists only the canonical direct FK.
     /// </summary>
     Task CreateBootstrapAdminAsync(
         BootstrapAdminCreation creation,
