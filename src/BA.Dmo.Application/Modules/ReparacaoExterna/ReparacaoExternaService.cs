@@ -78,16 +78,27 @@ public sealed class ReparacaoExternaService
         var exit = RepairExit.Create(request.RepairType, snapshot, request.PlannedDate, _clock.UtcNow, gate.Value.ActorId);
         if (exit.IsFailure) return Result<Guid, DomainError>.Failure(exit.Error);
 
-        var exitId = await _repository.CreateExitAsync(exit.Value, snapshot, Serialize(snapshot), ct);
-
+        var preparedItems = new List<(RepairExitItem Item, string AuditAfter)>();
+        var requestPieceIds = new HashSet<Guid>();
         foreach (var item in request.Items)
         {
-            var add = await AddItemCoreAsync(exitId, item.PhysicalPieceId, item.Number, gate.Value.ActorId, ct);
-            if (add.IsFailure) return Result<Guid, DomainError>.Failure(add.Error);
+            var prepared = await PrepareItemAsync(exit.Value, item.PhysicalPieceId, item.Number, requestPieceIds, ct);
+            if (prepared.IsFailure) return Result<Guid, DomainError>.Failure(prepared.Error);
+            preparedItems.Add(prepared.Value);
         }
 
-        await _repository.InsertAuditEventAsync(exitId, "reparacao_externa.lista.criar",
+        await using var uow = await _unitOfWorkFactory.BeginAsync(ct);
+        var exitId = await _repository.CreateExitAsync(uow, exit.Value, snapshot, Serialize(snapshot), ct);
+        foreach (var prepared in preparedItems)
+        {
+            await _repository.AddItemAsync(uow, prepared.Item, ct);
+            await _repository.InsertAuditEventAsync(uow, exitId, "reparacao_externa.lista.item",
+                null, prepared.AuditAfter, gate.Value.ActorId, ct);
+        }
+
+        await _repository.InsertAuditEventAsync(uow, exitId, "reparacao_externa.lista.criar",
             null, $"{RepairTypeCodec.ToStorage(request.RepairType)}|{request.RepairerId?.ToString()}", gate.Value.ActorId, ct);
+        await uow.CommitAsync(ct);
         return Result<Guid, DomainError>.Success(exitId);
     }
 
@@ -111,31 +122,47 @@ public sealed class ReparacaoExternaService
                 "REPEXT_LIST_NOT_EDITABLE",
                 "A lista já não está em preparação; não é possível adicionar itens."));
 
+        var prepared = await PrepareItemAsync(exit, physicalPieceId, number, requestPieceIds: null, ct);
+        if (prepared.IsFailure) return Result<Guid, DomainError>.Failure(prepared.Error);
+
+        var itemId = await _repository.AddItemAsync(prepared.Value.Item, ct);
+        await _repository.InsertAuditEventAsync(exitId, "reparacao_externa.lista.item",
+            null, prepared.Value.AuditAfter, actorId, ct);
+        return Result<Guid, DomainError>.Success(itemId);
+    }
+
+    private async Task<Result<(RepairExitItem Item, string AuditAfter), DomainError>> PrepareItemAsync(
+        RepairExit exit,
+        Guid physicalPieceId,
+        string number,
+        HashSet<Guid>? requestPieceIds,
+        CancellationToken ct)
+    {
         var piece = await _toolResolver.ResolveAsync(physicalPieceId, ct);
         if (piece is null)
-            return Result<Guid, DomainError>.Failure(DomainError.NotFound(
+            return Result<(RepairExitItem, string), DomainError>.Failure(DomainError.NotFound(
                 "REPEXT_PIECE_NOT_FOUND", "A ferramenta CM/MF escolhida não foi encontrada."));
 
         if (!string.Equals(piece.Number, number?.Trim(), StringComparison.Ordinal))
-            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+            return Result<(RepairExitItem, string), DomainError>.Failure(DomainError.Validation(
                 "REPEXT_PIECE_NUMBER_MISMATCH",
                 "O número individual não corresponde à ferramenta escolhida."));
 
         // Hard block (GLM-RE-09 / owner decision F): the item must not already be
         // in another open exit.
-        if (await _repository.ExistsItemInOpenExitAsync(physicalPieceId, ct))
-            return Result<Guid, DomainError>.Failure(DomainError.DomainConflict(
+        if ((requestPieceIds is not null && !requestPieceIds.Add(physicalPieceId))
+            || await _repository.ExistsItemInOpenExitAsync(physicalPieceId, ct))
+            return Result<(RepairExitItem, string), DomainError>.Failure(DomainError.DomainConflict(
                 RepairExitRules.DuplicateInOpenExitCode,
                 "Esta ferramenta já está incluída numa saída programada aberta."));
 
         // The list type governs the item kind (CM or MF).
-        var itemResult = RepairExitItem.CreateCmMf(exitId, physicalPieceId, number, exit.RepairType);
-        if (itemResult.IsFailure) return Result<Guid, DomainError>.Failure(itemResult.Error);
+        var itemResult = RepairExitItem.CreateCmMf(exit.RepairExitId, physicalPieceId, number, exit.RepairType);
+        if (itemResult.IsFailure)
+            return Result<(RepairExitItem, string), DomainError>.Failure(itemResult.Error);
 
-        var itemId = await _repository.AddItemAsync(itemResult.Value, ct);
-        await _repository.InsertAuditEventAsync(exitId, "reparacao_externa.lista.item",
-            null, $"{piece.Reference}|{piece.Lot}|{piece.Number}", actorId, ct);
-        return Result<Guid, DomainError>.Success(itemId);
+        return Result<(RepairExitItem, string), DomainError>.Success(
+            (itemResult.Value, $"{piece.Reference}|{piece.Lot}|{piece.Number}"));
     }
 
     public async Task<Result<bool, DomainError>> RemoveItemAsync(

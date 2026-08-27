@@ -438,7 +438,7 @@ LIMIT @Limit;";
 INSERT INTO audit_events (occurred_at_utc, year, actor_user_id, module_id, action_code,
                           entity_type, entity_id, result, before_summary, after_summary)
 VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'armazem', @Action,
-        'armazem', @EntityId, 'succeeded', @Before, @After);";
+        'armazem', @EntityId, 'succeeded', @Before::jsonb, @After::jsonb);";
         var conn = await Open(_connectionFactory, ct);
         try
         {
@@ -447,8 +447,8 @@ VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'armazem', @Action,
                 Actor = actorId,
                 Action = eventType,
                 EntityId = entityId?.ToString(),
-                Before = beforeSnapshot,
-                After = afterSnapshot
+                Before = AuditJson.Normalize(beforeSnapshot),
+                After = AuditJson.Normalize(afterSnapshot)
             }, cancellationToken: ct);
         }
         finally { await DisposeAsync(conn); }

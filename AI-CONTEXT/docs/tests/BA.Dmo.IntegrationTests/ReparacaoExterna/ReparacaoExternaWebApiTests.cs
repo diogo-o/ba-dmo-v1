@@ -172,11 +172,13 @@ public class ReparacaoExternaWebApiTests : IClassFixture<ReparacaoExternaWebApiT
         private sealed class FakeRepairRepo : IRepairRepository
         {
             public Task<Guid> CreateExitAsync(RepairExit exit, RepairerSnapshot? snap, string? json, CancellationToken ct = default) => Task.FromResult(exit.RepairExitId);
+            public Task<Guid> CreateExitAsync(IDbUnitOfWork uow, RepairExit exit, RepairerSnapshot? snap, string? json, CancellationToken ct = default) => CreateExitAsync(exit, snap, json, ct);
             public Task<RepairExit?> GetExitByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult<RepairExit?>(null);
             public Task<IReadOnlyList<RepairExitItem>> GetExitItemsAsync(Guid id, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<RepairExitItem>>(Array.Empty<RepairExitItem>());
             public Task<IReadOnlyList<RepairExit>> ListExitsAsync(RepairType? t, RepairExitStatus? s, DateOnly? f, DateOnly? to, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<RepairExit>>(Array.Empty<RepairExit>());
             public Task<bool> ExistsItemInOpenExitAsync(Guid piece, CancellationToken ct = default) => Task.FromResult(false);
             public Task<Guid> AddItemAsync(RepairExitItem item, CancellationToken ct = default) => Task.FromResult(Guid.NewGuid());
+            public Task<Guid> AddItemAsync(IDbUnitOfWork uow, RepairExitItem item, CancellationToken ct = default) => AddItemAsync(item, ct);
             public Task<RepairExitItem?> GetItemByIdAsync(Guid itemId, CancellationToken ct = default) => Task.FromResult<RepairExitItem?>(null);
             public Task DeleteItemAsync(Guid itemId, CancellationToken ct = default) => Task.CompletedTask;
             public Task ConfirmItemPickedAsync(IDbUnitOfWork uow, RepairExitItem item, CancellationToken ct = default) => Task.CompletedTask;
@@ -193,6 +195,7 @@ public class ReparacaoExternaWebApiTests : IClassFixture<ReparacaoExternaWebApiT
             public Task SetRepairerRepairTypesAsync(Guid repairerId, IEnumerable<string> repairTypes, CancellationToken ct = default) => Task.CompletedTask;
             public Task<IReadOnlySet<string>> ListRepairerRepairTypesAsync(Guid repairerId, CancellationToken ct = default) => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(StringComparer.Ordinal));
             public Task InsertAuditEventAsync(Guid? id, string type, string? b, string? a, string actor, CancellationToken ct = default) => Task.CompletedTask;
+            public Task InsertAuditEventAsync(IDbUnitOfWork uow, Guid? id, string type, string? b, string? a, string actor, CancellationToken ct = default) => InsertAuditEventAsync(id, type, b, a, actor, ct);
         }
 
         private sealed class FakeToolResolver : IToolPieceResolver

@@ -44,21 +44,37 @@ public sealed class ReparacaoExternaCurrentUser(string? actorId = "repex-actor")
 /// <summary>In-memory fake of the shared unit-of-work factory (no DB).</summary>
 public sealed class FakeRepairUnitOfWorkFactory : IRepairUnitOfWorkFactory
 {
+    public FakeUnitOfWork? Last { get; private set; }
+
     public Task<IDbUnitOfWork> BeginAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult<IDbUnitOfWork>(new FakeUnitOfWork());
+    {
+        Last = new FakeUnitOfWork();
+        return Task.FromResult<IDbUnitOfWork>(Last);
+    }
 }
 
 /// <summary>No-op in-memory unit of work (confined to tests/*).</summary>
 public sealed class FakeUnitOfWork : IDbUnitOfWork
 {
+    public bool Committed { get; private set; }
+    public bool Disposed { get; private set; }
+
     public IDbConnection Connection => null!;
     public IDbTransaction Transaction => null!;
 
-    public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Task CommitAsync(CancellationToken cancellationToken = default)
+    {
+        Committed = true;
+        return Task.CompletedTask;
+    }
 
     public Task RollbackAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Disposed = true;
+        return ValueTask.CompletedTask;
+    }
 }
 
 /// <summary>In-memory fake of the Armazém repair movement port (Armazém-owned).</summary>

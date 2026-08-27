@@ -11,10 +11,10 @@ namespace BA.Dmo.Infrastructure.Access;
 /// <summary>
 /// U-15 — Reparação Externa Dapper persistence (N08, GLM-RE). Implements
 /// IRepairRepository, owning Reparação persistence only. Single-table writes
-/// self-manage a connection; coordinated pickup/return writes participate in the
-/// shared <see cref="IDbUnitOfWork"/> so they commit/roll back atomically with the
-/// Armazém physical movement (owner decisions B/C). Append-only triggers and RLS
-/// are respected; repair_events is append-only.
+/// self-manage a connection; create-exit and coordinated pickup/return writes can
+/// participate in a shared <see cref="IDbUnitOfWork"/> so their complete use cases
+/// commit or roll back atomically. Append-only triggers and RLS are respected;
+/// repair_events is append-only.
 /// </summary>
 public sealed class DapperRepairRepository : IRepairRepository
 {
@@ -40,6 +40,20 @@ public sealed class DapperRepairRepository : IRepairRepository
     public async Task<Guid> CreateExitAsync(
         RepairExit exit, RepairerSnapshot? repairerSnapshot, string? snapshotJson, CancellationToken ct = default)
     {
+        var conn = await Open(_connectionFactory, ct);
+        try { return await CreateExitCoreAsync(conn, null, exit, snapshotJson, ct); }
+        finally { await DisposeAsync(conn); }
+    }
+
+    public Task<Guid> CreateExitAsync(
+        IDbUnitOfWork uow, RepairExit exit, RepairerSnapshot? repairerSnapshot,
+        string? snapshotJson, CancellationToken ct = default) =>
+        CreateExitCoreAsync(uow.Connection, uow.Transaction, exit, snapshotJson, ct);
+
+    private static async Task<Guid> CreateExitCoreAsync(
+        IDbConnection connection, IDbTransaction? transaction, RepairExit exit,
+        string? snapshotJson, CancellationToken ct)
+    {
         const string sql = @"
 INSERT INTO repair_exits
     (repair_exit_id, repair_type, repairer_id, repairer_snapshot, planned_date,
@@ -47,24 +61,19 @@ INSERT INTO repair_exits
 VALUES
     (@Id, @RepairType, @RepairerId, @Snapshot, @PlannedDate,
      @Status, @CreatedAtUtc, @CreatedBy, @UpdatedAtUtc);";
-        var conn = await Open(_connectionFactory, ct);
-        try
+        await Db.ExecuteAsync(connection, sql, new
         {
-            await Db.ExecuteAsync(conn, sql, new
-            {
-                Id = exit.RepairExitId,
-                RepairType = RepairTypeCodec.ToStorage(exit.RepairType),
-                RepairerId = (object?)exit.RepairerId ?? DBNull.Value,
-                Snapshot = (object?)snapshotJson ?? DBNull.Value,
-                PlannedDate = (object?)exit.PlannedDate ?? DBNull.Value,
-                Status = RepairExitStatusCodec.ToStorage(exit.Status),
-                CreatedAtUtc = exit.CreatedAtUtc,
-                CreatedBy = (object?)exit.CreatedBy ?? DBNull.Value,
-                UpdatedAtUtc = exit.UpdatedAtUtc
-            }, cancellationToken: ct);
-            return exit.RepairExitId;
-        }
-        finally { await DisposeAsync(conn); }
+            Id = exit.RepairExitId,
+            RepairType = RepairTypeCodec.ToStorage(exit.RepairType),
+            RepairerId = (object?)exit.RepairerId ?? DBNull.Value,
+            Snapshot = (object?)snapshotJson ?? DBNull.Value,
+            PlannedDate = (object?)exit.PlannedDate ?? DBNull.Value,
+            Status = RepairExitStatusCodec.ToStorage(exit.Status),
+            CreatedAtUtc = exit.CreatedAtUtc,
+            CreatedBy = (object?)exit.CreatedBy ?? DBNull.Value,
+            UpdatedAtUtc = exit.UpdatedAtUtc
+        }, transaction, ct);
+        return exit.RepairExitId;
     }
 
     public async Task<RepairExit?> GetExitByIdAsync(Guid repairExitId, CancellationToken ct = default)
@@ -146,6 +155,17 @@ SELECT EXISTS (
 
     public async Task<Guid> AddItemAsync(RepairExitItem item, CancellationToken ct = default)
     {
+        var conn = await Open(_connectionFactory, ct);
+        try { return await AddItemCoreAsync(conn, null, item, ct); }
+        finally { await DisposeAsync(conn); }
+    }
+
+    public Task<Guid> AddItemAsync(IDbUnitOfWork uow, RepairExitItem item, CancellationToken ct = default) =>
+        AddItemCoreAsync(uow.Connection, uow.Transaction, item, ct);
+
+    private static async Task<Guid> AddItemCoreAsync(
+        IDbConnection connection, IDbTransaction? transaction, RepairExitItem item, CancellationToken ct)
+    {
         const string sql = @"
 INSERT INTO repair_exit_items
     (repair_exit_item_id, repair_exit_id, bq_lote_id, physical_piece_id, qty,
@@ -153,13 +173,8 @@ INSERT INTO repair_exit_items
 VALUES
     (@Id, @ExitId, @BqLoteId, @PhysicalPieceId, @Qty,
      @IndividualNumber, @Picked, @OutAtUtc, @OutOperatorId, @InAtUtc, @InOperatorId, @Status);";
-        var conn = await Open(_connectionFactory, ct);
-        try
-        {
-            await Db.ExecuteAsync(conn, sql, ToItemParams(item), cancellationToken: ct);
-            return item.RepairExitItemId;
-        }
-        finally { await DisposeAsync(conn); }
+        await Db.ExecuteAsync(connection, sql, ToItemParams(item), transaction, ct);
+        return item.RepairExitItemId;
     }
 
     public async Task<RepairExitItem?> GetItemByIdAsync(Guid itemId, CancellationToken ct = default)
@@ -353,20 +368,20 @@ FROM line_repairer_defaults ORDER BY line, tool_type;";
 
     public async Task SetRepairerRepairTypesAsync(Guid repairerId, IEnumerable<string> repairTypes, CancellationToken ct = default)
     {
-        var conn = await Open(_connectionFactory, ct);
-        try
+        var types = repairTypes.Distinct(StringComparer.Ordinal).ToArray();
+        await DapperUnitOfWork.RunAsync<int>(_connectionFactory, async (connection, transaction, token) =>
         {
-            await Db.ExecuteAsync(conn,
+            await Db.ExecuteAsync(connection,
                 "DELETE FROM repairer_repair_types WHERE repairer_id = @RepairerId;",
-                new { RepairerId = repairerId }, cancellationToken: ct);
-            foreach (var type in repairTypes.Distinct(StringComparer.Ordinal))
+                new { RepairerId = repairerId }, transaction, token);
+            foreach (var type in types)
             {
-                await Db.ExecuteAsync(conn, @"
+                await Db.ExecuteAsync(connection, @"
 INSERT INTO repairer_repair_types (repairer_id, repair_type) VALUES (@RepairerId, @Type);",
-                    new { RepairerId = repairerId, Type = type }, cancellationToken: ct);
+                    new { RepairerId = repairerId, Type = type }, transaction, token);
             }
-        }
-        finally { await DisposeAsync(conn); }
+            return 0;
+        }, ct);
     }
 
     public async Task<IReadOnlySet<string>> ListRepairerRepairTypesAsync(Guid repairerId, CancellationToken ct = default)
@@ -387,24 +402,36 @@ INSERT INTO repairer_repair_types (repairer_id, repair_type) VALUES (@RepairerId
         Guid? entityId, string eventType, string? beforeSnapshot, string? afterSnapshot,
         string actorId, CancellationToken ct = default)
     {
+        var conn = await Open(_connectionFactory, ct);
+        try { await InsertAuditEventCoreAsync(conn, null, entityId, eventType, beforeSnapshot, afterSnapshot, actorId, ct); }
+        finally { await DisposeAsync(conn); }
+    }
+
+    public Task InsertAuditEventAsync(
+        IDbUnitOfWork uow, Guid? entityId, string eventType, string? beforeSnapshot,
+        string? afterSnapshot, string actorId, CancellationToken ct = default) =>
+        InsertAuditEventCoreAsync(
+            uow.Connection, uow.Transaction, entityId, eventType,
+            beforeSnapshot, afterSnapshot, actorId, ct);
+
+    private static Task InsertAuditEventCoreAsync(
+        IDbConnection connection, IDbTransaction? transaction, Guid? entityId,
+        string eventType, string? beforeSnapshot, string? afterSnapshot,
+        string actorId, CancellationToken ct)
+    {
         const string sql = @"
 INSERT INTO audit_events (occurred_at_utc, year, actor_user_id, module_id, action_code,
                           entity_type, entity_id, result, before_summary, after_summary)
 VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'reparacao_externa', @Action,
-        'reparacao_externa', @EntityId, 'succeeded', @Before, @After);";
-        var conn = await Open(_connectionFactory, ct);
-        try
+        'reparacao_externa', @EntityId, 'succeeded', @Before::jsonb, @After::jsonb);";
+        return Db.ExecuteAsync(connection, sql, new
         {
-            await Db.ExecuteAsync(conn, sql, new
-            {
-                Actor = actorId,
-                Action = eventType,
-                EntityId = entityId?.ToString(),
-                Before = beforeSnapshot,
-                After = afterSnapshot
-            }, cancellationToken: ct);
-        }
-        finally { await DisposeAsync(conn); }
+            Actor = actorId,
+            Action = eventType,
+            EntityId = entityId?.ToString(),
+            Before = AuditJson.Normalize(beforeSnapshot),
+            After = AuditJson.Normalize(afterSnapshot)
+        }, transaction, ct);
     }
 
     // ---- Mapping / parameter helpers -----------------------------------------

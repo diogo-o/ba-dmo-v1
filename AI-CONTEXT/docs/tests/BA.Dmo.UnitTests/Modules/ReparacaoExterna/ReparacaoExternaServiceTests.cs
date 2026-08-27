@@ -92,6 +92,31 @@ public class ReparacaoExternaServiceTests
     }
 
     [Fact]
+    public async Task CreateExit_UsesOneUnitOfWork_ForExitItemsAndAudits_ThenCommits()
+    {
+        var first = SeedPiece("CM-100", "1", "101");
+        var second = SeedPiece("CM-100", "1", "102");
+
+        var result = await _service.CreateExitAsync(new CreateExitRequest(
+            RepairType.CM, null, new DateOnly(2026, 8, 25),
+            [
+                new NewExitItemRequest(first.PhysicalPieceId, first.Number),
+                new NewExitItemRequest(second.PhysicalPieceId, second.Number)
+            ], null));
+
+        Assert.True(result.IsSuccess);
+        var uow = Assert.IsType<FakeUnitOfWork>(_uowFactory.Last);
+        Assert.True(uow.Committed);
+        Assert.True(uow.Disposed);
+        Assert.Equal(6, _repository.CreateExitWrites.Count);
+        Assert.All(_repository.CreateExitWrites, write => Assert.Same(uow, write.Uow));
+        Assert.Equal(1, _repository.CreateExitWrites.Count(write => write.Kind == "exit"));
+        Assert.Equal(2, _repository.CreateExitWrites.Count(write => write.Kind == "item"));
+        Assert.Equal(3, _repository.CreateExitWrites.Count(write => write.Kind == "audit"));
+        Assert.Equal(3, _repository.AuditEvents.Count);
+    }
+
+    [Fact]
     public async Task CreateExit_ItemAlreadyInOpenExit_IsHardBlocked()
     {
         var piece = SeedPiece();

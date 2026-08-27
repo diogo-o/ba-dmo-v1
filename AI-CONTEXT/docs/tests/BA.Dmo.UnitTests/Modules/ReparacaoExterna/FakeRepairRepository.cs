@@ -21,6 +21,7 @@ public sealed class FakeRepairRepository : IRepairRepository
     public Dictionary<Guid, HashSet<string>> RepairerTypes { get; } = new();
     public List<(Guid? entityId, string eventType, string? before, string? after, string actor)> AuditEvents { get; } = new();
     public List<(string kind, Guid exitItemId)> CoordinatedWrites { get; } = new();
+    public List<(string Kind, IDbUnitOfWork Uow)> CreateExitWrites { get; } = new();
 
     public bool FailItemWrite { get; set; }
 
@@ -30,6 +31,12 @@ public sealed class FakeRepairRepository : IRepairRepository
     {
         Exits.Add(exit);
         return Task.FromResult(exit.RepairExitId);
+    }
+
+    public Task<Guid> CreateExitAsync(IDbUnitOfWork uow, RepairExit exit, RepairerSnapshot? snap, string? snapshotJson, CancellationToken ct = default)
+    {
+        CreateExitWrites.Add(("exit", uow));
+        return CreateExitAsync(exit, snap, snapshotJson, ct);
     }
 
     public Task<RepairExit?> GetExitByIdAsync(Guid repairExitId, CancellationToken ct = default)
@@ -62,6 +69,12 @@ public sealed class FakeRepairRepository : IRepairRepository
         if (FailItemWrite) throw new InvalidOperationException("simulated item write failure");
         Items.Add(item);
         return Task.FromResult(item.RepairExitItemId);
+    }
+
+    public Task<Guid> AddItemAsync(IDbUnitOfWork uow, RepairExitItem item, CancellationToken ct = default)
+    {
+        CreateExitWrites.Add(("item", uow));
+        return AddItemAsync(item, ct);
     }
 
     public Task<RepairExitItem?> GetItemByIdAsync(Guid itemId, CancellationToken ct = default)
@@ -171,6 +184,12 @@ public sealed class FakeRepairRepository : IRepairRepository
     {
         AuditEvents.Add((entityId, eventType, beforeSnapshot, afterSnapshot, actorId));
         return Task.CompletedTask;
+    }
+
+    public Task InsertAuditEventAsync(IDbUnitOfWork uow, Guid? entityId, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken ct = default)
+    {
+        CreateExitWrites.Add(("audit", uow));
+        return InsertAuditEventAsync(entityId, eventType, beforeSnapshot, afterSnapshot, actorId, ct);
     }
 
     private static RepairExitItem Clone(RepairExitItem? item)

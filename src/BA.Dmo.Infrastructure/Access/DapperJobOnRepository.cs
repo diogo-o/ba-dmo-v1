@@ -486,7 +486,7 @@ WHERE job_on_verification_occurrence_id = @OccurrenceId;";
     {
         const string sql = @"
 INSERT INTO job_on_audit_event (job_on_id, job_on_revision_id, event_type, before_snapshot, after_snapshot, actor_id, occurred_at_utc)
-VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot, @AfterSnapshot, @ActorId, @OccurredAtUtc);";
+VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot::jsonb, @AfterSnapshot::jsonb, @ActorId, @OccurredAtUtc);";
 
         var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
         try
@@ -496,8 +496,8 @@ VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot, @AfterSnapshot, @Actor
                 JobId = jobId,
                 RevisionId = (object?)revisionId ?? DBNull.Value,
                 EventType = eventType,
-                BeforeSnapshot = (object?)beforeSnapshot ?? DBNull.Value,
-                AfterSnapshot = (object?)afterSnapshot ?? DBNull.Value,
+                BeforeSnapshot = (object?)AuditJson.Normalize(beforeSnapshot) ?? DBNull.Value,
+                AfterSnapshot = (object?)AuditJson.Normalize(afterSnapshot) ?? DBNull.Value,
                 ActorId = actorId,
                 OccurredAtUtc = DateTime.UtcNow
             }, cancellationToken: cancellationToken);
@@ -577,15 +577,15 @@ UPDATE job_on SET current_revision_id = @RevisionId WHERE job_on_id = @JobOnId;"
             // 3. INSERT audit event
             const string insertAuditSql = @"
 INSERT INTO job_on_audit_event (job_on_id, job_on_revision_id, event_type, before_snapshot, after_snapshot, actor_id, occurred_at_utc)
-VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot, @AfterSnapshot, @ActorId, @OccurredAtUtc);";
+VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot::jsonb, @AfterSnapshot::jsonb, @ActorId, @OccurredAtUtc);";
 
             await Db.ExecuteAsync(connection, insertAuditSql, new
             {
                 JobId = jobOnId,
                 RevisionId = (object?)newRevision.JobOnRevisionId ?? DBNull.Value,
                 EventType = eventType,
-                BeforeSnapshot = (object?)beforeImageAssetId ?? DBNull.Value,
-                AfterSnapshot = (object?)afterImageAssetId ?? DBNull.Value,
+                BeforeSnapshot = (object?)AuditJson.Normalize(beforeImageAssetId) ?? DBNull.Value,
+                AfterSnapshot = (object?)AuditJson.Normalize(afterImageAssetId) ?? DBNull.Value,
                 ActorId = actorId,
                 OccurredAtUtc = DateTime.UtcNow
             }, transaction, ct);
@@ -897,14 +897,14 @@ RETURNING job_on_id;";
     {
         const string sql = @"
 INSERT INTO job_on_audit_event (job_on_id, job_on_revision_id, event_type, before_snapshot, after_snapshot, actor_id, occurred_at_utc)
-VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot, @AfterSnapshot, @ActorId, @OccurredAtUtc);";
+VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot::jsonb, @AfterSnapshot::jsonb, @ActorId, @OccurredAtUtc);";
         await Db.ExecuteAsync(connection, sql, new
         {
             JobId = jobId,
             RevisionId = (object?)revisionId ?? DBNull.Value,
             EventType = eventType,
-            BeforeSnapshot = (object?)beforeSnapshot ?? DBNull.Value,
-            AfterSnapshot = (object?)afterSnapshot ?? DBNull.Value,
+            BeforeSnapshot = (object?)AuditJson.Normalize(beforeSnapshot) ?? DBNull.Value,
+            AfterSnapshot = (object?)AuditJson.Normalize(afterSnapshot) ?? DBNull.Value,
             ActorId = actorId,
             OccurredAtUtc = DateTime.UtcNow
         }, transaction, ct);

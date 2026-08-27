@@ -7,15 +7,15 @@ namespace BA.Dmo.Application.Modules.ReparacaoExterna;
 /// U-15 — Reparação Externa read/write port (N08; GLM-RE, TD-15/TD-22). Owns
 /// Reparação persistence (repairers, line_repairer_defaults, repair_exits,
 /// repair_exit_items, repair_events) ONLY.
-/// Single-table writes self-manage a connection; multi-module coordinated writes
-/// (pickup/return that ALSO move Armazém physical state) participate in the
-/// caller-provided <see cref="IDbUnitOfWork"/> so they commit/roll back atomically
-/// with the Armazém movement (owner decisions B/C).
+/// Single-table writes self-manage a connection. Multi-step create-exit writes and
+/// multi-module pickup/return writes participate in a caller-provided
+/// <see cref="IDbUnitOfWork"/> so each use case commits or rolls back atomically.
 /// </summary>
 public interface IRepairRepository
 {
     // ---- External exit lists (create / hydrate) ----------------------------
     Task<Guid> CreateExitAsync(RepairExit exit, RepairerSnapshot? repairerSnapshot, string? snapshotJson, CancellationToken ct = default);
+    Task<Guid> CreateExitAsync(IDbUnitOfWork uow, RepairExit exit, RepairerSnapshot? repairerSnapshot, string? snapshotJson, CancellationToken ct = default);
     Task<RepairExit?> GetExitByIdAsync(Guid repairExitId, CancellationToken ct = default);
     Task<IReadOnlyList<RepairExitItem>> GetExitItemsAsync(Guid repairExitId, CancellationToken ct = default);
     Task<IReadOnlyList<RepairExit>> ListExitsAsync(
@@ -25,6 +25,7 @@ public interface IRepairRepository
 
     // ---- Exit items ---------------------------------------------------------
     Task<Guid> AddItemAsync(RepairExitItem item, CancellationToken ct = default);
+    Task<Guid> AddItemAsync(IDbUnitOfWork uow, RepairExitItem item, CancellationToken ct = default);
     Task<RepairExitItem?> GetItemByIdAsync(Guid itemId, CancellationToken ct = default);
     Task DeleteItemAsync(Guid itemId, CancellationToken ct = default);
 
@@ -49,4 +50,5 @@ public interface IRepairRepository
 
     // ---- Audit --------------------------------------------------------------
     Task InsertAuditEventAsync(Guid? entityId, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken ct = default);
+    Task InsertAuditEventAsync(IDbUnitOfWork uow, Guid? entityId, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken ct = default);
 }
