@@ -1,25 +1,27 @@
 using BA.Dmo.Application.Modules.Admin;
 using BA.Dmo.Application.Shared.Access;
 using BA.Dmo.Application.Shared.Identity;
+using BA.Dmo.Application.Shared.Persistence;
+using BA.Dmo.Domain.Shared.Access;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace BA.Dmo.Web.Pages.Admin.Templates;
 
 /// <summary>
-/// Template editor (04_ACC §9, GLM-ACC-03): creates/updates access templates
-/// against the canonical catalog. The grants editor shows only canonical
-/// modules; submitted grants are validated server-side by the use case
-/// (unknown modules/capabilities reject the write). Optimistic concurrency
-/// on update; self-lockout protection in the use case.
+/// Template editor: one reusable title/function + exactly one functional profile
+/// + canonical module grants. The module catalog remains the single source of
+/// assignable modules; N31 stores the template-owned functional profile.
 /// </summary>
 public class EditModel : PageModel
 {
     private readonly AdminTemplateService _templates;
+    private readonly TemplateProfileStore _templateProfiles;
 
-    public EditModel(AdminTemplateService templates)
+    public EditModel(AdminTemplateService templates, IDbConnectionFactory connectionFactory)
     {
         _templates = templates;
+        _templateProfiles = new TemplateProfileStore(connectionFactory);
     }
 
     public sealed class GrantLine
@@ -30,15 +32,11 @@ public class EditModel : PageModel
     }
 
     public bool IsNew { get; private set; }
-
     public string TemplateId { get; set; } = string.Empty;
-
     public string Name { get; set; } = string.Empty;
-
+    public string FunctionalProfile { get; set; } = "Operador / Controlador";
     public bool Active { get; set; } = true;
-
     public DateTimeOffset Version { get; set; }
-
     public List<GrantLine> Lines { get; set; } = [];
 
     public async Task<IActionResult> OnGetAsync(string? id)
@@ -64,6 +62,9 @@ public class EditModel : PageModel
         Name = template.Value.Name;
         Active = template.Value.Active;
         Version = template.Value.UpdatedAtUtc;
+        FunctionalProfile = await _templateProfiles.GetAsync(
+            template.Value.TemplateId, HttpContext.RequestAborted)
+            ?? "Operador / Controlador";
 
         var parsed = AccessTemplateGrantsParser.Parse(template.Value.ModulesJson);
         var grants = parsed.IsSuccess
@@ -74,36 +75,97 @@ public class EditModel : PageModel
     }
 
     public async Task<IActionResult> OnPostAsync(
-        string templateId, string name, bool active, string? version, List<GrantLine> lines)
+        string templateId,
+        string name,
+        string functionalProfile,
+        bool active,
+        string? version,
+        List<GrantLine> lines)
     {
         TemplateId = templateId;
         Name = name;
+        FunctionalProfile = functionalProfile;
         Active = active;
         Lines = lines ?? [];
+
+        if (!FunctionalProfileNames.TryParse(functionalProfile, out var profile))
+        {
+            ModelState.AddModelError(string.Empty, "Selecione um perfil funcional válido.");
+            IsNew = string.IsNullOrWhiteSpace(version);
+            EnsureLines();
+            return Page();
+        }
 
         var grants = (lines ?? new List<GrantLine>())
             .Where(l => l.Granted && !string.IsNullOrWhiteSpace(l.ModuleId))
             .Select(l => new TemplateGrantInput(l.ModuleId, Array.Empty<string>()))
             .ToList();
 
+        if (grants.Count == 0)
+        {
+            ModelState.AddModelError(string.Empty, "Selecione pelo menos um módulo para o template.");
+            IsNew = string.IsNullOrWhiteSpace(version);
+            EnsureLines();
+            return Page();
+        }
+
+        var hasAdmin = grants.Any(g => g.ModuleId == CanonicalModuleCatalog.AdminModuleId);
+        if (profile == FunctionalProfile.Admin)
+        {
+            if (!hasAdmin || grants.Any(g => g.ModuleId != CanonicalModuleCatalog.AdminModuleId))
+            {
+                ModelState.AddModelError(
+                    string.Empty,
+                    "O perfil Admin deve usar apenas o módulo Administração.");
+                IsNew = string.IsNullOrWhiteSpace(version);
+                EnsureLines();
+                return Page();
+            }
+        }
+        else if (hasAdmin)
+        {
+            ModelState.AddModelError(
+                string.Empty,
+                "Perfis Operador e Responsável não podem incluir o módulo Administração.");
+            IsNew = string.IsNullOrWhiteSpace(version);
+            EnsureLines();
+            return Page();
+        }
+
         if (string.IsNullOrWhiteSpace(version))
         {
             var created = await _templates.CreateAsync(
                 new CreateTemplateRequest(templateId, name, grants),
                 HttpContext.RequestAborted);
-            return Finish(created.IsFailure ? created.Error.Message : null, isNew: true);
+            if (created.IsFailure)
+                return Finish(created.Error.Message, isNew: true);
+
+            await _templateProfiles.UpsertAsync(
+                created.Value.TemplateId,
+                profile.DisplayName(),
+                HttpContext.RequestAborted);
+            return Finish(null, isNew: true);
         }
 
         if (!DateTimeOffset.TryParse(version, out var expectedVersion))
         {
             ModelState.AddModelError(string.Empty, "Versão de concorrência inválida.");
+            IsNew = false;
+            EnsureLines();
             return Page();
         }
 
         var updated = await _templates.UpdateAsync(
             new UpdateTemplateRequest(templateId, name, grants, active, expectedVersion),
             HttpContext.RequestAborted);
-        return Finish(updated.IsFailure ? updated.Error.Message : null, isNew: false);
+        if (updated.IsFailure)
+            return Finish(updated.Error.Message, isNew: false);
+
+        await _templateProfiles.UpsertAsync(
+            updated.Value.TemplateId,
+            profile.DisplayName(),
+            HttpContext.RequestAborted);
+        return Finish(null, isNew: false);
     }
 
     private IActionResult Finish(string? error, bool isNew)
@@ -112,13 +174,20 @@ public class EditModel : PageModel
         {
             ModelState.AddModelError(string.Empty, error);
             IsNew = isNew;
-            if (isNew && Lines.Count == 0)
-                Lines = CanonicalLines(new Dictionary<string, IReadOnlyList<string>>());
+            EnsureLines();
             return Page();
         }
 
-        TempData["TemplateFeedback"] = isNew ? "Template criado." : "Template guardado.";
+        TempData["TemplateFeedback"] = isNew
+            ? "Template criado. Perfil e módulos ficaram associados ao título."
+            : "Template guardado. Os utilizadores associados assumem esta configuração.";
         return Redirect("/admin/templates");
+    }
+
+    private void EnsureLines()
+    {
+        if (Lines.Count == 0)
+            Lines = CanonicalLines(new Dictionary<string, IReadOnlyList<string>>());
     }
 
     private static List<GrantLine> CanonicalLines(
