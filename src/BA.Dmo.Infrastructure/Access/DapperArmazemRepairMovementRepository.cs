@@ -73,42 +73,53 @@ RETURNING warehouse_stock_id;";
 
         var locationId = await GetOrCreateLocationAsync(uow, WarehouseLocation.NormalizePositionCode(positionCode), "tool", ct);
 
-        // Occupancy 1:1 — an occupied position by another tool cannot be re-occupied.
+        // Serialize on the stable location row before checking active stock. An
+        // empty position has no warehouse_stock row to lock, so locking only the
+        // occupant would leave a TOCTOU gap for concurrent returns.
+        const string lockLocation = @"
+SELECT warehouse_location_id
+FROM warehouse_locations
+WHERE warehouse_location_id = @LocationId
+FOR UPDATE;";
+        await Db.QuerySingleOrDefaultAsync<Guid?>(
+            uow.Connection, lockLocation, new { LocationId = locationId }, uow.Transaction, ct);
+
+        // Occupancy 1:1 — after the location lock is acquired, this read observes
+        // any occupation committed by a return that held the lock immediately
+        // before this transaction.
         const string occupant = @"
 SELECT warehouse_stock_id, tool_lote_id
 FROM warehouse_stock
 WHERE warehouse_location_id = @LocationId AND released_at_utc IS NULL
-ORDER BY occupied_since_utc ASC LIMIT 1;";
+ORDER BY occupied_since_utc ASC
+LIMIT 1
+FOR UPDATE;";
         dynamic? existing = await Db.QuerySingleOrDefaultAsync<dynamic>(
             uow.Connection, occupant, new { LocationId = locationId }, uow.Transaction, ct);
 
-        if (existing is not null && (Guid)existing.tool_lote_id != toolLoteId)
+        if (existing is not null)
             return Result<bool, DomainError>.Failure(DomainError.DomainConflict(
                 "ARMZ_REPAIR_POSITION_OCCUPIED",
-                "A posição de retorno já está ocupada por outra ferramenta."));
+                (Guid)existing.tool_lote_id == toolLoteId
+                    ? "A posição de retorno já contém esta ferramenta."
+                    : "A posição de retorno já está ocupada por outra ferramenta."));
 
-        var stockId = existing is null ? Guid.NewGuid() : (Guid)existing.warehouse_stock_id;
-
-        if (existing is null)
-        {
-            const string occupy = @"
+        var stockId = Guid.NewGuid();
+        const string occupy = @"
 INSERT INTO warehouse_stock
     (warehouse_stock_id, warehouse_location_id, tool_lote_id, occupied_since_utc, occupied_by)
 VALUES
     (@Id, @LocationId, @ToolLoteId, @OccupiedSinceUtc, @OccupiedBy);";
-            await Db.ExecuteAsync(uow.Connection, occupy, new
-            {
-                Id = stockId,
-                LocationId = locationId,
-                ToolLoteId = toolLoteId,
-                OccupiedSinceUtc = inAtUtc,
-                OccupiedBy = (object?)actorId ?? DBNull.Value
-            }, uow.Transaction, ct);
-        }
-        // If the same lot re-occupies, it is already the active occupant at the position
-        // (no release of another tool); nothing more to insert on stock.
+        await Db.ExecuteAsync(uow.Connection, occupy, new
+        {
+            Id = stockId,
+            LocationId = locationId,
+            ToolLoteId = toolLoteId,
+            OccupiedSinceUtc = inAtUtc,
+            OccupiedBy = (object?)actorId ?? DBNull.Value
+        }, uow.Transaction, ct);
 
-        await InsertMovementAsync(uow, stockId, "in", repairExitId, actorId, inAtUtc, ct);
+        await InsertMovementAsync(uow, stockId, "in", repairExitId, actorId!, inAtUtc, ct);
         return Result<bool, DomainError>.Success(true);
     }
 
