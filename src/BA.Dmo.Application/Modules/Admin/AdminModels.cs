@@ -5,46 +5,49 @@ namespace BA.Dmo.Application.Modules.Admin;
 /// the U-02 schema exactly; no permission data is duplicated on users —
 /// grants live only in templates (GLM-ACC-02).
 /// </summary>
-public sealed record AdminUserRow(
-    string ActorId,
-    Guid? AuthUserId,
-    string DisplayName,
-    string? ProfileTitle,
-    string TemplateId,
-    bool Active,
-    DateTimeOffset UpdatedAtUtc,
-    string? AuthEmail = null,
-    string? ModulesOverrideJson = null,
-    string[]? TemplateIds = null)
+public sealed record AdminUserRow
 {
-    // Dapper/Npgsql materializes the current PostgreSQL projection as Guid,
-    // DateTime and System.Array. Keep the application-facing model strongly
-    // typed while providing an exact persistence constructor for that runtime
-    // signature, then normalize the values here.
+    // Parameterless constructor lets Dapper use property-based materialization
+    // for the PostgreSQL projection. This avoids brittle constructor matching
+    // against provider runtime types such as System.Array.
+    public AdminUserRow()
+    {
+    }
+
     public AdminUserRow(
         string actorId,
-        Guid authUserId,
+        Guid? authUserId,
         string displayName,
         string? profileTitle,
         string templateId,
         bool active,
-        DateTime updatedAtUtc,
-        string? authEmail,
-        string? modulesOverrideJson,
-        Array templateIds)
-        : this(
-            actorId,
-            (Guid?)authUserId,
-            displayName,
-            profileTitle,
-            templateId,
-            active,
-            new DateTimeOffset(DateTime.SpecifyKind(updatedAtUtc, DateTimeKind.Utc)),
-            authEmail,
-            modulesOverrideJson,
-            templateIds.Cast<string>().ToArray())
+        DateTimeOffset updatedAtUtc,
+        string? authEmail = null,
+        string? modulesOverrideJson = null,
+        string[]? templateIds = null)
     {
+        ActorId = actorId;
+        AuthUserId = authUserId;
+        DisplayName = displayName;
+        ProfileTitle = profileTitle;
+        TemplateId = templateId;
+        Active = active;
+        UpdatedAtUtc = updatedAtUtc;
+        AuthEmail = authEmail;
+        ModulesOverrideJson = modulesOverrideJson;
+        TemplateIds = templateIds;
     }
+
+    public string ActorId { get; set; } = string.Empty;
+    public Guid? AuthUserId { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
+    public string? ProfileTitle { get; set; }
+    public string TemplateId { get; set; } = string.Empty;
+    public bool Active { get; set; }
+    public DateTimeOffset UpdatedAtUtc { get; set; }
+    public string? AuthEmail { get; set; }
+    public string? ModulesOverrideJson { get; set; }
+    public string[]? TemplateIds { get; set; }
 
     public IReadOnlyList<string> AssignedTemplateIds =>
         TemplateIds is { Length: > 0 } ? TemplateIds : [TemplateId];
