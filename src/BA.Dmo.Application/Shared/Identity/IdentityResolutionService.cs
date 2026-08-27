@@ -18,18 +18,10 @@ public sealed record ResolvedIdentity(
     FirstPageResolution FirstPage);
 
 /// <summary>
-/// Server-side identity resolution pipeline (Plan-V3 GLM-ACC-01, U-05):
-/// authenticated Supabase auth_user_id → internal_users → access template →
-/// normalized grants → U-04 AccessResolver → CurrentUser/effective access.
-/// Fail-closed: missing/inactive internal user → INTERNAL_USER_INACTIVE;
-/// missing/inactive template → ACCESS_TEMPLATE_INACTIVE; invalid profile →
-/// FUNCTIONAL_PROFILE_INVALID; all produce the
-/// safe "session without access" state — never an Admin fallback, never a
-/// silent grant (GLM-ARCH-18).
-/// The service is request-scoped: results are memoized for the lifetime of
-/// ONE request only, so concurrent consumers of the same request (page
-/// guard, shell, authorship) resolve once; every subsequent request
-/// re-resolves against the repository (GLM-ACC-08 re-resolution).
+/// Server-side identity resolution pipeline. The final access model is one
+/// reusable template per user: template title/function + exactly one functional
+/// profile + canonical module grants. Any legacy hybrid assignment fails closed
+/// rather than merging Admin/Operador/Responsável access surfaces.
 /// </summary>
 public sealed class IdentityResolutionService
 {
@@ -74,11 +66,6 @@ public sealed class IdentityResolutionService
         }
         catch (AmbiguousIdentityException)
         {
-            // HI-2: duplicate internal rows for one auth_user_id is a
-            // data-integrity condition, NOT a backend outage. Fail closed
-            // with a distinct code (plain /no-access, never
-            // indisponivel=1) so the diagnosis points at the data, not at a
-            // healthy database.
             return Result<ResolvedIdentity, DomainError>.Failure(
                 DomainError.Unauthorized(
                     "IDENTITY_AMBIGUOUS",
@@ -86,7 +73,6 @@ public sealed class IdentityResolutionService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // Fail closed on backend failure: no identity, no access.
             return Result<ResolvedIdentity, DomainError>.Failure(
                 DomainError.BackendUnavailable(
                     "IDENTITY_RESOLUTION_UNAVAILABLE",
@@ -110,12 +96,21 @@ public sealed class IdentityResolutionService
                     record.ModulesJson)
             ];
 
-        var activeTemplates = associatedTemplates.Where(template => template.TemplateActive).ToList();
+        var activeTemplates = associatedTemplates
+            .Where(template => template.TemplateActive)
+            .ToList();
+
         if (activeTemplates.Count == 0)
             return Result<ResolvedIdentity, DomainError>.Failure(
                 DomainError.Unauthorized(
                     "ACCESS_TEMPLATE_INACTIVE",
                     "The access template is missing or inactive."));
+
+        if (activeTemplates.Count != 1)
+            return Result<ResolvedIdentity, DomainError>.Failure(
+                DomainError.Unauthorized(
+                    "ACCESS_TEMPLATE_AMBIGUOUS",
+                    "O utilizador tem mais do que um template ativo associado. Corrija a configuração na Administração."));
 
         if (!FunctionalProfileNames.TryParse(record.ProfileTitle, out var profile))
             return Result<ResolvedIdentity, DomainError>.Failure(
@@ -123,26 +118,21 @@ public sealed class IdentityResolutionService
                     "FUNCTIONAL_PROFILE_INVALID",
                     "The internal user has no valid functional profile."));
 
-        // modules_override is retained as dormant legacy data. Every active
-        // associated template passes through the same parser and resolver.
-        var templates = new List<AccessTemplateDefinition>();
-        foreach (var associated in activeTemplates)
-        {
-            var parsed = AccessTemplateGrantsParser.Parse(associated.ModulesJson);
-            if (parsed.IsFailure)
-                return Result<ResolvedIdentity, DomainError>.Failure(
-                    DomainError.Unauthorized(
-                        "ACCESS_TEMPLATE_INACTIVE",
-                        "The access grants cannot grant access."));
+        var effectiveTemplate = activeTemplates[0];
+        var parsed = AccessTemplateGrantsParser.Parse(effectiveTemplate.ModulesJson);
+        if (parsed.IsFailure)
+            return Result<ResolvedIdentity, DomainError>.Failure(
+                DomainError.Unauthorized(
+                    "ACCESS_TEMPLATE_INACTIVE",
+                    "The access grants cannot grant access."));
 
-            templates.Add(new AccessTemplateDefinition(
-                associated.TemplateId,
-                associated.TemplateName,
-                active: true,
-                parsed.Value));
-        }
+        var template = new AccessTemplateDefinition(
+            effectiveTemplate.TemplateId,
+            effectiveTemplate.TemplateName,
+            active: true,
+            parsed.Value);
 
-        var access = _accessResolver.Resolve(templates, profile);
+        var access = _accessResolver.Resolve([template], profile);
         var firstPage = _accessResolver.ResolveFirstPage(access);
 
         var currentUser = new CurrentUser(
@@ -154,7 +144,7 @@ public sealed class IdentityResolutionService
         return Result<ResolvedIdentity, DomainError>.Success(new ResolvedIdentity(
             currentUser,
             record.ActorId,
-            profile.DisplayName(),
+            effectiveTemplate.TemplateName,
             access,
             firstPage));
     }
