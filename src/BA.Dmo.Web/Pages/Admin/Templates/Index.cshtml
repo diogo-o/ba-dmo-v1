@@ -8,7 +8,7 @@
 <div class="dmo-page-head">
     <div>
         <h2>Templates de acesso</h2>
-        <p>Os grants são validados contra o catálogo canónico; entradas desconhecidas são rejeitadas.</p>
+        <p>Crie títulos reutilizáveis com um perfil funcional e os módulos certos. Depois basta associar o template ao utilizador.</p>
     </div>
     <a class="dmo-button" href="/admin/templates/edit">Criar template</a>
 </div>
@@ -29,7 +29,8 @@
         <table class="dmo-table">
             <thead>
                 <tr>
-                    <th>Nome</th>
+                    <th>Título / Função</th>
+                    <th>Perfil</th>
                     <th>Identificador</th>
                     <th>Estado</th>
                 </tr>
@@ -38,7 +39,7 @@
                 @if (Model.Templates.Count == 0)
                 {
                     <tr>
-                        <td colspan="3" class="empty">Sem templates. <a href="/admin/templates/edit">Criar template</a></td>
+                        <td colspan="4" class="empty">Sem templates. <a href="/admin/templates/edit">Criar template</a></td>
                     </tr>
                 }
                 @foreach (var template in Model.Templates)
@@ -48,6 +49,7 @@
                         data-open-url="/admin/templates/edit?id=@Uri.EscapeDataString(template.TemplateId)"
                         aria-selected="false">
                         <td><strong>@template.Name</strong></td>
+                        <td>@Model.ProfileFor(template.TemplateId)</td>
                         <td>@template.TemplateId</td>
                         <td>
                             <span class="@(template.Active ? "dmo-pill active" : "dmo-pill inactive")">
