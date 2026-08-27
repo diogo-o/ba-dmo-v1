@@ -8,7 +8,7 @@
 <div class="dmo-page-head">
     <div>
         <h2>Utilizadores</h2>
-        <p>Gerir identidade, título/função do perfil, acessos e estado.</p>
+        <p>Cada utilizador recebe um template reutilizável que define título/função, perfil e módulos.</p>
     </div>
     <a class="dmo-button" href="/admin/users/create">Criar utilizador</a>
 </div>
@@ -32,7 +32,7 @@ else
     <form method="get" class="dmo-toolbar dmo-card">
         <div class="dmo-field search">
             <label for="q">Pesquisar</label>
-            <input id="q" name="q" type="text" value="@Model.Search" placeholder="Nome, email ou texto do cabeçalho" />
+            <input id="q" name="q" type="text" value="@Model.Search" placeholder="Nome, email, título ou perfil" />
         </div>
         <div class="dmo-field">
             <label for="stateFilter">Estado</label>
@@ -44,11 +44,6 @@ else
         </div>
         <button type="submit" class="dmo-button">Pesquisar</button>
     </form>
-    @* External selection toolbar (shared pattern, contract §3): lives BETWEEN the
-       filters card and the table card, OUTSIDE the table. Buttons/links are
-       disabled until a row is selected; the shared JS substitutes {id} in
-       data-dmo-url and syncs data-dmo-row-id-input before submitting the hidden
-       reset form. *@
     <div class="dmo-selection-toolbar" data-dmo-toolbar-for="userRows">
         <a class="dmo-button" href="#"
            data-dmo-act="open"
@@ -75,9 +70,9 @@ else
                         <th>Nome</th>
                         <th>Email</th>
                         <th>Título / função</th>
-                        <th>Template</th>
+                        <th>Perfil</th>
                         <th>Estado</th>
-                        <th>Último acesso</th>
+                        <th>Atualizado</th>
                     </tr>
                 </thead>
                 <tbody id="userRows" data-dmo-list role="listbox">
@@ -99,8 +94,8 @@ else
                                     @user.AuthEmail
                                 }
                             </td>
+                            <td><strong>@Model.TemplateTitleFor(user)</strong></td>
                             <td>@(string.IsNullOrWhiteSpace(user.ProfileTitle) ? "—" : user.ProfileTitle)</td>
-                            <td>@string.Join(", ", user.AssignedTemplateIds)</td>
                             <td>
                                 <span class="@(user.Active ? "dmo-pill active" : "dmo-pill inactive")">
                                     @(user.Active ? "Ativo" : "Inativo")
