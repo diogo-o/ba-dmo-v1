@@ -17,6 +17,35 @@ public sealed record AdminUserRow(
     string? ModulesOverrideJson = null,
     string[]? TemplateIds = null)
 {
+    // Dapper/Npgsql materializes the current PostgreSQL projection as Guid,
+    // DateTime and System.Array. Keep the application-facing model strongly
+    // typed while providing an exact persistence constructor for that runtime
+    // signature, then normalize the values here.
+    public AdminUserRow(
+        string actorId,
+        Guid authUserId,
+        string displayName,
+        string? profileTitle,
+        string templateId,
+        bool active,
+        DateTime updatedAtUtc,
+        string? authEmail,
+        string? modulesOverrideJson,
+        Array templateIds)
+        : this(
+            actorId,
+            (Guid?)authUserId,
+            displayName,
+            profileTitle,
+            templateId,
+            active,
+            new DateTimeOffset(DateTime.SpecifyKind(updatedAtUtc, DateTimeKind.Utc)),
+            authEmail,
+            modulesOverrideJson,
+            templateIds.Cast<string>().ToArray())
+    {
+    }
+
     public IReadOnlyList<string> AssignedTemplateIds =>
         TemplateIds is { Length: > 0 } ? TemplateIds : [TemplateId];
 }
