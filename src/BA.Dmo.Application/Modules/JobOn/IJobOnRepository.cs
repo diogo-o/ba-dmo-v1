@@ -20,8 +20,15 @@ public interface IJobOnRepository
     /// <summary>Get by production code.</summary>
     Task<Domain.Modules.JobOn.JobOn?> GetByProductionCodeAsync(string productionCode, CancellationToken cancellationToken = default);
 
-    /// <summary>Update lifecycle state (with validation).</summary>
-    Task UpdateLifecycleStateAsync(Guid id, JobOnLifecycleState newState, string actorId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Atomically persists the complete Domain-owned lifecycle state and its
+    /// transition audit event. Status and terminal timestamps are never written
+    /// independently.
+    /// </summary>
+    Task TransitionLifecycleAsync(
+        Domain.Modules.JobOn.JobOn jobOn,
+        string actorId,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Insert a new revision (TD-18 immutable snapshots).</summary>
     Task InsertRevisionAsync(JobOnRevision revision, CancellationToken cancellationToken = default);

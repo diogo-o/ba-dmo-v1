@@ -152,17 +152,20 @@ public sealed class JobOn
         // Validate transitions
         switch (newState)
         {
+            case JobOnLifecycleState.Rascunho:
+                throw new Exception("A Job On cannot transition back to rascunho.");
+
             case JobOnLifecycleState.Planeado when fromState != JobOnLifecycleState.Rascunho:
                 throw new Exception("Only rascunho can transition to planeado.");
             
             case JobOnLifecycleState.EmFabrico when fromState != JobOnLifecycleState.Planeado:
                 throw new Exception("Only planeado can transition to em fabrico.");
             
-            case JobOnLifecycleState.Fechado when fromState != JobOnLifecycleState.EmFabrico:
-                throw new Exception("Only em fabrico can transition to fechado.");
-            
-            case JobOnLifecycleState.Cancelado when fromState is not (JobOnLifecycleState.Rascunho or JobOnLifecycleState.Planeado):
-                throw new Exception("Only rascunho/planeado can be cancelled.");
+            case JobOnLifecycleState.Fechado:
+                throw new Exception("Use Close to transition to fechado.");
+
+            case JobOnLifecycleState.Cancelado:
+                throw new Exception("Use Cancel to transition to cancelado.");
         }
 
         LifecycleState = newState;

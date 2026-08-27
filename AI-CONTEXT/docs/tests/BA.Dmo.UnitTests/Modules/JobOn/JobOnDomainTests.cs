@@ -43,16 +43,16 @@ public class JobOnDomainTests
     }
 
     [Fact]
-    public void Transition_EmFabricoToFechado_IsValid()
+    public void TransitionTo_EmFabricoToFechado_RequiresTimestampedCloseOperation()
     {
         var jobOn = NewJobOn();
         jobOn.TransitionTo(JobOnLifecycleState.Planeado);
         jobOn.TransitionTo(JobOnLifecycleState.EmFabrico);
 
-        jobOn.TransitionTo(JobOnLifecycleState.Fechado);
+        Assert.Throws<Exception>(() => jobOn.TransitionTo(JobOnLifecycleState.Fechado));
 
-        Assert.Equal(JobOnLifecycleState.Fechado, jobOn.LifecycleState);
-        Assert.False(jobOn.IsActive);
+        Assert.Equal(JobOnLifecycleState.EmFabrico, jobOn.LifecycleState);
+        Assert.Null(jobOn.ClosedAtUtc);
     }
 
     [Theory]
@@ -73,6 +73,21 @@ public class JobOnDomainTests
         jobOn.TransitionTo(JobOnLifecycleState.Planeado);
 
         Assert.Throws<Exception>(() => jobOn.TransitionTo(JobOnLifecycleState.Fechado));
+    }
+
+    [Fact]
+    public void Transition_TerminalStateBackToRascunho_ThrowsWithoutChangingLifecycleFacts()
+    {
+        var jobOn = NewJobOn();
+        jobOn.TransitionTo(JobOnLifecycleState.Planeado);
+        jobOn.TransitionTo(JobOnLifecycleState.EmFabrico);
+        var closedAt = new DateTime(2026, 8, 17, 18, 0, 0, DateTimeKind.Utc);
+        jobOn.Close(closedAt);
+
+        Assert.Throws<Exception>(() => jobOn.TransitionTo(JobOnLifecycleState.Rascunho));
+        Assert.Equal(JobOnLifecycleState.Fechado, jobOn.LifecycleState);
+        Assert.Equal(closedAt, jobOn.ClosedAtUtc);
+        Assert.Null(jobOn.CancelledAtUtc);
     }
 
     [Fact]

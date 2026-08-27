@@ -210,7 +210,7 @@ public class JobOnLandingTests : IClassFixture<JobOnLandingTests.LandingFixture>
             public Task<IReadOnlyList<JobOn>> GetActiveAsync(string machineCode, DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default) =>
                 Task.FromResult<IReadOnlyList<JobOn>>(Array.Empty<JobOn>());
             public Task<JobOn?> GetByProductionCodeAsync(string productionCode, CancellationToken cancellationToken = default) => Task.FromResult<JobOn?>(null);
-            public Task UpdateLifecycleStateAsync(Guid id, JobOnLifecycleState newState, string actorId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+            public Task TransitionLifecycleAsync(BA.Dmo.Domain.Modules.JobOn.JobOn jobOn, string actorId, CancellationToken cancellationToken = default) => Task.CompletedTask;
             public Task InsertRevisionAsync(JobOnRevision revision, CancellationToken cancellationToken = default) => Task.CompletedTask;
             public Task<IReadOnlyList<JobOnRevision>> GetRevisionsAsync(Guid jobOnId, CancellationToken cancellationToken = default) =>
                 Task.FromResult<IReadOnlyList<JobOnRevision>>(Array.Empty<JobOnRevision>());

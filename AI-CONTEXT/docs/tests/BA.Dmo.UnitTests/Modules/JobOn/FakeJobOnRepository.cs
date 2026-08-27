@@ -62,11 +62,13 @@ public sealed class FakeJobOnRepository : IJobOnRepository
         return Task.FromResult(stored is null ? null : Reconstruct(stored));
     }
 
-    public Task UpdateLifecycleStateAsync(Guid id, JobOnLifecycleState newState, string actorId, CancellationToken cancellationToken = default)
+    public Task TransitionLifecycleAsync(JobOnEntity jobOn, string actorId, CancellationToken cancellationToken = default)
     {
-        LifecycleUpdates.Add(newState);
-        if (JobOns.TryGetValue(id, out var jobOn))
-            jobOn.TransitionTo(newState);
+        LifecycleUpdates.Add(jobOn.LifecycleState);
+        JobOns[jobOn.Id] = jobOn;
+        AuditEvents.Add((
+            jobOn.Id, null, "jobon.transicao", null,
+            jobOn.LifecycleState.ToString(), actorId));
         return Task.CompletedTask;
     }
 

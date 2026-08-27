@@ -220,7 +220,7 @@ public class JobOnImageWebApiTests : IClassFixture<JobOnImageWebApiTests.ImageFi
         public Task<Guid> CreateAsync(Domain.Modules.JobOn.JobOn jobOn, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<Domain.Modules.JobOn.JobOn>> GetActiveAsync(string machineCode, DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<Domain.Modules.JobOn.JobOn>>(Array.Empty<Domain.Modules.JobOn.JobOn>());
         public Task<Domain.Modules.JobOn.JobOn?> GetByProductionCodeAsync(string productionCode, CancellationToken cancellationToken = default) => Task.FromResult<Domain.Modules.JobOn.JobOn?>(null);
-        public Task UpdateLifecycleStateAsync(Guid id, JobOnLifecycleState newState, string actorId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task TransitionLifecycleAsync(BA.Dmo.Domain.Modules.JobOn.JobOn jobOn, string actorId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task InsertRevisionAsync(JobOnRevision revision, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<JobOnRevision>> GetRevisionsAsync(Guid jobOnId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<JobOnRevision>>(_jobOn.Revisions);
         public Task InsertComponentsAsync(IEnumerable<JobOnComponent> components, CancellationToken cancellationToken = default) => throw new NotSupportedException();

@@ -298,19 +298,61 @@ public class JobOnServiceTests
         Assert.True(result.IsSuccess);
         Assert.Equal(JobOnLifecycleState.Planeado, result.Value);
         Assert.Contains(_repository.LifecycleUpdates, s => s == JobOnLifecycleState.Planeado);
-        Assert.Contains(_repository.AuditEvents, a => a.EventType == "jobon.transicao");
+        var stored = _repository.JobOns[jobOnId];
+        Assert.Null(stored.ClosedAtUtc);
+        Assert.Null(stored.CancelledAtUtc);
+        Assert.Single(_repository.AuditEvents, a => a.EventType == "jobon.transicao");
+    }
+
+    [Fact]
+    public async Task Transition_ToFechado_PersistsDomainCloseTimestamp_AndAudits()
+    {
+        var jobOnId = await SeedRascunho();
+        await _service.TransitionAsync(new TransitionJobOnRequest(jobOnId, JobOnLifecycleState.Planeado));
+        await _service.TransitionAsync(new TransitionJobOnRequest(jobOnId, JobOnLifecycleState.EmFabrico));
+
+        var result = await _service.TransitionAsync(
+            new TransitionJobOnRequest(jobOnId, JobOnLifecycleState.Fechado));
+
+        Assert.True(result.IsSuccess);
+        var stored = _repository.JobOns[jobOnId];
+        Assert.Equal(JobOnLifecycleState.Fechado, stored.LifecycleState);
+        Assert.Equal(new DateTime(2026, 8, 17, 18, 0, 0, DateTimeKind.Utc), stored.ClosedAtUtc);
+        Assert.Null(stored.CancelledAtUtc);
+        Assert.Equal(3, _repository.AuditEvents.Count(a => a.EventType == "jobon.transicao"));
+    }
+
+    [Fact]
+    public async Task Transition_ToCancelado_PersistsDomainCancelFields_AndAudits()
+    {
+        var jobOnId = await SeedRascunho();
+
+        var result = await _service.TransitionAsync(new TransitionJobOnRequest(
+            jobOnId, JobOnLifecycleState.Cancelado, "Ordem anulada"));
+
+        Assert.True(result.IsSuccess);
+        var stored = _repository.JobOns[jobOnId];
+        Assert.Equal(JobOnLifecycleState.Cancelado, stored.LifecycleState);
+        Assert.Null(stored.ClosedAtUtc);
+        Assert.Equal(new DateTime(2026, 8, 17, 18, 0, 0, DateTimeKind.Utc), stored.CancelledAtUtc);
+        Assert.Equal("aaaaaaaa-0000-0000-0000-000000000001", stored.CancelledBy);
+        Assert.Equal("Ordem anulada", stored.CancelReason);
+        Assert.Single(_repository.AuditEvents, a => a.EventType == "jobon.transicao");
     }
 
     [Fact]
     public async Task Transition_Invalid_ReturnsDomainConflict()
     {
         var jobOnId = await SeedRascunho();
+        var auditCountBefore = _repository.AuditEvents.Count;
 
         var result = await _service.TransitionAsync(new TransitionJobOnRequest(jobOnId, JobOnLifecycleState.Fechado));
 
         Assert.True(result.IsFailure);
         Assert.Equal(ErrorCategory.DomainConflict, result.Error.Category);
         Assert.Empty(_repository.LifecycleUpdates);
+        Assert.Equal(JobOnLifecycleState.Rascunho, _repository.JobOns[jobOnId].LifecycleState);
+        Assert.Equal(auditCountBefore, _repository.AuditEvents.Count);
     }
 
     // ---- resolve (TD-27) --------------------------------------------------

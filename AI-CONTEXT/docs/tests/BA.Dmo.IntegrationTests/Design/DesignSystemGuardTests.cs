@@ -510,7 +510,7 @@ public class DesignSystemGuardTests : IClassFixture<DesignSystemGuardTests.Desig
         public Task<Domain.Modules.JobOn.JobOn?> GetByProductionCodeAsync(string productionCode, CancellationToken cancellationToken = default) =>
             Task.FromResult<Domain.Modules.JobOn.JobOn?>(null);
 
-        public Task UpdateLifecycleStateAsync(Guid id, JobOnLifecycleState newState, string actorId, CancellationToken cancellationToken = default) =>
+        public Task TransitionLifecycleAsync(BA.Dmo.Domain.Modules.JobOn.JobOn jobOn, string actorId, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
 
         public Task InsertRevisionAsync(JobOnRevision revision, CancellationToken cancellationToken = default) =>

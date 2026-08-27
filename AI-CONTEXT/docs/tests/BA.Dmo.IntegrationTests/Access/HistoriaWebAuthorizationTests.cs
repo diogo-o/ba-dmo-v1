@@ -329,7 +329,7 @@ public class HistoriaWebAuthorizationTests :
         public Task<JobOn?> GetByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult<JobOn?>(null);
         public Task<IReadOnlyList<JobOn>> GetActiveAsync(string machineCode, DateTime? from = null, DateTime? to = null, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<JobOn>>(Array.Empty<JobOn>());
         public Task<JobOn?> GetByProductionCodeAsync(string productionCode, CancellationToken ct = default) => Task.FromResult<JobOn?>(null);
-        public Task UpdateLifecycleStateAsync(Guid id, JobOnLifecycleState newState, string actorId, CancellationToken ct = default) => Task.CompletedTask;
+        public Task TransitionLifecycleAsync(BA.Dmo.Domain.Modules.JobOn.JobOn jobOn, string actorId, CancellationToken ct = default) => Task.CompletedTask;
         public Task InsertRevisionAsync(JobOnRevision revision, CancellationToken ct = default) => Task.CompletedTask;
         public Task<IReadOnlyList<JobOnRevision>> GetRevisionsAsync(Guid jobOnId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<JobOnRevision>>(Array.Empty<JobOnRevision>());
         public Task InsertComponentsAsync(IEnumerable<JobOnComponent> components, CancellationToken ct = default) => Task.CompletedTask;

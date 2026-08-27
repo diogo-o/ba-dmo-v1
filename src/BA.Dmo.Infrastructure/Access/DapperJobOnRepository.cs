@@ -180,19 +180,35 @@ WHERE production_code = @ProductionCode;";
         }
     }
 
-    public async Task UpdateLifecycleStateAsync(Guid id, JobOnLifecycleState newState, string actorId, CancellationToken cancellationToken = default)
+    public async Task TransitionLifecycleAsync(
+        JobOn jobOn, string actorId, CancellationToken cancellationToken = default)
     {
-        const string sql = @"UPDATE job_on SET status = @NewState WHERE job_on_id = @Id;";
-        
-        var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
-        try
+        const string updateSql = @"
+UPDATE job_on
+SET status = @Status,
+    closed_at_utc = @ClosedAtUtc,
+    canceled_at_utc = @CanceledAtUtc,
+    canceled_by = @CanceledBy,
+    cancel_reason = @CancelReason
+WHERE job_on_id = @Id;";
+
+        await DapperUnitOfWork.RunAsync<int>(_connectionFactory, async (connection, transaction, ct) =>
         {
-            await Db.ExecuteAsync(connection, sql, new { NewState = JobOnLifecycleStateCodec.ToStorage(newState), Id = id }, cancellationToken: cancellationToken);
-        }
-        finally
-        {
-            await DisposeAsync(connection);
-        }
+            await Db.ExecuteAsync(connection, updateSql, new
+            {
+                Id = jobOn.Id,
+                Status = JobOnLifecycleStateCodec.ToStorage(jobOn.LifecycleState),
+                ClosedAtUtc = (object?)jobOn.ClosedAtUtc ?? DBNull.Value,
+                CanceledAtUtc = (object?)jobOn.CancelledAtUtc ?? DBNull.Value,
+                CanceledBy = (object?)jobOn.CancelledBy ?? DBNull.Value,
+                CancelReason = (object?)jobOn.CancelReason ?? DBNull.Value
+            }, transaction, ct);
+
+            await InsertAuditEventCoreAsync(
+                connection, transaction, jobOn.Id, null, "jobon.transicao", null,
+                jobOn.LifecycleState.ToString(), actorId, ct);
+            return 0;
+        }, cancellationToken);
     }
 
     public async Task InsertRevisionAsync(JobOnRevision revision, CancellationToken cancellationToken = default)
@@ -484,28 +500,44 @@ WHERE job_on_verification_occurrence_id = @OccurrenceId;";
 
     public async Task InsertAuditEventAsync(Guid jobId, Guid? revisionId, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken cancellationToken = default)
     {
-        const string sql = @"
-INSERT INTO job_on_audit_event (job_on_id, job_on_revision_id, event_type, before_snapshot, after_snapshot, actor_id, occurred_at_utc)
-VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot::jsonb, @AfterSnapshot::jsonb, @ActorId, @OccurredAtUtc);";
-
         var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
         try
         {
-            await Db.ExecuteAsync(connection, sql, new
-            {
-                JobId = jobId,
-                RevisionId = (object?)revisionId ?? DBNull.Value,
-                EventType = eventType,
-                BeforeSnapshot = (object?)AuditJson.Normalize(beforeSnapshot) ?? DBNull.Value,
-                AfterSnapshot = (object?)AuditJson.Normalize(afterSnapshot) ?? DBNull.Value,
-                ActorId = actorId,
-                OccurredAtUtc = DateTime.UtcNow
-            }, cancellationToken: cancellationToken);
+            await InsertAuditEventCoreAsync(
+                connection, null, jobId, revisionId, eventType, beforeSnapshot,
+                afterSnapshot, actorId, cancellationToken);
         }
         finally
         {
             await DisposeAsync(connection);
         }
+    }
+
+    private static Task InsertAuditEventCoreAsync(
+        IDbConnection connection,
+        IDbTransaction? transaction,
+        Guid jobId,
+        Guid? revisionId,
+        string eventType,
+        string? beforeSnapshot,
+        string? afterSnapshot,
+        string actorId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+INSERT INTO job_on_audit_event (job_on_id, job_on_revision_id, event_type, before_snapshot, after_snapshot, actor_id, occurred_at_utc)
+VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot::jsonb, @AfterSnapshot::jsonb, @ActorId, @OccurredAtUtc);";
+
+        return Db.ExecuteAsync(connection, sql, new
+        {
+            JobId = jobId,
+            RevisionId = (object?)revisionId ?? DBNull.Value,
+            EventType = eventType,
+            BeforeSnapshot = (object?)AuditJson.Normalize(beforeSnapshot) ?? DBNull.Value,
+            AfterSnapshot = (object?)AuditJson.Normalize(afterSnapshot) ?? DBNull.Value,
+            ActorId = actorId,
+            OccurredAtUtc = DateTime.UtcNow
+        }, transaction, cancellationToken);
     }
 
     /// <summary>
@@ -882,32 +914,6 @@ RETURNING job_on_id;";
     {
         const string sql = @"UPDATE job_on SET current_revision_id = @RevisionId WHERE job_on_id = @JobOnId;";
         return await Db.ExecuteAsync(connection, sql, new { RevisionId = revisionId, JobOnId = jobOnId }, transaction, ct);
-    }
-
-    private static async Task InsertAuditEventCoreAsync(
-        System.Data.IDbConnection connection,
-        System.Data.IDbTransaction transaction,
-        Guid jobId,
-        Guid? revisionId,
-        string eventType,
-        string? beforeSnapshot,
-        string? afterSnapshot,
-        string actorId,
-        CancellationToken ct)
-    {
-        const string sql = @"
-INSERT INTO job_on_audit_event (job_on_id, job_on_revision_id, event_type, before_snapshot, after_snapshot, actor_id, occurred_at_utc)
-VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot::jsonb, @AfterSnapshot::jsonb, @ActorId, @OccurredAtUtc);";
-        await Db.ExecuteAsync(connection, sql, new
-        {
-            JobId = jobId,
-            RevisionId = (object?)revisionId ?? DBNull.Value,
-            EventType = eventType,
-            BeforeSnapshot = (object?)AuditJson.Normalize(beforeSnapshot) ?? DBNull.Value,
-            AfterSnapshot = (object?)AuditJson.Normalize(afterSnapshot) ?? DBNull.Value,
-            ActorId = actorId,
-            OccurredAtUtc = DateTime.UtcNow
-        }, transaction, ct);
     }
 
     public async Task<IReadOnlyList<HistoricalProductionSummary>> GetHistoricalProductionsAsync(string? referenceFilter, string? machineFilter, DateTime? from, DateTime? to, CancellationToken cancellationToken = default)

@@ -35,7 +35,8 @@ public sealed record SaveJobOnRevisionRequest(
 /// <summary>Transition the lifecycle state (TD-27).</summary>
 public sealed record TransitionJobOnRequest(
     Guid JobOnId,
-    JobOnLifecycleState NewState);
+    JobOnLifecycleState NewState,
+    string? CancelReason = null);
 
 /// <summary>Associate an image with the current Article/Reference.</summary>
 public sealed record AttachImageRequest(
@@ -244,7 +245,19 @@ public sealed class JobOnService
 
         try
         {
-            jobOn.TransitionTo(request.NewState);
+            var now = _clock.UtcNow.UtcDateTime;
+            switch (request.NewState)
+            {
+                case JobOnLifecycleState.Fechado:
+                    jobOn.Close(now);
+                    break;
+                case JobOnLifecycleState.Cancelado:
+                    jobOn.Cancel(request.CancelReason ?? string.Empty, gate.Value.ActorId, now);
+                    break;
+                default:
+                    jobOn.TransitionTo(request.NewState);
+                    break;
+            }
         }
         catch (Exception ex)
         {
@@ -252,10 +265,8 @@ public sealed class JobOnService
                 "JOBON_INVALID_TRANSITION", ex.Message));
         }
 
-        await _repository.UpdateLifecycleStateAsync(
-            jobOn.Id, jobOn.LifecycleState, gate.Value.ActorId, cancellationToken);
-        await _repository.InsertAuditEventAsync(
-            jobOn.Id, null, "jobon.transicao", null, jobOn.LifecycleState.ToString(), gate.Value.ActorId, cancellationToken);
+        await _repository.TransitionLifecycleAsync(
+            jobOn, gate.Value.ActorId, cancellationToken);
         return Result<JobOnLifecycleState, DomainError>.Success(jobOn.LifecycleState);
     }
 
