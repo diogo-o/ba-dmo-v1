@@ -1,13 +1,23 @@
 @{
-    // Admin sub-navigation (reference admin-nav composition, owner override):
-    // exactly three areas — Utilizadores, Aplicações, Auditoria. The Templates
-    // tab and the "Voltar ao Job On" link are removed by owner decision (the
-    // /admin/templates routes stay reachable; /jobon stays denied for Pure
-    // Admin). Links only — authorization stays server-side (GLM-ACC-04).
+    // Single Admin sub-navigation. It is rendered by every Admin page and uses
+    // the shared tab contract instead of button-style navigation. The active
+    // tab is derived only from the current server route.
     var path = Context.Request.Path.Value ?? string.Empty;
+
+    bool IsActive(string prefix) =>
+        path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
 }
-<nav class="admin-nav" aria-label="Administração">
-    <a href="/admin/users" class="@(path.StartsWith("/admin/users", StringComparison.Ordinal) ? "active" : null)">Utilizadores</a>
-    <a href="/admin/applications" class="@(path.StartsWith("/admin/applications", StringComparison.Ordinal) ? "active" : null)">Aplicações</a>
-    <a href="/admin/audit" class="@(path.StartsWith("/admin/audit", StringComparison.Ordinal) ? "active" : null)">Auditoria</a>
+<nav class="dmo-module-tabs admin-tabs" aria-label="Administração">
+    <a href="/admin/users"
+       class="dmo-module-tab @(IsActive("/admin/users") ? "active" : null)"
+       aria-current="@(IsActive("/admin/users") ? "page" : null)">Utilizadores</a>
+    <a href="/admin/templates"
+       class="dmo-module-tab @(IsActive("/admin/templates") ? "active" : null)"
+       aria-current="@(IsActive("/admin/templates") ? "page" : null)">Modelos</a>
+    <a href="/admin/applications"
+       class="dmo-module-tab @(IsActive("/admin/applications") ? "active" : null)"
+       aria-current="@(IsActive("/admin/applications") ? "page" : null)">Aplicações</a>
+    <a href="/admin/audit"
+       class="dmo-module-tab @(IsActive("/admin/audit") ? "active" : null)"
+       aria-current="@(IsActive("/admin/audit") ? "page" : null)">Auditoria</a>
 </nav>
