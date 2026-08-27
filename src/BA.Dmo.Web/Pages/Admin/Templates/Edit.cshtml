@@ -8,7 +8,7 @@
 <div class="dmo-page-head">
     <div>
         <h2>@(Model.IsNew ? "Criar template" : "Editar template")</h2>
-        <p>Os templates atribuem módulos. O perfil do utilizador determina o comportamento dentro de cada módulo.</p>
+        <p>Um template define o título/função, um único perfil funcional e os módulos atribuídos.</p>
     </div>
     <a class="dmo-button" href="/admin/templates">Voltar à lista</a>
 </div>
@@ -23,8 +23,9 @@
             @if (Model.IsNew)
             {
                 <div class="dmo-field">
-                    <label for="templateId">Identificador</label>
+                    <label for="templateId">Identificador interno</label>
                     <input id="templateId" name="templateId" type="text" required value="@Model.TemplateId" />
+                    <p class="dmo-field__helper">Ex.: reparador, chefe-producao, controlador-metrologia.</p>
                 </div>
             }
             else
@@ -34,8 +35,18 @@
             }
             <div class="dmo-modal-grid">
                 <div class="dmo-field">
-                    <label for="name">Nome</label>
-                    <input id="name" name="name" type="text" required value="@Model.Name" />
+                    <label for="name">Título / Função</label>
+                    <input id="name" name="name" type="text" required value="@Model.Name" placeholder="Ex.: Reparador" />
+                    <p class="dmo-field__helper">É o nome reutilizável que aparece associado aos utilizadores.</p>
+                </div>
+                <div class="dmo-field">
+                    <label for="functionalProfile">Perfil funcional</label>
+                    <select id="functionalProfile" name="functionalProfile" required>
+                        <option value="Operador / Controlador" selected="@(Model.FunctionalProfile == "Operador / Controlador")">Operador / Controlador</option>
+                        <option value="Responsável" selected="@(Model.FunctionalProfile == "Responsável")">Responsável</option>
+                        <option value="Admin" selected="@(Model.FunctionalProfile == "Admin")">Admin</option>
+                    </select>
+                    <p class="dmo-field__helper">Define como este título trabalha dentro dos módulos selecionados.</p>
                 </div>
                 <div class="dmo-field">
                     <label for="active">Estado</label>
@@ -46,14 +57,17 @@
                 </div>
             </div>
             <div class="dmo-table-title">
-                <h3>Módulos</h3>
+                <div>
+                    <h3>Módulos</h3>
+                    <p class="dmo-field__helper">Estes módulos vêm do catálogo de Aplicações e serão assumidos por todos os utilizadores deste template.</p>
+                </div>
             </div>
             <div class="dmo-table-wrap">
                 <table class="dmo-table">
                     <thead>
                         <tr>
                             <th>Módulo</th>
-                            <th>Conceder</th>
+                            <th>Atribuir</th>
                         </tr>
                     </thead>
                     <tbody>
