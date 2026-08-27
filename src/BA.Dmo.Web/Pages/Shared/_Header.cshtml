@@ -30,7 +30,12 @@
             </div>
         }
     }
-    <partial name="_Navigation" />
+    @* In Admin there is already a dedicated Admin tab strip inside the page.
+       Do not render the global shell "Administração" tab as a second menu. *@
+    @if (!adminScope)
+    {
+        <partial name="_Navigation" />
+    }
     @if (shell is not null)
     {
         <div class="dmo-app-header__user" data-testid="shell-user">
