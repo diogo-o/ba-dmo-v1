@@ -87,7 +87,7 @@ public sealed class MigrationDiscoveryTests : IDisposable
     }
 
     [Fact]
-    public void ShippedFreshBuildFamily_IsComplete_N01ThroughN31()
+    public void ShippedFreshBuildFamily_IsComplete_N01ThroughN32()
     {
         var familyDirectory = ResolveRepositoryMigrationsDirectory();
 
@@ -100,7 +100,7 @@ public sealed class MigrationDiscoveryTests : IDisposable
                 "N09_armazem.sql", "N10_tampoes.sql", "N11_partilhado.sql", "N12_rls.sql",
                 "N13_jobon_production_folder.sql", "N14_pegamentos_documents.sql",
                 "N15_pegamentos_tool_number.sql", "N16_pegamentos_component_nominals.sql",
-                "N17_pegamentos_notas.sql", "N18_bq_repairer.sql", "N19_tool_usage.sql", "N20_repairer_repair_types.sql", "N21_tampoes_machines.sql", "N22_reparacao_interna_context.sql", "N23_controlo_folha.sql", "N24_jobon_user_current.sql", "N25_remediation.sql", "N26_user_modules_override.sql", "N27_access_convergence.sql", "N28_reparacao_interna_cm_mf_only.sql", "N29_jobon_reference_images.sql", "N30_jobon_reference_image_updated_by_index.sql", "N31_template_profiles_single_assignment.sql"
+                "N17_pegamentos_notas.sql", "N18_bq_repairer.sql", "N19_tool_usage.sql", "N20_repairer_repair_types.sql", "N21_tampoes_machines.sql", "N22_reparacao_interna_context.sql", "N23_controlo_folha.sql", "N24_jobon_user_current.sql", "N25_remediation.sql", "N26_user_modules_override.sql", "N27_access_convergence.sql", "N28_reparacao_interna_cm_mf_only.sql", "N29_jobon_reference_images.sql", "N30_jobon_reference_image_updated_by_index.sql", "N31_template_profiles_single_assignment.sql", "N32_access_authority_convergence.sql"
             ],
             discovered.Select(m => m.FileName).ToArray());
     }
@@ -157,6 +157,80 @@ public sealed class MigrationDiscoveryTests : IDisposable
         Assert.Contains("'Admin', 'Operador / Controlador', 'Responsável'", sql, StringComparison.Ordinal);
         Assert.Contains("ux_internal_user_access_templates_actor", sql, StringComparison.Ordinal);
         Assert.Contains("UPDATE internal_users", sql, StringComparison.Ordinal);
+    }
+
+    // ------------------------------------------------------------------
+    // N32 — access-authority convergence (SCHEMA-RAT-03A, D-1/D-2)
+    // Source guards only: they read the migration FILE. Executed
+    // PostgreSQL behaviour is covered by the env-guarded
+    // RemediationGuardTests.N32_* probes (BA_DMO_TEST_DATABASE).
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void N32_IsNonDestructive_AndLeavesLegacyObjectsInPlace()
+    {
+        var sql = File.ReadAllText(Path.Combine(
+            ResolveRepositoryMigrationsDirectory(),
+            "N32_access_authority_convergence.sql"));
+
+        // No destructive DDL anywhere in N32.
+        Assert.DoesNotContain("DROP TABLE", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP COLUMN", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP INDEX", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ALTER TABLE", sql, StringComparison.OrdinalIgnoreCase);
+        // Legacy objects stay physically present this phase.
+        Assert.Contains("internal_user_access_templates", sql, StringComparison.Ordinal);
+        Assert.Contains("profile_title", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void N32_FailsClosed_OnConflictingOrMultipleLegacyAssignments()
+    {
+        var sql = File.ReadAllText(Path.Combine(
+            ResolveRepositoryMigrationsDirectory(),
+            "N32_access_authority_convergence.sql"));
+
+        // Multiple junction rows per user are never silently collapsed.
+        Assert.Contains("HAVING COUNT(*) > 1", sql, StringComparison.Ordinal);
+        Assert.Contains("RAISE EXCEPTION", sql, StringComparison.Ordinal);
+        // A single junction row disputing the canonical direct FK fails too.
+        Assert.Contains("ut.template_id IS DISTINCT FROM u.template_id", sql, StringComparison.Ordinal);
+        // No MIN()/MAX()/first/latest invention of authority.
+        Assert.DoesNotContain("MIN(", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("MAX(", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void N32_KeepsProfileAuthorityTemplateOwned_WithoutCopyingUserProfiles()
+    {
+        var sql = File.ReadAllText(Path.Combine(
+            ResolveRepositoryMigrationsDirectory(),
+            "N32_access_authority_convergence.sql"));
+
+        // Profile repair uses ONLY the N31-established deterministic default.
+        Assert.Contains("lower(t.name) LIKE '%respons%'", sql, StringComparison.Ordinal);
+        Assert.Contains("'Operador / Controlador'", sql, StringComparison.Ordinal);
+        Assert.Contains("ON CONFLICT (template_id) DO NOTHING", sql, StringComparison.Ordinal);
+        // User profile_title is NEVER copied back into access_template_profiles.
+        string head;
+        var insertStart = sql.IndexOf(
+            "INSERT INTO access_template_profiles", StringComparison.Ordinal);
+        Assert.True(insertStart >= 0);
+        head = sql[..insertStart];
+        Assert.DoesNotContain("SELECT p.functional_profile", head, StringComparison.Ordinal);
+        // The INSERT selects from access_templates, not from internal_users.
+        Assert.Contains("FROM access_templates t", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void N32_DoesNotRepeatInnerTransactionControlDebt()
+    {
+        var sql = File.ReadAllText(Path.Combine(
+            ResolveRepositoryMigrationsDirectory(),
+            "N32_access_authority_convergence.sql"));
+
+        Assert.DoesNotContain("BEGIN;", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("COMMIT;", sql, StringComparison.Ordinal);
     }
 
     private static string ResolveRepositoryMigrationsDirectory()

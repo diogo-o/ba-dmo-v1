@@ -336,14 +336,16 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
                         "admin-actor", AdminAuthUserId, "Administrador", "Admin",
                         UserActive: true, TemplateId: "tpl-admin", TemplateName: "Admin",
                         TemplateActive: true,
-                        ModulesJson: "[{\"moduleId\":\"admin\",\"capabilities\":[\"admin.gerir\",\"audit.view\",\"audit.export\"]}]"));
+                        ModulesJson: "[{\"moduleId\":\"admin\",\"capabilities\":[\"admin.gerir\",\"audit.view\",\"audit.export\"]}]",
+                        FunctionalProfile: "Admin"));
 
                 if (authUserId == OperatorAuthUserId)
                     return Task.FromResult<InternalUserRecord?>(new InternalUserRecord(
                         "operator-actor", OperatorAuthUserId, "Operador", "Operador / Controlador",
                         UserActive: true, TemplateId: "tpl-op", TemplateName: "Operador",
                         TemplateActive: true,
-                        ModulesJson: "[{\"moduleId\":\"boquilhas\",\"capabilities\":[]}]"));
+                        ModulesJson: "[{\"moduleId\":\"boquilhas\",\"capabilities\":[]}]",
+                        FunctionalProfile: "Operador / Controlador"));
 
                 return Task.FromResult<InternalUserRecord?>(null);
             }
@@ -399,7 +401,7 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
             Task.FromResult(false);
 
         public Task CreateInternalUserAsync(
-            string actorId, Guid authUserId, string displayName, string? profileTitle,
+            string actorId, Guid authUserId, string displayName,
             string templateId, bool active, DateTimeOffset createdAtUtc,
             CancellationToken cancellationToken = default)
         {
@@ -408,7 +410,7 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
         }
 
         public Task UpdateUserAsync(
-            string actorId, string displayName, string? profileTitle,
+            string actorId, string displayName,
             DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc,
             CancellationToken cancellationToken = default)
         {
@@ -418,12 +420,6 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
 
         public Task<bool> ChangeUserTemplateAsync(
             string actorId, string templateId, DateTimeOffset expectedUpdatedAt,
-            DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default)
-            => ReplaceUserAccessTemplatesAsync(
-                actorId, [templateId], expectedUpdatedAt, updatedAtUtc, cancellationToken);
-
-        public Task<bool> ReplaceUserAccessTemplatesAsync(
-            string actorId, IReadOnlyList<string> templateIds, DateTimeOffset expectedUpdatedAt,
             DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default)
         {
             Writes.Add("change_templates");
@@ -471,21 +467,34 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
                     : null);
 
         public Task CreateTemplateAsync(
-            string templateId, string name, string modulesJson, DateTimeOffset createdAtUtc,
-            CancellationToken cancellationToken = default)
+            string templateId, string name, string modulesJson, string functionalProfile,
+            DateTimeOffset createdAtUtc, CancellationToken cancellationToken = default)
         {
             Writes.Add("create_template");
             return Task.CompletedTask;
         }
 
         public Task<bool> UpdateTemplateAsync(
-            string templateId, string name, string modulesJson, bool active,
+            string templateId, string name, string modulesJson, bool active, string functionalProfile,
             DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc,
             CancellationToken cancellationToken = default)
         {
             Writes.Add("update_template");
             return Task.FromResult(true);
         }
+
+        public Task<string?> GetTemplateFunctionalProfileAsync(
+            string templateId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<string?>(
+                templateId == "tpl-admin" ? "Admin" : "Operador / Controlador");
+
+        public Task<IReadOnlyDictionary<string, string>> ListTemplateFunctionalProfilesAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyDictionary<string, string>>(
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["tpl-admin"] = "Admin"
+                });
 
         public Task InsertAuditEventAsync(
             AuditEntry entry, CancellationToken cancellationToken = default) =>

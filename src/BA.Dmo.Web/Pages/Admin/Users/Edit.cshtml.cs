@@ -1,5 +1,4 @@
 using BA.Dmo.Application.Modules.Admin;
-using BA.Dmo.Application.Shared.Persistence;
 using BA.Dmo.Domain.Shared.Kernel;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -7,23 +6,21 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace BA.Dmo.Web.Pages.Admin.Users;
 
 /// <summary>
-/// Edits user identity, one reusable template and activation. The selected
-/// template supplies both the functional profile and module access.
+/// Edits user identity, ONE reusable template and activation. The selected
+/// template supplies both the functional profile and module access
+/// (SCHEMA-RAT-03A D-1/D-2) — the profile is never a user-level field.
 /// </summary>
 public class EditModel : PageModel
 {
     private readonly AdminUserService _users;
     private readonly AdminTemplateService _templates;
-    private readonly TemplateProfileStore _templateProfiles;
 
     public EditModel(
         AdminUserService users,
-        AdminTemplateService templates,
-        IDbConnectionFactory connectionFactory)
+        AdminTemplateService templates)
     {
         _users = users;
         _templates = templates;
-        _templateProfiles = new TemplateProfileStore(connectionFactory);
     }
 
     public AdminUserRow? Entry { get; private set; }
@@ -53,9 +50,9 @@ public class EditModel : PageModel
             return Page();
         }
 
-        TemplateProfiles = await _templateProfiles.ListAsync(HttpContext.RequestAborted);
+        TemplateProfiles = await _templates.ListFunctionalProfilesAsync(HttpContext.RequestAborted);
         if (string.IsNullOrWhiteSpace(templateId)
-            || !TemplateProfiles.TryGetValue(templateId, out var profile))
+            || !TemplateProfiles.ContainsKey(templateId))
         {
             ModelState.AddModelError(
                 string.Empty,
@@ -67,8 +64,7 @@ public class EditModel : PageModel
         var result = await _users.SaveUserAsync(
             id,
             displayName,
-            profile,
-            [templateId],
+            templateId,
             active,
             expectedVersion,
             HttpContext.RequestAborted);
@@ -103,7 +99,7 @@ public class EditModel : PageModel
     private async Task LoadAsync(string id)
     {
         Templates = await _templates.ListAsync(HttpContext.RequestAborted);
-        TemplateProfiles = await _templateProfiles.ListAsync(HttpContext.RequestAborted);
+        TemplateProfiles = await _templates.ListFunctionalProfilesAsync(HttpContext.RequestAborted);
         var user = await _users.GetAsync(id, HttpContext.RequestAborted);
         ServiceErrorMessage = user.IsFailure
             && user.Error.Category == ErrorCategory.BackendUnavailable

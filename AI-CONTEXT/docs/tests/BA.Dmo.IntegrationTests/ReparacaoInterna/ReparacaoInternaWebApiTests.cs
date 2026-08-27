@@ -195,7 +195,8 @@ public class ReparacaoInternaWebApiTests : IClassFixture<ReparacaoInternaWebApiT
             TemplateId: "tpl-repan",
             TemplateName: "Reparação Interna",
             TemplateActive: true,
-            ModulesJson: $"[{{\"moduleId\":\"reparacao_interna\",\"capabilities\":{(corrigir ? "[\"reparacao_interna.corrigir\"]" : "[]")}}}]");
+            ModulesJson: $"[{{\"moduleId\":\"reparacao_interna\",\"capabilities\":{(corrigir ? "[\"reparacao_interna.corrigir\"]" : "[]")}}}]",
+            FunctionalProfile: "Operador / Controlador");
 
         public InternalUserRecord UserWithoutRepInt() => new(
             ActorId: "other-actor",
@@ -206,7 +207,8 @@ public class ReparacaoInternaWebApiTests : IClassFixture<ReparacaoInternaWebApiT
             TemplateId: "tpl-other",
             TemplateName: "Outro",
             TemplateActive: true,
-            ModulesJson: "[]");
+            ModulesJson: "[]",
+            FunctionalProfile: "Operador / Controlador");
 
         public HttpClient CreateTestClient() => CreateClient(new WebApplicationFactoryClientOptions
         {

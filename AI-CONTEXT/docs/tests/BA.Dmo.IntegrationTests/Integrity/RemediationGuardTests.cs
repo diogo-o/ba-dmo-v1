@@ -68,6 +68,15 @@ public sealed class RemediationGuardTests
         }
     }
 
+    private static async Task<string?> CaptureScalar(string cs, string sql)
+    {
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        var value = await cmd.ExecuteScalarAsync();
+        return value as string;
+    }
+
     private static async Task EnsureTemplateAsync(string cs, string templateId)
     {
         await Exec(cs, $@"
@@ -388,5 +397,133 @@ WHERE p.table_schema='public'
 SELECT count(*) FROM pg_indexes
 WHERE schemaname='public' AND indexname='ix_audit_events_module_time'");
         Assert.Equal(1, n);
+    }
+
+    // ----------------------------------------------------------------------
+    // N32 — access-authority convergence (SCHEMA-RAT-03A, D-1/D-2).
+    // Executed-PostgreSQL probes: the suite DB is assumed fully migrated
+    // through N32; the guards/backfill of N32 are replicated here so its
+    // fail-closed reconciliation and template-owned profile authority are
+    // PROVEN against real PostgreSQL (SKIPs without BA_DMO_TEST_DATABASE).
+    // ----------------------------------------------------------------------
+
+    [Fact]
+    public async Task N32_ConflictingLegacyJunction_RaisesFailClosedDiagnostic_NeverSilentChoice()
+    {
+        if (SkipIfNoDatabase()) return;
+        var cs = Cs!;
+        var tpl1 = "tpl-n32-a-" + Guid.NewGuid().ToString("N")[..8];
+        var tpl2 = "tpl-n32-b-" + Guid.NewGuid().ToString("N")[..8];
+        var actor = "n32-conflict-" + Guid.NewGuid().ToString("N")[..8];
+        await EnsureTemplateAsync(cs, tpl1);
+        await EnsureTemplateAsync(cs, tpl2);
+        // profile rows exist via the N31 trigger; N32-201 backfill also covers.
+        await Exec(cs, $@"
+INSERT INTO internal_users (actor_id, auth_user_id, template_id, display_name)
+VALUES ('{actor}', '{Guid.NewGuid()}', '{tpl1}', 'N32 Conflict');");
+
+        // All mutations inside ONE transaction that is ROLLED BACK, so the
+        // shared test database is left untouched (junction row + guard run +
+        // index never altered globally).
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        await using var tx = await conn.BeginTransactionAsync();
+        await using (var cmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock(hashtext('ba_dmo_n32_probe'))", conn, tx))
+            await cmd.ExecuteNonQueryAsync();
+
+        // Make the junction DISPUTE the canonical direct FK (delete any mirror
+        // row, then insert a conflicting single junction row).
+        await using (var cmd = new NpgsqlCommand(
+            "DELETE FROM internal_user_access_templates WHERE actor_id = @ActorId; " +
+            "INSERT INTO internal_user_access_templates (actor_id, template_id, assigned_at_utc) " +
+            "VALUES (@ActorId, @TemplateId2, now());",
+            conn, tx))
+        {
+            cmd.Parameters.AddWithValue("ActorId", actor);
+            cmd.Parameters.AddWithValue("TemplateId2", tpl2);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        // N32 §2 guard (replicated verbatim semantics): a single junction row
+        // disputing internal_users.template_id MUST raise a diagnostic and
+        // never silently pick a side.
+        string? message = null;
+        try
+        {
+            await using var guard = new NpgsqlCommand(
+                """
+                DO $$
+                DECLARE v_sample text;
+                BEGIN
+                    SELECT string_agg(u.actor_id, ', ' ORDER BY u.actor_id)
+                      INTO v_sample
+                      FROM internal_users u
+                      JOIN internal_user_access_templates ut ON ut.actor_id = u.actor_id
+                     WHERE ut.template_id IS DISTINCT FROM u.template_id
+                       AND ut.template_id IS NOT NULL;
+                    IF v_sample IS NOT NULL THEN
+                        RAISE EXCEPTION 'N32 blocked: internal_user_access_templates disputes the canonical internal_users.template_id for actor(s): %', v_sample;
+                    END IF;
+                END
+                $$;
+                """,
+                conn, tx);
+            await guard.ExecuteNonQueryAsync();
+        }
+        catch (PostgresException ex)
+        {
+            message = ex.Message;
+        }
+
+        Assert.NotNull(message);
+        Assert.Contains("N32 blocked", message, StringComparison.Ordinal);
+        Assert.Contains(actor, message, StringComparison.Ordinal);
+
+        await tx.RollbackAsync(); // index + data + advisory lock all restored
+    }
+
+    [Fact]
+    public async Task N32_ProfileBackfill_UsesDeterministicDefault_NotUserProfileTitle()
+    {
+        if (SkipIfNoDatabase()) return;
+        var cs = Cs!;
+        var tpl = "tpl-n32-prof-" + Guid.NewGuid().ToString("N")[..8];
+        await Exec(cs, $@"
+INSERT INTO access_templates (template_id, name, modules, active)
+VALUES ('{tpl}', 'Sem responsabilidades', '[{{""moduleId"":""jobon"",""capabilities"":[]}}]', TRUE)
+ON CONFLICT (template_id) DO NOTHING;");
+        // The N31 trigger auto-creates the profile; delete it to force backfill.
+        await Exec(cs, $"DELETE FROM access_template_profiles WHERE template_id = '{tpl}';");
+        // A user whose profile_title mirror says 'Admin' — backfill must NOT
+        // copy that into the template (template profile is the authority).
+        await Exec(cs, $@"
+INSERT INTO internal_users (actor_id, auth_user_id, template_id, display_name, profile_title)
+VALUES ('{tpl}-user', '{Guid.NewGuid()}', '{tpl}', 'N32 User', 'Admin');");
+
+        // N32 §3 backfill (replicated): deterministic default only.
+        await Exec(cs, $@"
+INSERT INTO access_template_profiles (template_id, functional_profile, updated_at_utc)
+SELECT t.template_id,
+       CASE
+           WHEN t.modules @> '[{{""moduleId"":""admin""}}]'::jsonb THEN 'Admin'
+           WHEN lower(t.name) LIKE '%respons%' THEN 'Responsável'
+           ELSE 'Operador / Controlador'
+       END,
+       t.updated_at_utc
+  FROM access_templates t
+  LEFT JOIN access_template_profiles p ON p.template_id = t.template_id
+ WHERE p.template_id IS NULL
+ON CONFLICT (template_id) DO NOTHING;");
+
+        var profile = await CaptureScalar(cs,
+            $"SELECT functional_profile FROM access_template_profiles WHERE template_id = '{tpl}';");
+        // The deterministic default must win (no user profile copying).
+        Assert.Equal("Operador / Controlador", profile);
+
+        // The user's legacy mirror still says 'Admin' — resolution authority
+        // is the template anyway; the mirror is NOT the source of truth.
+        var mirror = await CaptureScalar(cs,
+            $"SELECT profile_title FROM internal_users WHERE actor_id = '{tpl}-user';");
+        Assert.Equal("Admin", mirror);
     }
 }

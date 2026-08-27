@@ -10,24 +10,32 @@ namespace BA.Dmo.Infrastructure.Identity;
 /// enumerated columns; bootstrap writes run inside ONE unit of work and are
 /// audited (GLM-DATA-05, GLM-ACC-11: admin operations are audit_events with
 /// moduleId = admin).
+///
+/// SCHEMA-RAT-03A (D-1/D-2): identity is resolved through the canonical
+/// direct assignment internal_users.template_id -> access_templates ->
+/// access_template_profiles. The N27 junction is NOT joined for identity and
+/// is maintained as a one-way mirror only (bootstrap). The legacy
+/// internal_users.profile_title column is read back solely as a compatibility
+/// mirror (record.ProfileTitle) and is never the functional authority.
 /// </summary>
 public sealed class DapperInternalUserRepository : IInternalUserRepository
 {
     private const string FindByAuthUserIdSql =
         """
-        SELECT u.actor_id          AS ActorId,
-               u.auth_user_id      AS AuthUserId,
-               u.display_name      AS DisplayName,
-               u.profile_title     AS ProfileTitle,
-               u.active            AS UserActive,
-               t.template_id       AS TemplateId,
-               t.name              AS TemplateName,
-               COALESCE(t.active, FALSE) AS TemplateActive,
-               t.modules::text     AS ModulesJson,
-               u.modules_override::text AS ModulesOverrideJson
+        SELECT u.actor_id             AS ActorId,
+               u.auth_user_id         AS AuthUserId,
+               u.display_name         AS DisplayName,
+               u.profile_title        AS ProfileTitle,
+               u.active               AS UserActive,
+               t.template_id          AS TemplateId,
+               t.name                 AS TemplateName,
+               t.active               AS TemplateActive,
+               t.modules::text        AS ModulesJson,
+               u.modules_override::text AS ModulesOverrideJson,
+               p.functional_profile   AS FunctionalProfile
         FROM internal_users u
-        LEFT JOIN internal_user_access_templates ut ON ut.actor_id = u.actor_id
-        LEFT JOIN access_templates t ON t.template_id = ut.template_id
+        JOIN access_templates t ON t.template_id = u.template_id
+        LEFT JOIN access_template_profiles p ON p.template_id = t.template_id
         WHERE u.auth_user_id = @AuthUserId;
         """;
 
@@ -35,10 +43,10 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
         """
         SELECT 1
         FROM internal_users u
-        JOIN internal_user_access_templates ut ON ut.actor_id = u.actor_id
-        JOIN access_templates t ON t.template_id = ut.template_id
+        JOIN access_templates t ON t.template_id = u.template_id
+        JOIN access_template_profiles p ON p.template_id = t.template_id
         WHERE u.active
-          AND u.profile_title = 'Admin'
+          AND p.functional_profile = 'Admin'
           AND t.active
           AND t.modules @> @AdminGrantPattern::jsonb
         LIMIT 1;
@@ -59,7 +67,11 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
                                     display_name, profile_title, active,
                                     created_at_utc, updated_at_utc)
         VALUES (@ActorId, @AuthUserId, @TemplateId,
-                @DisplayName, 'Admin', TRUE,
+                @DisplayName,
+                (SELECT functional_profile
+                   FROM access_template_profiles
+                  WHERE template_id = @TemplateId),
+                TRUE,
                 @CreatedAtUtc, @CreatedAtUtc)
         ON CONFLICT (actor_id) DO NOTHING;
         """;
@@ -69,7 +81,9 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
         INSERT INTO internal_user_access_templates (
             actor_id, template_id, assigned_at_utc, assigned_by)
         VALUES (@ActorId, @TemplateId, @CreatedAtUtc, @ActorId)
-        ON CONFLICT (actor_id, template_id) DO NOTHING;
+        ON CONFLICT (actor_id) DO UPDATE
+        SET template_id = EXCLUDED.template_id,
+            assigned_at_utc = EXCLUDED.assigned_at_utc;
         """;
 
     private const string InsertAuditEventSql =
@@ -119,26 +133,22 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
                 throw new AmbiguousIdentityException(authUserId);
 
             var first = list[0];
-            var templates = list
-                .Where(row => !string.IsNullOrWhiteSpace(row.TemplateId))
-                .Select(row => new InternalUserAccessTemplateRecord(
-                    row.TemplateId!, row.TemplateName!, row.TemplateActive, row.ModulesJson!))
-                .DistinctBy(template => template.TemplateId, StringComparer.Ordinal)
-                .ToList();
-            var legacy = templates.FirstOrDefault();
 
+            // D-2: the effective template is the canonical direct FK row —
+            // exactly one, from the JOIN on internal_users.template_id. No
+            // junction enumeration.
             return new InternalUserRecord(
                 first.ActorId,
                 first.AuthUserId,
                 first.DisplayName,
                 first.ProfileTitle,
                 first.UserActive,
-                legacy?.TemplateId ?? string.Empty,
-                legacy?.TemplateName ?? string.Empty,
-                legacy?.TemplateActive ?? false,
-                legacy?.ModulesJson ?? "[]",
+                first.TemplateId,
+                first.TemplateName,
+                first.TemplateActive,
+                first.ModulesJson,
                 first.ModulesOverrideJson,
-                templates);
+                first.FunctionalProfile);
         }
         finally
         {
@@ -169,7 +179,10 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
     {
         ArgumentNullException.ThrowIfNull(creation);
 
-        // Atomic: template + internal user + audit event in ONE transaction.
+        // Atomic: template + internal user + junction mirror + audit event in
+        // ONE transaction. The direct FK (internal_users.template_id) is the
+        // authority; the junction row and profile_title mirror are one-way
+        // derived from it in the same transaction (SCHEMA-RAT-03A D-1/D-2).
         await DapperUnitOfWork.RunAsync<int>(_connectionFactory, async (connection, transaction, ct) =>
         {
             await Db.ExecuteAsync(connection, InsertTemplateSql, new
@@ -224,9 +237,10 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
         string DisplayName,
         string? ProfileTitle,
         bool UserActive,
-        string? TemplateId,
-        string? TemplateName,
+        string TemplateId,
+        string TemplateName,
         bool TemplateActive,
-        string? ModulesJson,
-        string? ModulesOverrideJson);
+        string ModulesJson,
+        string? ModulesOverrideJson,
+        string? FunctionalProfile);
 }

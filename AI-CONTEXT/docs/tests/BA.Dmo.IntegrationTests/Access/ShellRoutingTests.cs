@@ -961,7 +961,8 @@ public class ShellRoutingTests : IClassFixture<ShellRoutingTests.ShellFixture>
                     "shell-actor", AuthUserId, "Utilizador Shell", ProfileName(fixture.Profile),
                     UserActive: true, TemplateId: "tpl-shell", TemplateName: "Shell",
                     TemplateActive: fixture.Profile != UserProfile.TemplateInactive,
-                    ModulesJson: modulesJson));
+                    ModulesJson: modulesJson,
+                    FunctionalProfile: ProfileName(fixture.Profile)));
             }
 
             public Task<bool> AdminExistsAsync(CancellationToken cancellationToken = default) =>

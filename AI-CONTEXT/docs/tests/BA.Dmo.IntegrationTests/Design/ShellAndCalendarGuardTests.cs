@@ -194,7 +194,8 @@ public class ShellAndCalendarGuardTests : IClassFixture<ShellAndCalendarGuardTes
             TemplateId: "tpl-shell",
             TemplateName: "Shell",
             TemplateActive: true,
-            ModulesJson: "[{\"moduleId\":\"jobon\",\"capabilities\":[]}]");
+            ModulesJson: "[{\"moduleId\":\"jobon\",\"capabilities\":[]}]",
+            FunctionalProfile: "Operador / Controlador");
 
         public HttpClient CreateTestClient() => CreateClient(new WebApplicationFactoryClientOptions
         {

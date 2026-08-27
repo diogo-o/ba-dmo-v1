@@ -133,7 +133,8 @@ public class JobOnImageWebApiTests : IClassFixture<JobOnImageWebApiTests.ImageFi
                     TemplateId: "tpl-jobon-images",
                     TemplateName: "Job On",
                     TemplateActive: true,
-                    ModulesJson: "[{\"moduleId\":\"jobon\",\"capabilities\":[\"jobon.view\",\"jobon.edit\"]}]"));
+                    ModulesJson: "[{\"moduleId\":\"jobon\",\"capabilities\":[\"jobon.view\",\"jobon.edit\"]}]",
+                    FunctionalProfile: "Responsável"));
 
             public Task<bool> AdminExistsAsync(CancellationToken cancellationToken = default) =>
                 Task.FromResult(true);

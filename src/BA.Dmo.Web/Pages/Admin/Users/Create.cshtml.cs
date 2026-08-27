@@ -1,5 +1,4 @@
 using BA.Dmo.Application.Modules.Admin;
-using BA.Dmo.Application.Shared.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -8,22 +7,20 @@ namespace BA.Dmo.Web.Pages.Admin.Users;
 /// <summary>
 /// Create internal user. The Admin chooses exactly one reusable template;
 /// its title/function, functional profile and module grants are assumed
-/// automatically by the new user.
+/// automatically by the new user (SCHEMA-RAT-03A D-1/D-2: the functional
+/// profile is template-owned and is never part of the user form).
 /// </summary>
 public class CreateModel : PageModel
 {
     private readonly AdminUserService _users;
     private readonly AdminTemplateService _templates;
-    private readonly TemplateProfileStore _templateProfiles;
 
     public CreateModel(
         AdminUserService users,
-        AdminTemplateService templates,
-        IDbConnectionFactory connectionFactory)
+        AdminTemplateService templates)
     {
         _users = users;
         _templates = templates;
-        _templateProfiles = new TemplateProfileStore(connectionFactory);
     }
 
     public sealed class InputModel
@@ -58,7 +55,8 @@ public class CreateModel : PageModel
 
         // Compatibility for pre-rework form posts/tests only. The rendered UI
         // exposes a single `templateId`; if an old `templateIds` field arrives,
-        // only its first value is considered. It can never recreate a hybrid.
+        // only its first value is considered. It can never recreate a hybrid:
+        // exactly one template is assigned (D-2).
         var selectedTemplateId = !string.IsNullOrWhiteSpace(templateId)
             ? templateId.Trim()
             : templateIds?.FirstOrDefault(id => !string.IsNullOrWhiteSpace(id))?.Trim()
@@ -73,7 +71,7 @@ public class CreateModel : PageModel
         };
 
         if (string.IsNullOrWhiteSpace(selectedTemplateId)
-            || !TemplateProfiles.TryGetValue(selectedTemplateId, out var profile))
+            || !TemplateProfiles.TryGetValue(selectedTemplateId, out _))
         {
             ModelState.AddModelError(
                 string.Empty,
@@ -86,10 +84,8 @@ public class CreateModel : PageModel
                 email,
                 password,
                 displayName,
-                profile,
                 selectedTemplateId,
-                active,
-                [selectedTemplateId]),
+                active),
             HttpContext.RequestAborted);
 
         if (result.IsFailure)
@@ -110,6 +106,6 @@ public class CreateModel : PageModel
             .Where(template => template.Active)
             .ToList()
             .AsReadOnly();
-        TemplateProfiles = await _templateProfiles.ListAsync(HttpContext.RequestAborted);
+        TemplateProfiles = await _templates.ListFunctionalProfilesAsync(HttpContext.RequestAborted);
     }
 }

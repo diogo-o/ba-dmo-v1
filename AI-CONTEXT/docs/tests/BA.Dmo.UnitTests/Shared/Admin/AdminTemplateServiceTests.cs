@@ -45,7 +45,8 @@ public class AdminTemplateServiceTests
             {
                 new TemplateGrantInput("controlo", Array.Empty<string>()),
                 new TemplateGrantInput("boquilhas", Array.Empty<string>())
-            }));
+            },
+            FunctionalProfileNames.OperatorController));
 
         Assert.True(result.IsSuccess);
         var saved = _repository.Templates["tpl-novo"];
@@ -54,6 +55,11 @@ public class AdminTemplateServiceTests
             "[{\"moduleId\":\"boquilhas\",\"capabilities\":[]}," +
             "{\"moduleId\":\"controlo\",\"capabilities\":[]}]",
             saved.ModulesJson);
+        // D-1: the template-owned functional profile is persisted with the
+        // template (one authoritative write path).
+        Assert.Equal(
+            FunctionalProfileNames.OperatorController,
+            _repository.TemplateProfiles["tpl-novo"]);
         Assert.Equal("create", Assert.Single(_repository.Audits).ActionCode);
         Assert.Equal("access_template", _repository.Audits[0].EntityType);
     }
@@ -72,7 +78,8 @@ public class AdminTemplateServiceTests
             {
                 new TemplateGrantInput(moduleId,
                     string.IsNullOrEmpty(capability) ? Array.Empty<string>() : new[] { capability })
-            }));
+            },
+            FunctionalProfileNames.OperatorController));
 
         Assert.True(result.IsFailure);
         Assert.Equal("ACCESS_TEMPLATE_GRANTS_INVALID", result.Error.Code);
@@ -84,10 +91,64 @@ public class AdminTemplateServiceTests
     public async Task CreateTemplate_DuplicateId_IsConflict()
     {
         var result = await _service.CreateAsync(new CreateTemplateRequest(
-            "tpl-1", "Outro nome", Array.Empty<TemplateGrantInput>()));
+            "tpl-1", "Outro nome", Array.Empty<TemplateGrantInput>(),
+            FunctionalProfileNames.OperatorController));
 
         Assert.True(result.IsFailure);
         Assert.Equal("ACCESS_TEMPLATE_EXISTS", result.Error.Code);
+    }
+
+    // ---- product rules (D-1): Admin profile ⇔ admin module only -------------
+
+    [Fact]
+    public async Task CreateTemplate_AdminProfile_WithOperationalModules_IsRejected()
+    {
+        var result = await _service.CreateAsync(new CreateTemplateRequest(
+            "tpl-hybrid", "Híbrido",
+            new[] { new TemplateGrantInput("boquilhas", Array.Empty<string>()) },
+            FunctionalProfileNames.Admin));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("ADMIN_PROFILE_TEMPLATE_MISMATCH", result.Error.Code);
+        Assert.DoesNotContain("tpl-hybrid", _repository.Templates.Keys);
+    }
+
+    [Fact]
+    public async Task CreateTemplate_OperationalProfile_WithAdminModule_IsRejected()
+    {
+        var result = await _service.CreateAsync(new CreateTemplateRequest(
+            "tpl-op-admin", "Operacional com admin",
+            new[] { new TemplateGrantInput("admin", Array.Empty<string>()) },
+            FunctionalProfileNames.OperatorController));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("ADMIN_PROFILE_TEMPLATE_MISMATCH", result.Error.Code);
+        Assert.DoesNotContain("tpl-op-admin", _repository.Templates.Keys);
+    }
+
+    [Fact]
+    public async Task CreateTemplate_AdminProfile_AdminModuleOnly_IsAccepted()
+    {
+        var result = await _service.CreateAsync(new CreateTemplateRequest(
+            "tpl-admin-only", "Administração",
+            new[] { new TemplateGrantInput("admin", Array.Empty<string>()) },
+            FunctionalProfileNames.Admin));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(FunctionalProfileNames.Admin, _repository.TemplateProfiles["tpl-admin-only"]);
+    }
+
+    [Fact]
+    public async Task CreateTemplate_InvalidFunctionalProfile_IsRejected()
+    {
+        var result = await _service.CreateAsync(new CreateTemplateRequest(
+            "tpl-bad-profile", "Perfil inválido",
+            new[] { new TemplateGrantInput("boquilhas", Array.Empty<string>()) },
+            "Metrologia"));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("ADMIN_PROFILE_TEMPLATE_MISMATCH", result.Error.Code);
+        Assert.DoesNotContain("tpl-bad-profile", _repository.Templates.Keys);
     }
 
     [Fact]
@@ -97,10 +158,14 @@ public class AdminTemplateServiceTests
             "tpl-1", "Template 1 (revisto)",
             new[] { new TemplateGrantInput("controlo", Array.Empty<string>()) },
             Active: true,
-            _repository.Templates["tpl-1"].UpdatedAtUtc));
+            _repository.Templates["tpl-1"].UpdatedAtUtc,
+            FunctionalProfileNames.OperatorController));
 
         Assert.True(result.IsSuccess);
         Assert.Contains("\"moduleId\":\"controlo\"", _repository.Templates["tpl-1"].ModulesJson);
+        Assert.Equal(
+            FunctionalProfileNames.OperatorController,
+            _repository.TemplateProfiles["tpl-1"]);
         Assert.Equal("update_modules", Assert.Single(_repository.Audits).ActionCode);
     }
 
@@ -113,7 +178,8 @@ public class AdminTemplateServiceTests
             "tpl-1", "Template 1",
             new[] { new TemplateGrantInput("boquilhas", Array.Empty<string>()) },
             Active: false,
-            _repository.Templates["tpl-1"].UpdatedAtUtc));
+            _repository.Templates["tpl-1"].UpdatedAtUtc,
+            FunctionalProfileNames.OperatorController));
 
         Assert.True(result.IsFailure);
         Assert.Equal("ADMIN_SELF_LOCKOUT", result.Error.Code);
@@ -128,7 +194,8 @@ public class AdminTemplateServiceTests
         var result = await _service.UpdateAsync(new UpdateTemplateRequest(
             "tpl-1", "Nome", new[] { new TemplateGrantInput("boquilhas", Array.Empty<string>()) },
             Active: true,
-            _repository.Templates["tpl-1"].UpdatedAtUtc));
+            _repository.Templates["tpl-1"].UpdatedAtUtc,
+            FunctionalProfileNames.OperatorController));
 
         Assert.True(result.IsFailure);
         Assert.Equal(ErrorCategory.ConcurrencyConflict, result.Error.Category);
@@ -140,10 +207,12 @@ public class AdminTemplateServiceTests
         _identity.GrantNone();
 
         var create = await _service.CreateAsync(new CreateTemplateRequest(
-            "tpl-x", "X", Array.Empty<TemplateGrantInput>()));
+            "tpl-x", "X", Array.Empty<TemplateGrantInput>(),
+            FunctionalProfileNames.OperatorController));
         var update = await _service.UpdateAsync(new UpdateTemplateRequest(
             "tpl-1", "X", Array.Empty<TemplateGrantInput>(), true,
-            _repository.Templates["tpl-1"].UpdatedAtUtc));
+            _repository.Templates["tpl-1"].UpdatedAtUtc,
+            FunctionalProfileNames.OperatorController));
 
         Assert.Equal(ErrorCategory.Forbidden, create.Error.Category);
         Assert.Equal(ErrorCategory.Forbidden, update.Error.Category);

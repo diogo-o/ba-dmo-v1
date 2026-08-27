@@ -135,7 +135,8 @@ public class TampaoWebApiTests : IClassFixture<TampaoWebApiTests.TampoesFixture>
             TemplateId: "tpl-tampoes",
             TemplateName: "Tampões",
             TemplateActive: true,
-            ModulesJson: "[{\"moduleId\":\"tampoes\",\"capabilities\":[]}]");
+            ModulesJson: "[{\"moduleId\":\"tampoes\",\"capabilities\":[]}]",
+            FunctionalProfile: "Operador / Controlador");
 
         public InternalUserRecord UserWithoutTampoes() => new(
             ActorId: "other-actor",
@@ -146,7 +147,8 @@ public class TampaoWebApiTests : IClassFixture<TampaoWebApiTests.TampoesFixture>
             TemplateId: "tpl-other",
             TemplateName: "Outro",
             TemplateActive: true,
-            ModulesJson: "[]");
+            ModulesJson: "[]",
+            FunctionalProfile: "Operador / Controlador");
 
         public HttpClient CreateTestClient() => CreateClient(new WebApplicationFactoryClientOptions
         {

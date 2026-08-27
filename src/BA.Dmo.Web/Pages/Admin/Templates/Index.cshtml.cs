@@ -1,20 +1,18 @@
 using BA.Dmo.Application.Modules.Admin;
-using BA.Dmo.Application.Shared.Persistence;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace BA.Dmo.Web.Pages.Admin.Templates;
 
 /// <summary>Template listing. Each template is one reusable title/function,
-/// one functional profile and one canonical module set.</summary>
+/// one functional profile (template-owned, SCHEMA-RAT-03A D-1) and one
+/// canonical module set.</summary>
 public class IndexModel : PageModel
 {
     private readonly AdminTemplateService _templates;
-    private readonly TemplateProfileStore _templateProfiles;
 
-    public IndexModel(AdminTemplateService templates, IDbConnectionFactory connectionFactory)
+    public IndexModel(AdminTemplateService templates)
     {
         _templates = templates;
-        _templateProfiles = new TemplateProfileStore(connectionFactory);
     }
 
     public IReadOnlyList<AdminTemplateRow> Templates { get; private set; } = [];
@@ -28,7 +26,7 @@ public class IndexModel : PageModel
     {
         Feedback = TempData["TemplateFeedback"] as string;
         Templates = await _templates.ListAsync(HttpContext.RequestAborted);
-        Profiles = await _templateProfiles.ListAsync(HttpContext.RequestAborted);
+        Profiles = await _templates.ListFunctionalProfilesAsync(HttpContext.RequestAborted);
     }
 
     public string ProfileFor(string templateId) =>

@@ -1,7 +1,6 @@
 using BA.Dmo.Application.Modules.Admin;
 using BA.Dmo.Application.Shared.Access;
 using BA.Dmo.Application.Shared.Identity;
-using BA.Dmo.Application.Shared.Persistence;
 using BA.Dmo.Domain.Shared.Access;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -10,18 +9,19 @@ namespace BA.Dmo.Web.Pages.Admin.Templates;
 
 /// <summary>
 /// Template editor: one reusable title/function + exactly one functional profile
-/// + canonical module grants. The module catalog remains the single source of
-/// assignable modules; N31 stores the template-owned functional profile.
+/// (template-owned — SCHEMA-RAT-03A D-1) + canonical module grants. The module
+/// catalog remains the single source of assignable modules; the profile and
+/// modules are persisted in ONE authoritative write path (AdminTemplateService
+/// → DapperAdminRepository, same transaction). The module catalog architecture
+/// (D-6) is untouched.
 /// </summary>
 public class EditModel : PageModel
 {
     private readonly AdminTemplateService _templates;
-    private readonly TemplateProfileStore _templateProfiles;
 
-    public EditModel(AdminTemplateService templates, IDbConnectionFactory connectionFactory)
+    public EditModel(AdminTemplateService templates)
     {
         _templates = templates;
-        _templateProfiles = new TemplateProfileStore(connectionFactory);
     }
 
     public sealed class GrantLine
@@ -62,7 +62,7 @@ public class EditModel : PageModel
         Name = template.Value.Name;
         Active = template.Value.Active;
         Version = template.Value.UpdatedAtUtc;
-        FunctionalProfile = await _templateProfiles.GetAsync(
+        FunctionalProfile = await _templates.GetFunctionalProfileAsync(
             template.Value.TemplateId, HttpContext.RequestAborted)
             ?? "Operador / Controlador";
 
@@ -135,15 +135,11 @@ public class EditModel : PageModel
         if (string.IsNullOrWhiteSpace(version))
         {
             var created = await _templates.CreateAsync(
-                new CreateTemplateRequest(templateId, name, grants),
+                new CreateTemplateRequest(templateId, name, grants, functionalProfile),
                 HttpContext.RequestAborted);
             if (created.IsFailure)
                 return Finish(created.Error.Message, isNew: true);
 
-            await _templateProfiles.UpsertAsync(
-                created.Value.TemplateId,
-                profile.DisplayName(),
-                HttpContext.RequestAborted);
             return Finish(null, isNew: true);
         }
 
@@ -156,15 +152,11 @@ public class EditModel : PageModel
         }
 
         var updated = await _templates.UpdateAsync(
-            new UpdateTemplateRequest(templateId, name, grants, active, expectedVersion),
+            new UpdateTemplateRequest(templateId, name, grants, active, expectedVersion, functionalProfile),
             HttpContext.RequestAborted);
         if (updated.IsFailure)
             return Finish(updated.Error.Message, isNew: false);
 
-        await _templateProfiles.UpsertAsync(
-            updated.Value.TemplateId,
-            profile.DisplayName(),
-            HttpContext.RequestAborted);
         return Finish(null, isNew: false);
     }
 

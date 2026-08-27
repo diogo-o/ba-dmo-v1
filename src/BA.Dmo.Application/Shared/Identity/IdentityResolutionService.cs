@@ -18,10 +18,18 @@ public sealed record ResolvedIdentity(
     FirstPageResolution FirstPage);
 
 /// <summary>
-/// Server-side identity resolution pipeline. The final access model is one
-/// reusable template per user: template title/function + exactly one functional
-/// profile + canonical module grants. Any legacy hybrid assignment fails closed
-/// rather than merging Admin/Operador/Responsável access surfaces.
+/// Server-side identity resolution pipeline (SCHEMA-RAT-03A, D-1/D-2). The
+/// final access model is one reusable template per user resolved through the
+/// canonical direct assignment:
+///
+///   internal_users.template_id
+///      -> access_templates
+///      -> access_template_profiles.functional_profile  (functional authority)
+///      -> AccessResolver (template modules + profile-derived capabilities)
+///
+/// The N27 junction (internal_user_access_templates) is NOT consulted and the
+/// legacy internal_users.profile_title mirror is NOT a functional-access
+/// authority. Invalid/inconsistent data fails closed — never merged.
 /// </summary>
 public sealed class IdentityResolutionService
 {
@@ -85,41 +93,25 @@ public sealed class IdentityResolutionService
                     "INTERNAL_USER_INACTIVE",
                     "The internal user is not registered or is inactive."));
 
-        var associatedTemplates = record.AccessTemplates is { Count: > 0 }
-            ? record.AccessTemplates
-            :
-            [
-                new InternalUserAccessTemplateRecord(
-                    record.TemplateId,
-                    record.TemplateName,
-                    record.TemplateActive,
-                    record.ModulesJson)
-            ];
-
-        var activeTemplates = associatedTemplates
-            .Where(template => template.TemplateActive)
-            .ToList();
-
-        if (activeTemplates.Count == 0)
+        // D-2: the single effective template comes from the canonical direct
+        // FK. No junction enumeration, no plural-template resolution, no
+        // fallback that treats the junction as an equal authority. The direct
+        // FK is NOT NULL + FK-constrained, so exactly one template exists.
+        if (!record.TemplateActive)
             return Result<ResolvedIdentity, DomainError>.Failure(
                 DomainError.Unauthorized(
                     "ACCESS_TEMPLATE_INACTIVE",
                     "The access template is missing or inactive."));
 
-        if (activeTemplates.Count != 1)
-            return Result<ResolvedIdentity, DomainError>.Failure(
-                DomainError.Unauthorized(
-                    "ACCESS_TEMPLATE_AMBIGUOUS",
-                    "O utilizador tem mais do que um template ativo associado. Corrija a configuração na Administração."));
-
-        if (!FunctionalProfileNames.TryParse(record.ProfileTitle, out var profile))
+        // D-1: the functional profile is template-owned (access_template_profiles).
+        // internal_users.profile_title is NOT the authority and is never parsed here.
+        if (!FunctionalProfileNames.TryParse(record.FunctionalProfile, out var profile))
             return Result<ResolvedIdentity, DomainError>.Failure(
                 DomainError.Unauthorized(
                     "FUNCTIONAL_PROFILE_INVALID",
                     "The internal user has no valid functional profile."));
 
-        var effectiveTemplate = activeTemplates[0];
-        var parsed = AccessTemplateGrantsParser.Parse(effectiveTemplate.ModulesJson);
+        var parsed = AccessTemplateGrantsParser.Parse(record.ModulesJson);
         if (parsed.IsFailure)
             return Result<ResolvedIdentity, DomainError>.Failure(
                 DomainError.Unauthorized(
@@ -127,8 +119,8 @@ public sealed class IdentityResolutionService
                     "The access grants cannot grant access."));
 
         var template = new AccessTemplateDefinition(
-            effectiveTemplate.TemplateId,
-            effectiveTemplate.TemplateName,
+            record.TemplateId,
+            record.TemplateName,
             active: true,
             parsed.Value);
 
@@ -141,10 +133,12 @@ public sealed class IdentityResolutionService
             access.AuthorizedModuleIds,
             access.GrantedCapabilityIds);
 
+        // ProfileTitle carries the template title/function (visual/function
+        // title) — the functional profile itself is profile, resolved above.
         return Result<ResolvedIdentity, DomainError>.Success(new ResolvedIdentity(
             currentUser,
             record.ActorId,
-            effectiveTemplate.TemplateName,
+            record.TemplateName,
             access,
             firstPage));
     }

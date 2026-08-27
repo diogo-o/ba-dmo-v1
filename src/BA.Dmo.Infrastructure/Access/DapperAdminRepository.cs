@@ -14,18 +14,26 @@ namespace BA.Dmo.Infrastructure.Access;
 /// (GLM-ACC-12); the self-lockout invariant (GLM-ACC-10) is validated inside
 /// the SAME transaction as the write: the change is applied, the surviving
 /// admin path is counted, and a zero count rolls the write back.
+///
+/// SCHEMA-RAT-03A (D-1/D-2): user assignment is single-template and the
+/// canonical store is internal_users.template_id (direct FK) — the N27
+/// junction is maintained as a ONE-WAY mirror only (max one row per user,
+/// written in the same transaction as the FK). The functional profile is
+/// template-owned (access_template_profiles): template create/update write
+/// the profile in the same transaction and re-derive internal_users.
+/// profile_title one-way (compatibility mirror; never a user-level edit).
 /// </summary>
 public sealed class DapperAdminRepository : IAdminRepository
 {
     private const string AdminGrantPatternJson = "[{\"moduleId\":\"admin\"}]";
 
     // PostgreSQL SQLSTATE 42703 = undefined_column. Detected internally ONLY to
-// recognise the N26-not-applied schema condition (internal_users.modules_override);
-// it is translated to SchemaMigrationRequiredException and the user is shown a
-// safe Portuguese message — the SQLSTATE itself is never surfaced.
-private const string UndefinedColumnSqlState = "42703";
+    // recognise the N26-not-applied schema condition (internal_users.modules_override);
+    // it is translated to SchemaMigrationRequiredException and the user is shown a
+    // safe Portuguese message — the SQLSTATE itself is never surfaced.
+    private const string UndefinedColumnSqlState = "42703";
 
-private const string UserColumns =
+    private const string UserColumns =
         """
         u.actor_id        AS ActorId,
         u.auth_user_id    AS AuthUserId,
@@ -36,12 +44,7 @@ private const string UserColumns =
         u.updated_at_utc  AS UpdatedAtUtc,
         NULL::text        AS AuthEmail,
         u.modules_override::text AS ModulesOverrideJson
-        , ARRAY(
-            SELECT ut.template_id
-            FROM internal_user_access_templates ut
-            WHERE ut.actor_id = u.actor_id
-            ORDER BY ut.template_id
-          ) AS TemplateIds
+        , ARRAY[u.template_id] AS TemplateIds
         """;
 
     private const string TemplateColumns =
@@ -151,7 +154,6 @@ private const string UserColumns =
         string actorId,
         Guid authUserId,
         string displayName,
-        string? profileTitle,
         string templateId,
         bool active,
         DateTimeOffset createdAtUtc,
@@ -167,7 +169,11 @@ private const string UserColumns =
                                                 display_name, profile_title, active,
                                                 created_at_utc, updated_at_utc)
                     VALUES (@ActorId, @AuthUserId, @TemplateId,
-                            @DisplayName, @ProfileTitle, @Active,
+                            @DisplayName,
+                            (SELECT functional_profile
+                               FROM access_template_profiles
+                              WHERE template_id = @TemplateId),
+                            @Active,
                             @CreatedAtUtc, @CreatedAtUtc)
                     ON CONFLICT (actor_id) DO NOTHING
                     RETURNING actor_id
@@ -176,7 +182,9 @@ private const string UserColumns =
                     actor_id, template_id, assigned_at_utc, assigned_by)
                 SELECT actor_id, @TemplateId, @CreatedAtUtc, NULL
                 FROM inserted
-                ON CONFLICT (actor_id, template_id) DO NOTHING;
+                ON CONFLICT (actor_id) DO UPDATE
+                SET template_id = EXCLUDED.template_id,
+                    assigned_at_utc = EXCLUDED.assigned_at_utc;
                 """,
                 new
                 {
@@ -184,7 +192,6 @@ private const string UserColumns =
                     AuthUserId = authUserId,
                     TemplateId = templateId,
                     DisplayName = displayName,
-                    ProfileTitle = profileTitle,
                     Active = active,
                     CreatedAtUtc = createdAtUtc
                 },
@@ -199,7 +206,6 @@ private const string UserColumns =
     public async Task UpdateUserAsync(
         string actorId,
         string displayName,
-        string? profileTitle,
         DateTimeOffset expectedUpdatedAt,
         DateTimeOffset updatedAtUtc,
         CancellationToken cancellationToken = default)
@@ -211,7 +217,6 @@ private const string UserColumns =
                 """
                 UPDATE internal_users
                 SET display_name = @DisplayName,
-                    profile_title = @ProfileTitle,
                     updated_at_utc = @UpdatedAtUtc
                 WHERE actor_id = @ActorId AND updated_at_utc = @ExpectedUpdatedAt;
                 """,
@@ -219,7 +224,6 @@ private const string UserColumns =
                 {
                     ActorId = actorId,
                     DisplayName = displayName,
-                    ProfileTitle = profileTitle,
                     UpdatedAtUtc = updatedAtUtc,
                     ExpectedUpdatedAt = expectedUpdatedAt
                 },
@@ -232,35 +236,23 @@ private const string UserColumns =
         }
     }
 
-    public Task<bool> ChangeUserTemplateAsync(
+    public async Task<bool> ChangeUserTemplateAsync(
         string actorId,
         string templateId,
         DateTimeOffset expectedUpdatedAt,
         DateTimeOffset updatedAtUtc,
-        CancellationToken cancellationToken = default) =>
-        ReplaceUserAccessTemplatesAsync(
-            actorId, [templateId], expectedUpdatedAt, updatedAtUtc, cancellationToken);
-
-    public async Task<bool> ReplaceUserAccessTemplatesAsync(
-        string actorId,
-        IReadOnlyList<string> templateIds,
-        DateTimeOffset expectedUpdatedAt,
-        DateTimeOffset updatedAtUtc,
         CancellationToken cancellationToken = default)
     {
-        var ids = templateIds.Distinct(StringComparer.Ordinal).ToArray();
-        if (ids.Length == 0)
-            throw new ArgumentException("At least one template is required.", nameof(templateIds));
-
         try
         {
             await DapperUnitOfWork.RunAsync<int>(_connectionFactory,
                 async (connection, transaction, ct) =>
                 {
+                    // 1. Canonical single assignment: internal_users.template_id.
                     var rows = await Db.ExecuteAsync(connection,
                         """
                         UPDATE internal_users
-                        SET template_id = @PrimaryTemplateId,
+                        SET template_id = @TemplateId,
                             updated_at_utc = @UpdatedAtUtc
                         WHERE actor_id = @ActorId
                           AND updated_at_utc = @ExpectedUpdatedAt;
@@ -268,25 +260,27 @@ private const string UserColumns =
                         new
                         {
                             ActorId = actorId,
-                            PrimaryTemplateId = ids[0],
+                            TemplateId = templateId,
                             UpdatedAtUtc = updatedAtUtc,
                             ExpectedUpdatedAt = expectedUpdatedAt
                         }, transaction: transaction, cancellationToken: ct);
                     ConcurrencyGuard.EnsureSingleRowUpdated(rows, "utilizador interno");
 
-                    await Db.ExecuteAsync(connection,
-                        "DELETE FROM internal_user_access_templates WHERE actor_id = @ActorId;",
-                        new { ActorId = actorId }, transaction: transaction, cancellationToken: ct);
+                    // 2. One-way legacy mirror: exactly one junction row per
+                    // user mirroring the direct FK (never an authority).
                     await Db.ExecuteAsync(connection,
                         """
                         INSERT INTO internal_user_access_templates (
                             actor_id, template_id, assigned_at_utc, assigned_by)
-                        SELECT @ActorId, template_id, @UpdatedAtUtc, NULL
-                        FROM unnest(@TemplateIds::text[]) AS assigned(template_id);
+                        VALUES (@ActorId, @TemplateId, @UpdatedAtUtc, NULL)
+                        ON CONFLICT (actor_id) DO UPDATE
+                        SET template_id = EXCLUDED.template_id,
+                            assigned_at_utc = EXCLUDED.assigned_at_utc;
                         """,
-                        new { ActorId = actorId, TemplateIds = ids, UpdatedAtUtc = updatedAtUtc },
+                        new { ActorId = actorId, TemplateId = templateId, UpdatedAtUtc = updatedAtUtc },
                         transaction: transaction, cancellationToken: ct);
 
+                    // 3. Self-lockout invariant (GLM-ACC-10).
                     var admins = await CountActiveAdminsOnAsync(
                         connection, transaction, excludeActorId: null, ct);
                     if (admins == 0)
@@ -325,12 +319,13 @@ private const string UserColumns =
             cancellationToken);
 
     /// <summary>
-    /// Guarded write of the per-user module override (N26). Writes ONLY
-    /// modules_override (+ updated_at) for THIS actor; template rows are never
-    /// touched (other users on the same template unaffected). Optimistic
-    /// concurrency via updated_at (GLM-ACC-12); the module grant surface does
-    /// not participate in the self-lockout count (admin.gerir still resolves
-    /// through the shared template) so no admins-count guard is applied here.
+    /// Guarded write of the per-user module override (N26 — DORMANT legacy).
+    /// Writes ONLY modules_override (+ updated_at) for THIS actor; template
+    /// rows are never touched (other users on the same template unaffected).
+    /// Optimistic concurrency via updated_at (GLM-ACC-12); the module grant
+    /// surface does not participate in the self-lockout count (admin.gerir
+    /// still resolves through the shared template) so no admins-count guard.
+    /// Runtime identity/access resolution never consumes this column.
     /// </summary>
     public async Task SetUserModulesOverrideAsync(
         string actorId,
@@ -423,10 +418,10 @@ private const string UserColumns =
             """
             SELECT COUNT(DISTINCT u.actor_id)
             FROM internal_users u
-            JOIN internal_user_access_templates ut ON ut.actor_id = u.actor_id
-            JOIN access_templates t ON t.template_id = ut.template_id
+            JOIN access_templates t ON t.template_id = u.template_id
+            JOIN access_template_profiles p ON p.template_id = t.template_id
             WHERE u.active
-              AND u.profile_title = 'Admin'
+              AND p.functional_profile = 'Admin'
               AND t.active
               AND t.modules @> @AdminGrantPattern::jsonb
               AND (@ExcludeActorId::text IS NULL OR u.actor_id <> @ExcludeActorId);
@@ -438,7 +433,7 @@ private const string UserColumns =
     }
 
     // ------------------------------------------------------------------
-    // access templates
+    // access templates / template-owned functional profile
     // ------------------------------------------------------------------
 
     public async Task<IReadOnlyList<AdminTemplateRow>> ListTemplatesAsync(
@@ -474,31 +469,99 @@ private const string UserColumns =
         }
     }
 
+    public async Task<string?> GetTemplateFunctionalProfileAsync(
+        string templateId, CancellationToken cancellationToken = default)
+    {
+        var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
+        try
+        {
+            return await Db.QuerySingleOrDefaultAsync<string>(connection,
+                """
+                SELECT p.functional_profile
+                FROM access_template_profiles p
+                WHERE p.template_id = @TemplateId;
+                """,
+                new { TemplateId = templateId },
+                cancellationToken: cancellationToken);
+        }
+        finally
+        {
+            await DisposeAsync(connection);
+        }
+    }
+
+    public async Task<IReadOnlyDictionary<string, string>> ListTemplateFunctionalProfilesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
+        try
+        {
+            var rows = await Db.QueryAsync<TemplateProfileRow>(connection,
+                """
+                SELECT p.template_id AS TemplateId, p.functional_profile AS FunctionalProfile
+                FROM access_template_profiles p
+                ORDER BY p.template_id;
+                """,
+                cancellationToken: cancellationToken);
+            return rows.ToDictionary(row => row.TemplateId, row => row.FunctionalProfile, StringComparer.Ordinal);
+        }
+        finally
+        {
+            await DisposeAsync(connection);
+        }
+    }
+
     public async Task CreateTemplateAsync(
         string templateId,
         string name,
         string modulesJson,
+        string functionalProfile,
         DateTimeOffset createdAtUtc,
         CancellationToken cancellationToken = default)
     {
         var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
         try
         {
-            await Db.ExecuteAsync(connection,
-                """
-                INSERT INTO access_templates (template_id, name, modules, active,
-                                              created_at_utc, created_by, updated_at_utc)
-                VALUES (@TemplateId, @Name, @ModulesJson::jsonb, TRUE,
-                        @CreatedAtUtc, NULL, @CreatedAtUtc);
-                """,
-                new
+            await DapperUnitOfWork.RunAsync<int>(_connectionFactory,
+                async (connection, transaction, ct) =>
                 {
-                    TemplateId = templateId,
-                    Name = name,
-                    ModulesJson = modulesJson,
-                    CreatedAtUtc = createdAtUtc
-                },
-                cancellationToken: cancellationToken);
+                    await Db.ExecuteAsync(connection,
+                        """
+                        INSERT INTO access_templates (template_id, name, modules, active,
+                                                      created_at_utc, created_by, updated_at_utc)
+                        VALUES (@TemplateId, @Name, @ModulesJson::jsonb, TRUE,
+                                @CreatedAtUtc, NULL, @CreatedAtUtc);
+                        """,
+                        new
+                        {
+                            TemplateId = templateId,
+                            Name = name,
+                            ModulesJson = modulesJson,
+                            CreatedAtUtc = createdAtUtc
+                        },
+                        transaction: transaction, cancellationToken: ct);
+
+                    // Template-owned functional profile (D-1), written in the
+                    // same transaction. The N31 AFTER INSERT trigger derives a
+                    // deterministic initial profile; the explicit choice wins.
+                    await Db.ExecuteAsync(connection,
+                        """
+                        INSERT INTO access_template_profiles (template_id, functional_profile, updated_at_utc)
+                        VALUES (@TemplateId, @FunctionalProfile, @CreatedAtUtc)
+                        ON CONFLICT (template_id) DO UPDATE
+                        SET functional_profile = EXCLUDED.functional_profile,
+                            updated_at_utc = EXCLUDED.updated_at_utc;
+                        """,
+                        new
+                        {
+                            TemplateId = templateId,
+                            FunctionalProfile = functionalProfile,
+                            CreatedAtUtc = createdAtUtc
+                        },
+                        transaction: transaction, cancellationToken: ct);
+
+                    return 1;
+                }, cancellationToken);
         }
         finally
         {
@@ -511,6 +574,7 @@ private const string UserColumns =
         string name,
         string modulesJson,
         bool active,
+        string functionalProfile,
         DateTimeOffset expectedUpdatedAt,
         DateTimeOffset updatedAtUtc,
         CancellationToken cancellationToken = default)
@@ -541,6 +605,32 @@ private const string UserColumns =
                         },
                         transaction: transaction, cancellationToken: ct);
                     ConcurrencyGuard.EnsureSingleRowUpdated(rows, "template de acesso");
+
+                    // Template-owned functional profile (D-1) + one-way user
+                    // profile_title mirror, all in the same transaction. The
+                    // mirror update intentionally does NOT touch
+                    // internal_users.updated_at_utc (no concurrency-version
+                    // churn on the users of the template).
+                    await Db.ExecuteAsync(connection,
+                        """
+                        INSERT INTO access_template_profiles (template_id, functional_profile, updated_at_utc)
+                        VALUES (@TemplateId, @FunctionalProfile, @UpdatedAtUtc)
+                        ON CONFLICT (template_id) DO UPDATE
+                        SET functional_profile = EXCLUDED.functional_profile,
+                            updated_at_utc = EXCLUDED.updated_at_utc;
+
+                        UPDATE internal_users
+                        SET profile_title = @FunctionalProfile
+                        WHERE template_id = @TemplateId
+                          AND profile_title IS DISTINCT FROM @FunctionalProfile;
+                        """,
+                        new
+                        {
+                            TemplateId = templateId,
+                            FunctionalProfile = functionalProfile,
+                            UpdatedAtUtc = updatedAtUtc
+                        },
+                        transaction: transaction, cancellationToken: ct);
 
                     var admins = await CountActiveAdminsOnAsync(
                         connection, transaction, excludeActorId: null, ct);
@@ -704,6 +794,8 @@ private const string UserColumns =
         else
             connection.Dispose();
     }
+
+    private sealed record TemplateProfileRow(string TemplateId, string FunctionalProfile);
 
     /// <summary>Rolled-back marker for the self-lockout invariant.</summary>
     private sealed class LockoutViolationException : Exception;

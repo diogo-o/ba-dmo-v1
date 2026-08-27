@@ -108,7 +108,8 @@ public class PegamentoWebApiTests : IClassFixture<PegamentoWebApiTests.PegFixtur
             TemplateId: "tpl-peg",
             TemplateName: "Pegamentos",
             TemplateActive: true,
-            ModulesJson: "[{\"moduleId\":\"controlo\",\"capabilities\":[]}]");
+            ModulesJson: "[{\"moduleId\":\"controlo\",\"capabilities\":[]}]",
+            FunctionalProfile: "Operador / Controlador");
 
         public InternalUserRecord UserWithoutPegamentos() => new(
             ActorId: "other-actor",
@@ -119,7 +120,8 @@ public class PegamentoWebApiTests : IClassFixture<PegamentoWebApiTests.PegFixtur
             TemplateId: "tpl-other",
             TemplateName: "Outro",
             TemplateActive: true,
-            ModulesJson: "[]");
+            ModulesJson: "[]",
+            FunctionalProfile: "Operador / Controlador");
 
         public HttpClient CreateTestClient() => CreateClient(new WebApplicationFactoryClientOptions
         {

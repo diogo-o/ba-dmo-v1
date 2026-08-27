@@ -456,7 +456,8 @@ public class DesignSystemGuardTests : IClassFixture<DesignSystemGuardTests.Desig
             TemplateId: "tpl-design",
             TemplateName: "Design",
             TemplateActive: true,
-            ModulesJson: "[{\"moduleId\":\"jobon\",\"capabilities\":[]},{\"moduleId\":\"boquilhas\",\"capabilities\":[]}]");
+            ModulesJson: "[{\"moduleId\":\"jobon\",\"capabilities\":[]},{\"moduleId\":\"boquilhas\",\"capabilities\":[]}]",
+            FunctionalProfile: "Operador / Controlador");
 
         public HttpClient CreateTestClient() => CreateClient(new WebApplicationFactoryClientOptions
         {

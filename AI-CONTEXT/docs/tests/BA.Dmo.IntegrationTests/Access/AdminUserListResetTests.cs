@@ -211,7 +211,8 @@ public class AdminUserListResetTests : IClassFixture<AdminUserListResetTests.Res
                         "admin-actor", AdminAuthUserId, "Administrador", "Admin",
                         UserActive: true, TemplateId: "tpl-admin", TemplateName: "Admin",
                         TemplateActive: true,
-                        ModulesJson: "[{\"moduleId\":\"admin\",\"capabilities\":[\"admin.gerir\",\"audit.view\"]}]"))
+                        ModulesJson: "[{\"moduleId\":\"admin\",\"capabilities\":[\"admin.gerir\",\"audit.view\"]}]",
+                        FunctionalProfile: "Admin"))
                     : Task.FromResult<InternalUserRecord?>(null);
 
             public Task<bool> AdminExistsAsync(CancellationToken cancellationToken = default) =>
@@ -286,22 +287,17 @@ public class AdminUserListResetTests : IClassFixture<AdminUserListResetTests.Res
             Task.FromResult(false);
 
         public Task CreateInternalUserAsync(
-            string actorId, Guid authUserId, string displayName, string? profileTitle,
+            string actorId, Guid authUserId, string displayName,
             string templateId, bool active, DateTimeOffset createdAtUtc,
             CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task UpdateUserAsync(
-            string actorId, string displayName, string? profileTitle,
+            string actorId, string displayName,
             DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc,
             CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task<bool> ChangeUserTemplateAsync(
             string actorId, string templateId, DateTimeOffset expectedUpdatedAt,
-            DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default) =>
-            Task.FromResult(true);
-
-        public Task<bool> ReplaceUserAccessTemplatesAsync(
-            string actorId, IReadOnlyList<string> templateIds, DateTimeOffset expectedUpdatedAt,
             DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default) =>
             Task.FromResult(true);
 
@@ -334,12 +330,24 @@ public class AdminUserListResetTests : IClassFixture<AdminUserListResetTests.Res
                         Active: true, DateTimeOffset.UnixEpoch)
                     : null);
 
+        public Task<string?> GetTemplateFunctionalProfileAsync(
+            string templateId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<string?>("Operador / Controlador");
+
+        public Task<IReadOnlyDictionary<string, string>> ListTemplateFunctionalProfilesAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyDictionary<string, string>>(
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["tpl-op"] = "Operador / Controlador"
+                });
+
         public Task CreateTemplateAsync(
-            string templateId, string name, string modulesJson, DateTimeOffset createdAtUtc,
-            CancellationToken cancellationToken = default) => Task.CompletedTask;
+            string templateId, string name, string modulesJson, string functionalProfile,
+            DateTimeOffset createdAtUtc, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task<bool> UpdateTemplateAsync(
-            string templateId, string name, string modulesJson, bool active,
+            string templateId, string name, string modulesJson, bool active, string functionalProfile,
             DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc,
             CancellationToken cancellationToken = default) => Task.FromResult(true);
 

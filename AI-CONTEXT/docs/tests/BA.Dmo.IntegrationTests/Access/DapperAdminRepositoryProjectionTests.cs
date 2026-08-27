@@ -35,7 +35,9 @@ public class DapperAdminRepositoryProjectionTests
         // AuthEmail and ModulesOverrideJson columns deliberately carry real
         // typed columns present in the projection yet returned as NULL (no
         // auth.users access at the runtime connection; no per-user override set):
-        // TemplateIds is the N27 authoritative association projection.
+        // TemplateIds is the SINGLE canonical assignment projection
+        // (ARRAY[u.template_id], SCHEMA-RAT-03A D-2 — the N27 junction is NOT
+        // consulted for the effective template).
         var table = new DataTable();
         table.Columns.Add("ActorId", typeof(string));
         table.Columns.Add("AuthUserId", typeof(Guid));
@@ -50,7 +52,7 @@ public class DapperAdminRepositoryProjectionTests
         table.Rows.Add(
             "user-1", authUserId, "Utilizador Um", "Operador / Controlador",
             "tpl-active", true, updatedAt, DBNull.Value, DBNull.Value,
-            new[] { "tpl-active", "tpl-jobon" });
+            new[] { "tpl-active" });
 
         var connection = new DataReaderDbConnection(table);
         var repository = new DapperAdminRepository(new FixedReaderConnectionFactory(connection));
@@ -66,6 +68,10 @@ public class DapperAdminRepositoryProjectionTests
         Assert.Contains("NULL::text", connection.IssuedSql, StringComparison.Ordinal);
         Assert.Contains("AS ModulesOverrideJson", connection.IssuedSql, StringComparison.Ordinal);
         Assert.Contains("AS TemplateIds", connection.IssuedSql, StringComparison.Ordinal);
+        // D-2: the projection derives the assignment from the canonical direct
+        // FK — the N27 junction must not appear in the admin user projection.
+        Assert.Contains("ARRAY[u.template_id]", connection.IssuedSql, StringComparison.Ordinal);
+        Assert.DoesNotContain("internal_user_access_templates", connection.IssuedSql, StringComparison.Ordinal);
 
         var row = Assert.Single(rows);
         Assert.Equal("user-1", row.ActorId);
@@ -79,7 +85,7 @@ public class DapperAdminRepositoryProjectionTests
         Assert.Null(row.AuthEmail);
         // No per-user override set: the override column materializes as null.
         Assert.Null(row.ModulesOverrideJson);
-        Assert.Equal(["tpl-active", "tpl-jobon"], row.AssignedTemplateIds);
+        Assert.Equal(["tpl-active"], row.AssignedTemplateIds);
         Assert.True(connection.WasDisposed);
     }
 

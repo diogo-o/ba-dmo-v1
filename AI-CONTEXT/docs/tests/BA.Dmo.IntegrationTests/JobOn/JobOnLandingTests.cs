@@ -164,7 +164,8 @@ public class JobOnLandingTests : IClassFixture<JobOnLandingTests.LandingFixture>
                     "actor-landing", AuthUserId, "Utilizador Landing", "Operador / Controlador",
                     UserActive: true, TemplateId: "tpl-landing", TemplateName: "Landing",
                     TemplateActive: true,
-                    ModulesJson: "[{\"moduleId\":\"jobon\",\"capabilities\":[\"jobon.view\"]}]"));
+                    ModulesJson: "[{\"moduleId\":\"jobon\",\"capabilities\":[\"jobon.view\"]}]",
+                    FunctionalProfile: "Operador / Controlador"));
 
             public Task<bool> AdminExistsAsync(CancellationToken cancellationToken = default) =>
                 Task.FromResult(true);

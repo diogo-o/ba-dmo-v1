@@ -109,7 +109,8 @@ public class ReparacaoExternaWebApiTests : IClassFixture<ReparacaoExternaWebApiT
             TemplateId: "tpl-repx",
             TemplateName: "Reparação Externa",
             TemplateActive: true,
-            ModulesJson: "[{\"moduleId\":\"reparacao_externa\",\"capabilities\":[]}]");
+            ModulesJson: "[{\"moduleId\":\"reparacao_externa\",\"capabilities\":[]}]",
+            FunctionalProfile: "Operador / Controlador");
 
         public InternalUserRecord UserWithoutRepExt() => new(
             ActorId: "other-actor",
@@ -120,7 +121,8 @@ public class ReparacaoExternaWebApiTests : IClassFixture<ReparacaoExternaWebApiT
             TemplateId: "tpl-other",
             TemplateName: "Outro",
             TemplateActive: true,
-            ModulesJson: "[]");
+            ModulesJson: "[]",
+            FunctionalProfile: "Operador / Controlador");
 
         public HttpClient CreateTestClient() => CreateClient(new WebApplicationFactoryClientOptions
         {

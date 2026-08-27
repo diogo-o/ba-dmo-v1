@@ -136,7 +136,8 @@ public class FerramentasWebApiTests : IClassFixture<FerramentasWebApiTests.FerrF
             TemplateId: "tpl-ferr",
             TemplateName: "Ferramentas",
             TemplateActive: true,
-            ModulesJson: "[{\"moduleId\":\"ferramentas\",\"capabilities\":[]}]");
+            ModulesJson: "[{\"moduleId\":\"ferramentas\",\"capabilities\":[]}]",
+            FunctionalProfile: canConfigure ? "Responsável" : "Operador / Controlador");
 
         public InternalUserRecord UserWithoutFerramentas() => new(
             ActorId: "other-actor",
@@ -147,7 +148,8 @@ public class FerramentasWebApiTests : IClassFixture<FerramentasWebApiTests.FerrF
             TemplateId: "tpl-other",
             TemplateName: "Outro",
             TemplateActive: true,
-            ModulesJson: "[]");
+            ModulesJson: "[]",
+            FunctionalProfile: "Operador / Controlador");
 
         public HttpClient CreateTestClient() => CreateClient(new WebApplicationFactoryClientOptions
         {

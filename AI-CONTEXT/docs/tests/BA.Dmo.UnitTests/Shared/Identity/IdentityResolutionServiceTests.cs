@@ -6,8 +6,12 @@ using BA.Dmo.Domain.Shared.Kernel;
 namespace BA.Dmo.UnitTests.Shared.Identity;
 
 /// <summary>
-/// Identity resolution tests for the final access model:
-/// one reusable template per user, one functional profile, fail-closed access.
+/// Identity resolution tests for the final access model (SCHEMA-RAT-03A
+/// D-1/D-2): the user's single effective template comes from the canonical
+/// direct FK (internal_users.template_id) and the functional profile comes
+/// from the template (access_template_profiles). The N27 junction and the
+/// legacy internal_users.profile_title mirror are NOT authorities — resolution
+/// fails closed on invalid/inconsistent data and never merges templates.
 /// </summary>
 public class IdentityResolutionServiceTests
 {
@@ -39,7 +43,10 @@ public class IdentityResolutionServiceTests
             TemplateId: "tpl-1",
             TemplateName: "Template 1",
             TemplateActive: templateActive,
-            ModulesJson: modulesJson);
+            ModulesJson: modulesJson,
+            FunctionalProfile: FunctionalProfileNames.OperatorController);
+
+    // ---- 1. USER WITH ONE TEMPLATE: direct FK + template-owned profile ------
 
     [Fact]
     public async Task ValidActiveUserAndTemplate_ResolveAuthoritativeIdentity()
@@ -69,6 +76,8 @@ public class IdentityResolutionServiceTests
         Assert.Equal(FirstPageOutcome.Landing, result.Value.FirstPage.Outcome);
         Assert.Equal("/jobon", result.Value.FirstPage.Page!.Route);
     }
+
+    // ---- fail-closed states ------------------------------------------------
 
     [Fact]
     public async Task MissingInternalUser_FailsClosed_WithInternalUserInactive()
@@ -114,33 +123,27 @@ public class IdentityResolutionServiceTests
         Assert.Equal("ACCESS_TEMPLATE_INACTIVE", result.Error.Code);
     }
 
+    // ---- 6. ZERO/MULTIPLE INVALID STATES: fail-closed ----------------------
+
     [Fact]
-    public async Task MultipleAssignedTemplates_FailClosedAsAmbiguous()
+    public async Task MissingTemplateFunctionalProfile_FailsClosed_AsFunctionalProfileInvalid()
     {
-        _repository.User = Record(modulesJson: "[]") with
-        {
-            AccessTemplates =
-            [
-                new InternalUserAccessTemplateRecord(
-                    "tpl-jobon", "Job On", true,
-                    "[{\"moduleId\":\"jobon\",\"capabilities\":[]}]"),
-                new InternalUserAccessTemplateRecord(
-                    "tpl-controlo", "Controlo", true,
-                    "[{\"moduleId\":\"controlo\",\"capabilities\":[]}]")
-            ]
-        };
+        // The template exists but has NO access_template_profiles row (the Dapper
+        // repo returns FunctionalProfile = null). The template-owned profile is
+        // the authority: a missing profile is invalid, never a fallback.
+        _repository.User = Record() with { FunctionalProfile = null };
 
         var result = await _service.ResolveAsync(AuthUserId);
 
         Assert.True(result.IsFailure);
-        Assert.Equal("ACCESS_TEMPLATE_AMBIGUOUS", result.Error.Code);
+        Assert.Equal("FUNCTIONAL_PROFILE_INVALID", result.Error.Code);
         Assert.Equal(ErrorCategory.Unauthorized, result.Error.Category);
     }
 
     [Fact]
-    public async Task MissingOrUnknownFunctionalProfile_FailsClosed()
+    public async Task UnknownFunctionalProfile_FailsClosed()
     {
-        _repository.User = Record() with { ProfileTitle = "Metrologia" };
+        _repository.User = Record() with { FunctionalProfile = "Metrologia" };
 
         var result = await _service.ResolveAsync(AuthUserId);
 
@@ -148,12 +151,46 @@ public class IdentityResolutionServiceTests
         Assert.Equal("FUNCTIONAL_PROFILE_INVALID", result.Error.Code);
     }
 
+    // ---- 4. PROFILE MIRROR DIVERGENCE: template profile wins ----------------
+
+    [Fact]
+    public async Task ProfileMirrorDivergence_FollowsTemplateProfile_NotProfileTitleMirror()
+    {
+        // Legacy mirror (internal_users.profile_title) says Operador /
+        // Controlador; the template-owned profile (access_template_profiles)
+        // says Responsável. Authorization MUST follow the template profile.
+        _repository.User = Record(modulesJson:
+            "[{\"moduleId\":\"jobon\",\"capabilities\":[]},{\"moduleId\":\"controlo\",\"capabilities\":[]}]") with
+        {
+            ProfileTitle = FunctionalProfileNames.OperatorController,
+            FunctionalProfile = FunctionalProfileNames.Responsible
+        };
+
+        var result = await _service.ResolveAsync(AuthUserId);
+
+        Assert.True(result.IsSuccess);
+        var access = result.Value.Access;
+        // Responsável projections apply (jobon.edit + jobon.configure +
+        // controlo.review + peso.aprovar); Operador/Controlador-only
+        // projections (controlo.edit/controlo.submit) do not.
+        Assert.True(access.HasCapability("jobon.edit"));
+        Assert.True(access.HasCapability("jobon.configure"));
+        Assert.True(access.HasModule("controlo"));
+        Assert.True(access.HasCapability("controlo.review"));
+        Assert.True(access.HasCapability("peso.aprovar"));
+        Assert.False(access.HasCapability("controlo.edit"));
+        Assert.False(access.HasCapability("controlo.submit"));
+    }
+
     [Fact]
     public async Task InvalidGrantEntries_AreDiscarded_NotSilentlyRepaired()
     {
         _repository.User = Record(modulesJson:
             "[{\"moduleId\":\"ghost\",\"capabilities\":[\"peso.aprovar\"]}," +
-            "{\"moduleId\":\"controlo\",\"capabilities\":[\"controlo.review\",\"ghost.cap\"]}]");
+            "{\"moduleId\":\"controlo\",\"capabilities\":[\"controlo.review\",\"ghost.cap\"]}]") with
+        {
+            FunctionalProfile = FunctionalProfileNames.OperatorController
+        };
 
         var result = await _service.ResolveAsync(AuthUserId);
 
@@ -169,13 +206,16 @@ public class IdentityResolutionServiceTests
         Assert.False(access.HasCapability("ghost.cap"));
     }
 
+    // ---- 9. ADMIN TEMPLATE --------------------------------------------------
+
     [Fact]
     public async Task AdminGrants_LandOnAdmin_InsteadOfJobOn()
     {
         _repository.User = Record(modulesJson:
             "[{\"moduleId\":\"admin\",\"capabilities\":[]}]") with
         {
-            ProfileTitle = FunctionalProfileNames.Admin,
+            ProfileTitle = FunctionalProfileNames.OperatorController,
+            FunctionalProfile = FunctionalProfileNames.Admin,
             TemplateName = "Administrador"
         };
 
@@ -186,6 +226,28 @@ public class IdentityResolutionServiceTests
         Assert.False(result.Value.Access.HasCapability("jobon.view"));
         Assert.True(result.Value.Access.HasModule("admin"));
         Assert.True(result.Value.Access.HasCapability("admin.gerir"));
+        Assert.False(result.Value.Access.HasModule("boquilhas"));
+    }
+
+    // ---- 10. OPERATIONAL TEMPLATE: never admin ------------------------------
+
+    [Fact]
+    public async Task OperationalTemplate_DoesNotGainAdminAccess_EvenWithLegacyProfileTitleAdmin()
+    {
+        // Legacy mirror says Admin but the template profile is operational:
+        // access is operational — the mirror never grants admin.
+        _repository.User = Record() with
+        {
+            ProfileTitle = FunctionalProfileNames.Admin,
+            FunctionalProfile = FunctionalProfileNames.OperatorController
+        };
+
+        var result = await _service.ResolveAsync(AuthUserId);
+
+        Assert.True(result.IsSuccess);
+        Assert.False(result.Value.Access.HasModule("admin"));
+        Assert.False(result.Value.Access.HasCapability("admin.gerir"));
+        Assert.True(result.Value.Access.HasModule("jobon"));
     }
 
     [Fact]

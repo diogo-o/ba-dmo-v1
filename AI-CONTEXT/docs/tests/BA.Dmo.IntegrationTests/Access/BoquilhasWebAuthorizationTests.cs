@@ -288,7 +288,8 @@ public class BoquilhasWebAuthorizationTests :
                 return Task.FromResult<InternalUserRecord?>(new InternalUserRecord(
                     "boquilhas-actor", AuthUserId, "Operador Boquilhas", "Operador / Controlador",
                     UserActive: true, TemplateId: "tpl-bq", TemplateName: "Boquilhas",
-                    TemplateActive: true, ModulesJson: $"[{grants}]"));
+                    TemplateActive: true, ModulesJson: $"[{grants}]",
+                    FunctionalProfile: "Operador / Controlador"));
             }
 
             public Task<bool> AdminExistsAsync(CancellationToken cancellationToken = default) =>

@@ -233,7 +233,8 @@ public class HistoriaWebAuthorizationTests :
                 return Task.FromResult<InternalUserRecord?>(new InternalUserRecord(
                     "historia-actor", AuthUserId, "Operador História", "Operador / Controlador",
                     UserActive: true, TemplateId: "tpl-hist", TemplateName: "História",
-                    TemplateActive: true, ModulesJson: $"[{grants}]"));
+                    TemplateActive: true, ModulesJson: $"[{grants}]",
+                    FunctionalProfile: "Operador / Controlador"));
             }
 
             public Task<bool> AdminExistsAsync(CancellationToken cancellationToken = default) =>
@@ -252,13 +253,11 @@ public class HistoriaWebAuthorizationTests :
                 Task.FromResult<AdminUserRow?>(null);
             public Task<bool> AuthUserIdAlreadyRegisteredAsync(Guid authUserId, CancellationToken ct = default) =>
                 Task.FromResult(false);
-            public Task CreateInternalUserAsync(string actorId, Guid authUserId, string displayName, string? profileTitle, string templateId, bool active, DateTimeOffset createdAtUtc, CancellationToken ct = default) =>
+            public Task CreateInternalUserAsync(string actorId, Guid authUserId, string displayName, string templateId, bool active, DateTimeOffset createdAtUtc, CancellationToken ct = default) =>
                 Task.CompletedTask;
-            public Task UpdateUserAsync(string actorId, string displayName, string? profileTitle, DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc, CancellationToken ct = default) =>
+            public Task UpdateUserAsync(string actorId, string displayName, DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc, CancellationToken ct = default) =>
                 Task.CompletedTask;
             public Task<bool> ChangeUserTemplateAsync(string actorId, string templateId, DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc, CancellationToken ct = default) =>
-                Task.FromResult(true);
-            public Task<bool> ReplaceUserAccessTemplatesAsync(string actorId, IReadOnlyList<string> templateIds, DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc, CancellationToken ct = default) =>
                 Task.FromResult(true);
             public Task<bool> SetUserActiveAsync(string actorId, bool active, DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc, CancellationToken ct = default) =>
                 Task.FromResult(true);
@@ -270,9 +269,13 @@ public class HistoriaWebAuthorizationTests :
                 Task.FromResult<IReadOnlyList<AdminTemplateRow>>(Array.Empty<AdminTemplateRow>());
             public Task<AdminTemplateRow?> GetTemplateAsync(string templateId, CancellationToken ct = default) =>
                 Task.FromResult<AdminTemplateRow?>(null);
-            public Task CreateTemplateAsync(string templateId, string name, string modulesJson, DateTimeOffset createdAtUtc, CancellationToken ct = default) =>
+            public Task<string?> GetTemplateFunctionalProfileAsync(string templateId, CancellationToken ct = default) =>
+                Task.FromResult<string?>(null);
+            public Task<IReadOnlyDictionary<string, string>> ListTemplateFunctionalProfilesAsync(CancellationToken ct = default) =>
+                Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>(StringComparer.Ordinal));
+            public Task CreateTemplateAsync(string templateId, string name, string modulesJson, string functionalProfile, DateTimeOffset createdAtUtc, CancellationToken ct = default) =>
                 Task.CompletedTask;
-            public Task<bool> UpdateTemplateAsync(string templateId, string name, string modulesJson, bool active, DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc, CancellationToken ct = default) =>
+            public Task<bool> UpdateTemplateAsync(string templateId, string name, string modulesJson, bool active, string functionalProfile, DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc, CancellationToken ct = default) =>
                 Task.FromResult(true);
             public Task InsertAuditEventAsync(AuditEntry entry, CancellationToken ct = default) =>
                 Task.CompletedTask;

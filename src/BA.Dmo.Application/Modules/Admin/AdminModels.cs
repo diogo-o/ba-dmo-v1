@@ -3,7 +3,10 @@ namespace BA.Dmo.Application.Modules.Admin;
 /// <summary>
 /// Admin read/write models (Plan-V3 04_ACC §9, 06_DATA §3.1). Rows mirror
 /// the U-02 schema exactly; no permission data is duplicated on users —
-/// grants live only in templates (GLM-ACC-02).
+/// grants live only in templates (GLM-ACC-02). SCHEMA-RAT-03A (D-1/D-2):
+/// users carry exactly one template (internal_users.template_id); the
+/// functional profile is template-owned (access_template_profiles) and
+/// AdminUserRow.ProfileTitle is the legacy compatibility mirror only.
 /// </summary>
 public sealed record AdminUserRow
 {
@@ -49,8 +52,8 @@ public sealed record AdminUserRow
     public string? ModulesOverrideJson { get; set; }
     public string[]? TemplateIds { get; set; }
 
-    public IReadOnlyList<string> AssignedTemplateIds =>
-        TemplateIds is { Length: > 0 } ? TemplateIds : [TemplateId];
+    /// <summary>Single canonical assignment: the direct template_id.</summary>
+    public IReadOnlyList<string> AssignedTemplateIds => [TemplateId];
 }
 
 public sealed record AdminTemplateRow(
@@ -119,40 +122,29 @@ public sealed record AuditEntry(
     string? AfterSummary = null);
 
 /// <summary>
-/// Request to create an internal user (+ Auth account, TD-16). The executor
-/// identity is resolved server-side by the authorization gate — never
-/// supplied by the posted form. Initial activation state defaults to active.
+/// Request to create an internal user (+ Auth account, TD-16). Exactly ONE
+/// template is assigned (D-2): the functional profile is template-owned and
+/// is NOT part of this request. The executor identity is resolved server-side
+/// by the authorization gate — never supplied by the posted form. Initial
+/// activation state defaults to active.
 /// </summary>
 public sealed record CreateAdminUserRequest(
     string Email,
     string Password,
     string DisplayName,
-    string? ProfileTitle,
     string TemplateId,
-    bool Active = true,
-    IReadOnlyList<string>? TemplateIds = null)
-{
-    public IReadOnlyList<string> AssignedTemplateIds =>
-        TemplateIds is { Count: > 0 } ? TemplateIds : [TemplateId];
-}
+    bool Active = true);
 
-/// <summary>Request to edit identity/display fields of an internal user.</summary>
+/// <summary>Request to edit identity/display fields of an internal user (functional profile is template-owned; never posted).</summary>
 public sealed record UpdateAdminUserRequest(
     string ActorId,
     string DisplayName,
-    string? ProfileTitle,
     DateTimeOffset ExpectedUpdatedAt);
 
-/// <summary>Request to change the template of an internal user.</summary>
+/// <summary>Request to change the template of an internal user (single, replacing assignment — D-2).</summary>
 public sealed record ChangeUserTemplateRequest(
     string ActorId,
     string TemplateId,
-    DateTimeOffset ExpectedUpdatedAt);
-
-/// <summary>Request to replace a user's one-or-more template associations.</summary>
-public sealed record ChangeUserTemplatesRequest(
-    string ActorId,
-    IReadOnlyList<string> TemplateIds,
     DateTimeOffset ExpectedUpdatedAt);
 
 /// <summary>Request to activate/deactivate an internal user.</summary>
@@ -164,19 +156,21 @@ public sealed record SetUserActiveRequest(
 /// <summary>Template grant as edited by Administration.</summary>
 public sealed record TemplateGrantInput(string ModuleId, IReadOnlyList<string> Capabilities);
 
-/// <summary>Request to create an access template.</summary>
+/// <summary>Request to create an access template (modules + template-owned functional profile).</summary>
 public sealed record CreateTemplateRequest(
     string TemplateId,
     string Name,
-    IReadOnlyList<TemplateGrantInput> Grants);
+    IReadOnlyList<TemplateGrantInput> Grants,
+    string FunctionalProfile);
 
-/// <summary>Request to update an access template.</summary>
+/// <summary>Request to update an access template (modules + template-owned functional profile).</summary>
 public sealed record UpdateTemplateRequest(
     string TemplateId,
     string Name,
     IReadOnlyList<TemplateGrantInput> Grants,
     bool Active,
-    DateTimeOffset ExpectedUpdatedAt);
+    DateTimeOffset ExpectedUpdatedAt,
+    string FunctionalProfile);
 
 /// <summary>One mirror display entry edited by Administration.</summary>
 public sealed record MirrorEntryInput(string ModuleId, int DisplayOrder, bool Active);

@@ -13,6 +13,12 @@ namespace BA.Dmo.Application.Modules.Admin;
 /// repository port, and writes the global audit fact (GLM-ACC-11). Secrets
 /// (passwords/tokens/service-role) never enter audit entries or results.
 /// Self-lockout invariant: GLM-ACC-10. Concurrency: GLM-ACC-12/BT-06.
+///
+/// SCHEMA-RAT-03A (D-1/D-2): user create/edit/save assign EXACTLY ONE
+/// template (internal_users.template_id is the canonical store; changing it
+/// REPLACES current access — no accumulation). The functional profile is
+/// template-owned (access_template_profiles): it is never part of user
+/// requests and never written per-user.
 /// </summary>
 public sealed class AdminUserService
 {
@@ -158,9 +164,12 @@ public sealed class AdminUserService
 
     /// <summary>
     /// Creates the Auth account through the PRIVILEGED adapter (TD-16), then
-    /// the internal user. Provider failure persists nothing; duplicate
-    /// registration is an explicit conflict. Retrying after a failed internal
-    /// insert is safe (provisioning is idempotent). No default credentials.
+    /// the internal user with EXACTLY ONE template assignment (D-2). The
+    /// functional profile is template-owned — it is resolved from the
+    /// template, never supplied by the request. Provider failure persists
+    /// nothing; duplicate registration is an explicit conflict. Retrying
+    /// after a failed internal insert is safe (provisioning is idempotent).
+    /// No default credentials.
     /// </summary>
     public async Task<Result<AdminUserRow, DomainError>> CreateUserAsync(
         CreateAdminUserRequest request, CancellationToken cancellationToken = default)
@@ -192,20 +201,10 @@ public sealed class AdminUserService
                 "ADMIN_USER_WEAK_PASSWORD",
                 $"A palavra-passe deve ter pelo menos {PasswordPolicyMinLength} caracteres."));
 
-        if (!FunctionalProfileNames.TryParse(request.ProfileTitle, out var profile))
-            return Result<AdminUserRow, DomainError>.Failure(DomainError.Validation(
-                "ADMIN_USER_PROFILE_INVALID",
-                "Selecione um dos três perfis funcionais válidos."));
-
-        var templateIds = request.AssignedTemplateIds
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .Select(id => id.Trim())
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        var templateError = await ValidateProfileTemplatesAsync(
-            profile, templateIds, cancellationToken);
-        if (templateError is not null)
-            return Result<AdminUserRow, DomainError>.Failure(templateError);
+        var template = await RequireAssignableTemplateAsync(
+            request.TemplateId, cancellationToken);
+        if (template is not null)
+            return Result<AdminUserRow, DomainError>.Failure(template);
 
         var provisioned = await _provisioning.EnsureAuthUserAsync(
             request.Email, request.Password, cancellationToken);
@@ -224,34 +223,25 @@ public sealed class AdminUserService
             actorId,
             provisioned.Value.AuthUserId,
             request.DisplayName.Trim(),
-            profile.DisplayName(),
-            templateIds[0],
+            request.TemplateId.Trim(),
             request.Active,
             now,
             cancellationToken);
 
-        if (templateIds.Length > 1)
-        {
-            var assigned = await _repository.ReplaceUserAccessTemplatesAsync(
-                actorId, templateIds, now, now, cancellationToken);
-            if (!assigned)
-                return Result<AdminUserRow, DomainError>.Failure(DomainError.DomainConflict(
-                    "ADMIN_SELF_LOCKOUT",
-                    "Operação recusada: deve permanecer pelo menos um administrador ativo."));
-        }
-
         await AuditAsync(gate.Value, "create", "internal_user", actorId,
             request.DisplayName.Trim(), "succeeded", null, now, cancellationToken);
+
+        var profileTitle = await _repository.GetTemplateFunctionalProfileAsync(
+            request.TemplateId.Trim(), cancellationToken);
 
         return Result<AdminUserRow, DomainError>.Success(new AdminUserRow(
             actorId,
             provisioned.Value.AuthUserId,
             request.DisplayName.Trim(),
-            profile.DisplayName(),
-            templateIds[0],
+            profileTitle,
+            request.TemplateId.Trim(),
             request.Active,
-            now,
-            TemplateIds: templateIds));
+            now));
     }
 
     public async Task<Result<AdminUserRow, DomainError>> UpdateUserAsync(
@@ -270,23 +260,15 @@ public sealed class AdminUserService
             return Result<AdminUserRow, DomainError>.Failure(DomainError.Validation(
                 "ADMIN_USER_INVALID", "O nome não pode ficar vazio."));
 
-        if (!FunctionalProfileNames.TryParse(request.ProfileTitle, out var profile))
-            return Result<AdminUserRow, DomainError>.Failure(DomainError.Validation(
-                "ADMIN_USER_PROFILE_INVALID",
-                "Selecione um dos três perfis funcionais válidos."));
-
-        var templateError = await ValidateProfileTemplatesAsync(
-            profile, existing.AssignedTemplateIds, cancellationToken);
-        if (templateError is not null)
-            return Result<AdminUserRow, DomainError>.Failure(templateError);
-
         var now = _clock.UtcNow;
         try
         {
+            // D-1: the functional profile is template-owned; the user-level
+            // write updates identity/display fields only (profile_title mirror
+            // is never touched here).
             await _repository.UpdateUserAsync(
                 request.ActorId,
                 request.DisplayName.Trim(),
-                profile.DisplayName(),
                 request.ExpectedUpdatedAt,
                 now,
                 cancellationToken);
@@ -299,26 +281,23 @@ public sealed class AdminUserService
 
         await AuditAsync(gate.Value, "update", "internal_user", request.ActorId,
             request.DisplayName.Trim(), "succeeded",
-            $"display_name={existing.DisplayName}; profile_title={existing.ProfileTitle}",
+            $"display_name={existing.DisplayName}",
             now, cancellationToken);
 
         return Result<AdminUserRow, DomainError>.Success(existing with
         {
             DisplayName = request.DisplayName.Trim(),
-            ProfileTitle = profile.DisplayName(),
             UpdatedAtUtc = now
         });
     }
 
+    /// <summary>
+    /// Guarded single-template change (D-2): replaces internal_users.template_id
+    /// — the previous template's access does NOT accumulate. The user's
+    /// functional profile and modules follow the NEW template automatically.
+    /// </summary>
     public async Task<Result<AdminUserRow, DomainError>> ChangeTemplateAsync(
         ChangeUserTemplateRequest request, CancellationToken cancellationToken = default)
-        => await ChangeTemplatesAsync(
-            new ChangeUserTemplatesRequest(
-                request.ActorId, [request.TemplateId], request.ExpectedUpdatedAt),
-            cancellationToken);
-
-    public async Task<Result<AdminUserRow, DomainError>> ChangeTemplatesAsync(
-        ChangeUserTemplatesRequest request, CancellationToken cancellationToken = default)
     {
         var gate = _gate.Require(CanonicalCapabilities.AdminGerir);
         if (gate.IsFailure)
@@ -329,17 +308,8 @@ public sealed class AdminUserService
             return Result<AdminUserRow, DomainError>.Failure(DomainError.NotFound(
                 "INTERNAL_USER_NOT_FOUND", "Utilizador interno não encontrado."));
 
-        if (!FunctionalProfileNames.TryParse(existing.ProfileTitle, out var profile))
-            return Result<AdminUserRow, DomainError>.Failure(DomainError.Validation(
-                "ADMIN_USER_PROFILE_INVALID", "O utilizador não tem um perfil funcional válido."));
-
-        var templateIds = (request.TemplateIds ?? [])
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .Select(id => id.Trim())
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        var templateError = await ValidateProfileTemplatesAsync(
-            profile, templateIds, cancellationToken);
+        var templateError = await RequireAssignableTemplateAsync(
+            request.TemplateId, cancellationToken);
         if (templateError is not null)
             return Result<AdminUserRow, DomainError>.Failure(templateError);
 
@@ -347,8 +317,8 @@ public sealed class AdminUserService
         bool applied;
         try
         {
-            applied = await _repository.ReplaceUserAccessTemplatesAsync(
-                request.ActorId, templateIds,
+            applied = await _repository.ChangeUserTemplateAsync(
+                request.ActorId, request.TemplateId.Trim(),
                 request.ExpectedUpdatedAt, now, cancellationToken);
         }
         catch (ConcurrencyConflictException ex)
@@ -365,13 +335,16 @@ public sealed class AdminUserService
 
         await AuditAsync(gate.Value, "change_template", "internal_user", request.ActorId,
             existing.DisplayName, "succeeded",
-            $"template_ids={string.Join(',', existing.AssignedTemplateIds)} → {string.Join(',', templateIds)}",
+            $"template_id={existing.TemplateId} → {request.TemplateId.Trim()}",
             now, cancellationToken);
+
+        var profileTitle = await _repository.GetTemplateFunctionalProfileAsync(
+            request.TemplateId.Trim(), cancellationToken);
 
         return Result<AdminUserRow, DomainError>.Success(existing with
         {
-            TemplateId = templateIds[0],
-            TemplateIds = templateIds,
+            TemplateId = request.TemplateId.Trim(),
+            ProfileTitle = profileTitle,
             UpdatedAtUtc = now
         });
     }
@@ -420,17 +393,16 @@ public sealed class AdminUserService
     }
 
     /// <summary>
-    /// Composite save of the Admin user form: display/profile fields,
-    /// template assignment and activation are applied as separate guarded
-    /// use cases (each re-authorized and audited), refreshing the
-    /// concurrency version between steps. Any failed step stops the flow
-    /// and returns its explicit result.
+    /// Composite save of the Admin user form: display fields, SINGLE template
+    /// assignment and activation are applied as separate guarded use cases
+    /// (each re-authorized and audited), refreshing the concurrency version
+    /// between steps. Any failed step stops the flow and returns its explicit
+    /// result. Changing the template REPLACES the previous effective access.
     /// </summary>
     public async Task<Result<AdminUserRow, DomainError>> SaveUserAsync(
         string actorId,
         string displayName,
-        string? profileTitle,
-        IReadOnlyList<string> templateIds,
+        string templateId,
         bool active,
         DateTimeOffset expectedUpdatedAt,
         CancellationToken cancellationToken = default)
@@ -438,23 +410,19 @@ public sealed class AdminUserService
         var version = expectedUpdatedAt;
 
         var updated = await UpdateUserAsync(
-            new UpdateAdminUserRequest(actorId, displayName, profileTitle, version),
+            new UpdateAdminUserRequest(actorId, displayName, version),
             cancellationToken);
         if (updated.IsFailure)
             return updated;
         version = updated.Value.UpdatedAtUtc;
         var current = updated.Value;
 
-        var normalizedTemplateIds = (templateIds ?? [])
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .Select(id => id.Trim())
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        if (!current.AssignedTemplateIds.OrderBy(id => id, StringComparer.Ordinal)
-                .SequenceEqual(normalizedTemplateIds.OrderBy(id => id, StringComparer.Ordinal)))
+        var normalizedTemplateId = templateId.Trim();
+        if (!string.Equals(
+            current.TemplateId, normalizedTemplateId, StringComparison.Ordinal))
         {
-            var changed = await ChangeTemplatesAsync(
-                new ChangeUserTemplatesRequest(actorId, normalizedTemplateIds, version),
+            var changed = await ChangeTemplateAsync(
+                new ChangeUserTemplateRequest(actorId, normalizedTemplateId, version),
                 cancellationToken);
             if (changed.IsFailure)
                 return changed;
@@ -509,45 +477,33 @@ public sealed class AdminUserService
         return Result<bool, DomainError>.Success(true);
     }
 
-    private async Task<DomainError?> ValidateProfileTemplatesAsync(
-        FunctionalProfile profile,
-        IReadOnlyList<string> templateIds,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// Validates that the template can be assigned to a user (D-2): exists,
+    /// active and its template-owned functional profile is one of the three
+    /// canonical values. Returns a DomainError when invalid, null when valid.
+    /// </summary>
+    private async Task<DomainError?> RequireAssignableTemplateAsync(
+        string templateId, CancellationToken cancellationToken)
     {
-        if (templateIds.Count == 0)
+        var id = templateId?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(id))
             return DomainError.Validation(
-                "ADMIN_TEMPLATE_INVALID", "Selecione pelo menos um template de acesso.");
+                "ADMIN_TEMPLATE_INVALID", "Selecione um template de acesso.");
 
-        var moduleIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var templateId in templateIds)
-        {
-            var template = await _repository.GetTemplateAsync(templateId, cancellationToken);
-            if (template is null || !template.Active)
-                return DomainError.Validation(
-                    "ADMIN_TEMPLATE_INVALID",
-                    "Todos os templates selecionados devem existir e estar ativos.");
+        var template = await _repository.GetTemplateAsync(id, cancellationToken);
+        if (template is null || !template.Active)
+            return DomainError.Validation(
+                "ADMIN_TEMPLATE_INVALID",
+                "O template selecionado deve existir e estar ativo.");
 
-            var parsed = AccessTemplateGrantsParser.Parse(template.ModulesJson);
-            if (parsed.IsFailure)
-                return DomainError.Validation(
-                    "ADMIN_TEMPLATE_INVALID", "Um template selecionado tem módulos inválidos.");
-            foreach (var grant in parsed.Value)
-                moduleIds.Add(grant.ModuleId);
-        }
-
-        var hasAdmin = moduleIds.Contains(CanonicalModuleCatalog.AdminModuleId);
-        if (profile == FunctionalProfile.Admin)
-        {
-            if (!hasAdmin || moduleIds.Any(id => id != CanonicalModuleCatalog.AdminModuleId))
-                return DomainError.Validation(
-                    "ADMIN_PROFILE_TEMPLATE_MISMATCH",
-                    "O perfil Admin só pode usar templates de Administração.");
-        }
-        else if (hasAdmin)
+        if (!FunctionalProfileNames.TryParse(
+            await _repository.GetTemplateFunctionalProfileAsync(id, cancellationToken),
+            out _))
         {
             return DomainError.Validation(
-                "ADMIN_PROFILE_TEMPLATE_MISMATCH",
-                "Perfis operacionais não podem receber templates de Administração.");
+                "ADMIN_TEMPLATE_PROFILE_MISSING",
+                "O template selecionado não tem perfil funcional configurado. " +
+                "Configure o perfil do template na Administração.");
         }
 
         return null;

@@ -6,13 +6,18 @@ namespace BA.Dmo.UnitTests.Shared.Admin;
 /// <summary>
 /// In-memory fake of the Admin persistence port (confined to tests/*).
 /// Tracks writes/audits and can simulate the self-lockout rejection and
-/// optimistic-concurrency conflict behaviors.
+/// optimistic-concurrency conflict behaviors. SCHEMA-RAT-03A (D-1/D-2):
+/// single-template assignment (internal_users.template_id is the canonical
+/// store) and template-owned functional profiles (TemplateProfiles dictionary).
 /// </summary>
 public sealed class FakeAdminRepository : IAdminRepository
 {
     public Dictionary<string, AdminUserRow> Users { get; } = new(StringComparer.Ordinal);
 
     public Dictionary<string, AdminTemplateRow> Templates { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>template_id → functional profile (template-owned authority).</summary>
+    public Dictionary<string, string> TemplateProfiles { get; } = new(StringComparer.Ordinal);
 
     public List<AuditEntry> Audits { get; } = [];
 
@@ -63,7 +68,7 @@ public sealed class FakeAdminRepository : IAdminRepository
         Task.FromResult(Users.Values.Any(u => u.AuthUserId == authUserId));
 
     public Task CreateInternalUserAsync(
-        string actorId, Guid authUserId, string displayName, string? profileTitle,
+        string actorId, Guid authUserId, string displayName,
         string templateId, bool active, DateTimeOffset createdAtUtc,
         CancellationToken cancellationToken = default)
     {
@@ -74,23 +79,29 @@ public sealed class FakeAdminRepository : IAdminRepository
         }
 
         Writes.Add($"create:{actorId}");
+        var mirrorProfile = TemplateProfiles.TryGetValue(templateId, out var profile)
+            ? profile
+            : null;
         Users[actorId] = new AdminUserRow(
-            actorId, authUserId, displayName, profileTitle, templateId, active, createdAtUtc);
+            actorId, authUserId, displayName, mirrorProfile, templateId, active, createdAtUtc)
+        {
+            TemplateIds = [templateId]
+        };
         return Task.CompletedTask;
     }
 
     public Task UpdateUserAsync(
-        string actorId, string displayName, string? profileTitle,
+        string actorId, string displayName,
         DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc,
         CancellationToken cancellationToken = default)
     {
         ThrowIfConcurrencySimulated();
         Writes.Add($"update:{actorId}");
         var user = Users[actorId];
+        // D-1: the user write never touches the functional profile (mirror).
         Users[actorId] = user with
         {
             DisplayName = displayName,
-            ProfileTitle = profileTitle,
             UpdatedAtUtc = updatedAtUtc
         };
         return Task.CompletedTask;
@@ -98,12 +109,6 @@ public sealed class FakeAdminRepository : IAdminRepository
 
     public Task<bool> ChangeUserTemplateAsync(
         string actorId, string templateId, DateTimeOffset expectedUpdatedAt,
-        DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default)
-        => ReplaceUserAccessTemplatesAsync(
-            actorId, [templateId], expectedUpdatedAt, updatedAtUtc, cancellationToken);
-
-    public Task<bool> ReplaceUserAccessTemplatesAsync(
-        string actorId, IReadOnlyList<string> templateIds, DateTimeOffset expectedUpdatedAt,
         DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default)
     {
         ThrowIfConcurrencySimulated();
@@ -117,8 +122,11 @@ public sealed class FakeAdminRepository : IAdminRepository
         var user = Users[actorId];
         Users[actorId] = user with
         {
-            TemplateId = templateIds[0],
-            TemplateIds = templateIds.ToArray(),
+            TemplateId = templateId,
+            TemplateIds = [templateId],
+            ProfileTitle = TemplateProfiles.TryGetValue(templateId, out var profile)
+                ? profile
+                : user.ProfileTitle,
             UpdatedAtUtc = updatedAtUtc
         };
         return Task.FromResult(true);
@@ -164,18 +172,28 @@ public sealed class FakeAdminRepository : IAdminRepository
         string templateId, CancellationToken cancellationToken = default) =>
         Task.FromResult(Templates.TryGetValue(templateId, out var t) ? t : null);
 
+    public Task<string?> GetTemplateFunctionalProfileAsync(
+        string templateId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(TemplateProfiles.TryGetValue(templateId, out var profile) ? profile : null);
+
+    public Task<IReadOnlyDictionary<string, string>> ListTemplateFunctionalProfilesAsync(
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyDictionary<string, string>>(
+            new Dictionary<string, string>(TemplateProfiles, StringComparer.Ordinal));
+
     public Task CreateTemplateAsync(
-        string templateId, string name, string modulesJson, DateTimeOffset createdAtUtc,
-        CancellationToken cancellationToken = default)
+        string templateId, string name, string modulesJson, string functionalProfile,
+        DateTimeOffset createdAtUtc, CancellationToken cancellationToken = default)
     {
         Writes.Add($"create_template:{templateId}");
         Templates[templateId] = new AdminTemplateRow(
             templateId, name, modulesJson, true, createdAtUtc);
+        TemplateProfiles[templateId] = functionalProfile;
         return Task.CompletedTask;
     }
 
     public Task<bool> UpdateTemplateAsync(
-        string templateId, string name, string modulesJson, bool active,
+        string templateId, string name, string modulesJson, bool active, string functionalProfile,
         DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc,
         CancellationToken cancellationToken = default)
     {
@@ -189,6 +207,15 @@ public sealed class FakeAdminRepository : IAdminRepository
         Writes.Add($"update_template:{templateId}");
         Templates[templateId] = new AdminTemplateRow(
             templateId, name, modulesJson, active, updatedAtUtc);
+        TemplateProfiles[templateId] = functionalProfile;
+        // One-way mirror: all users of the template follow the new profile.
+        foreach (var actorId in Users.Keys.ToList())
+        {
+            var user = Users[actorId];
+            if (user.TemplateId == templateId && user.ProfileTitle != functionalProfile)
+                Users[actorId] = user with { ProfileTitle = functionalProfile };
+        }
+
         return Task.FromResult(true);
     }
 

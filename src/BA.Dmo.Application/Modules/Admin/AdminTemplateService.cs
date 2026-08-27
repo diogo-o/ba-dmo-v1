@@ -1,6 +1,7 @@
 using System.Text.Json;
 using BA.Dmo.Application.Shared.Access;
 using BA.Dmo.Application.Shared.Persistence;
+using BA.Dmo.Domain.Shared.Access;
 using BA.Dmo.Domain.Shared.Kernel;
 
 namespace BA.Dmo.Application.Modules.Admin;
@@ -14,6 +15,14 @@ namespace BA.Dmo.Application.Modules.Admin;
 /// catalog/normalizer is the single model; no second template model exists.
 /// Self-lockout: GLM-ACC-10. Concurrency: GLM-ACC-12. Templates are
 /// deactivated, never deleted (UD-10).
+///
+/// SCHEMA-RAT-03A (D-1/D-2): the functional profile is TEMPLATE-owned. Each
+/// template carries exactly one profile (Admin / Operador / Controlador /
+/// Responsável); create/update persist it in the same transaction as the
+/// template row (one authoritative write path) and the repository re-derives
+/// the users' profile_title mirror one-way. Product rules are enforced
+/// server-side here: Admin profile ⇔ admin module only; operational profiles
+/// cannot include the admin module.
 /// </summary>
 public sealed class AdminTemplateService
 {
@@ -49,6 +58,29 @@ public sealed class AdminTemplateService
         return _repository.ListTemplatesAsync(cancellationToken);
     }
 
+    /// <summary>template_id → functional_profile for every template (template-owned profile authority).</summary>
+    public Task<IReadOnlyDictionary<string, string>> ListFunctionalProfilesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var gate = _gate.Require(CanonicalCapabilities.AdminGerir);
+        if (gate.IsFailure)
+            return Task.FromResult<IReadOnlyDictionary<string, string>>(
+                new Dictionary<string, string>(StringComparer.Ordinal));
+
+        return _repository.ListTemplateFunctionalProfilesAsync(cancellationToken);
+    }
+
+    /// <summary>Functional profile of a single template (template-owned authority).</summary>
+    public Task<string?> GetFunctionalProfileAsync(
+        string templateId, CancellationToken cancellationToken = default)
+    {
+        var gate = _gate.Require(CanonicalCapabilities.AdminGerir);
+        if (gate.IsFailure)
+            return Task.FromResult<string?>(null);
+
+        return _repository.GetTemplateFunctionalProfileAsync(templateId, cancellationToken);
+    }
+
     public async Task<Result<AdminTemplateRow, DomainError>> GetAsync(
         string templateId, CancellationToken cancellationToken = default)
     {
@@ -80,16 +112,30 @@ public sealed class AdminTemplateService
             return Result<AdminTemplateRow, DomainError>.Failure(DomainError.DomainConflict(
                 "ACCESS_TEMPLATE_EXISTS", "Já existe um template com este identificador."));
 
+        var profile = ValidateFunctionalProfile(request.FunctionalProfile);
+        if (profile is null)
+            return Result<AdminTemplateRow, DomainError>.Failure(DomainError.Validation(
+                "ADMIN_PROFILE_TEMPLATE_MISMATCH",
+                "Selecione um perfil funcional válido."));
+
         var grants = ValidateGrants(request.Grants);
         if (grants.IsFailure)
             return Result<AdminTemplateRow, DomainError>.Failure(grants.Error);
 
+        // Product rule: Admin profile ⇔ admin module only; operational
+        // profiles never include the admin module (no hybrid profiles).
+        var moduleRule = ValidateProfileModuleRule(profile.Value, request.Grants);
+        if (moduleRule is not null)
+            return Result<AdminTemplateRow, DomainError>.Failure(moduleRule);
+
         var now = _clock.UtcNow;
         await _repository.CreateTemplateAsync(
-            request.TemplateId.Trim(), request.Name.Trim(), grants.Value, now, cancellationToken);
+            request.TemplateId.Trim(), request.Name.Trim(), grants.Value,
+            profile.Value.DisplayName(), now, cancellationToken);
 
         await AuditAsync(gate.Value, "create", request.TemplateId.Trim(),
-            request.Name.Trim(), "succeeded", null, now, cancellationToken);
+            request.Name.Trim(), "succeeded",
+            $"functional_profile={profile.Value.DisplayName()}", now, cancellationToken);
 
         return Result<AdminTemplateRow, DomainError>.Success(new AdminTemplateRow(
             request.TemplateId.Trim(), request.Name.Trim(), grants.Value, Active: true, now));
@@ -111,9 +157,19 @@ public sealed class AdminTemplateService
             return Result<AdminTemplateRow, DomainError>.Failure(DomainError.Validation(
                 "ACCESS_TEMPLATE_INVALID", "O nome do template não pode ficar vazio."));
 
+        var profile = ValidateFunctionalProfile(request.FunctionalProfile);
+        if (profile is null)
+            return Result<AdminTemplateRow, DomainError>.Failure(DomainError.Validation(
+                "ADMIN_PROFILE_TEMPLATE_MISMATCH",
+                "Selecione um perfil funcional válido."));
+
         var grants = ValidateGrants(request.Grants);
         if (grants.IsFailure)
             return Result<AdminTemplateRow, DomainError>.Failure(grants.Error);
+
+        var moduleRule = ValidateProfileModuleRule(profile.Value, request.Grants);
+        if (moduleRule is not null)
+            return Result<AdminTemplateRow, DomainError>.Failure(moduleRule);
 
         var now = _clock.UtcNow;
         bool applied;
@@ -121,6 +177,7 @@ public sealed class AdminTemplateService
         {
             applied = await _repository.UpdateTemplateAsync(
                 request.TemplateId, request.Name.Trim(), grants.Value, request.Active,
+                profile.Value.DisplayName(),
                 request.ExpectedUpdatedAt, now, cancellationToken);
         }
         catch (ConcurrencyConflictException ex)
@@ -135,11 +192,12 @@ public sealed class AdminTemplateService
                 "Operação recusada: deve permanecer pelo menos um administrador ativo " +
                 "com template ativo que conceda admin.gerir."));
 
-        var action = request.Active != existing.Active
+        var previouslyActive = existing.Active;
+        var action = request.Active != previouslyActive
             ? (request.Active ? "activate" : "deactivate")
             : (grants.Value != existing.ModulesJson ? "update_modules" : "update");
         await AuditAsync(gate.Value, action, request.TemplateId, request.Name.Trim(),
-            "succeeded", null, now, cancellationToken);
+            "succeeded", $"functional_profile={profile.Value.DisplayName()}", now, cancellationToken);
 
         return Result<AdminTemplateRow, DomainError>.Success(existing with
         {
@@ -149,6 +207,42 @@ public sealed class AdminTemplateService
             UpdatedAtUtc = now
         });
     }
+
+    /// <summary>
+    /// Product rule (SCHEMA-RAT-01 §1.4 / SCHEMA-RAT-02 D-1): an Admin profile
+    /// template contains the admin module ONLY; operational profiles cannot
+    /// include the admin module. Enforced server-side on profile writes.
+    /// </summary>
+    private DomainError? ValidateProfileModuleRule(
+        FunctionalProfile profile, IReadOnlyList<TemplateGrantInput> grants)
+    {
+        var moduleIds = (grants ?? [])
+            .Where(g => g is not null && !string.IsNullOrWhiteSpace(g.ModuleId))
+            .Select(g => g.ModuleId.Trim())
+            .ToHashSet(StringComparer.Ordinal);
+
+        var hasAdmin = moduleIds.Contains(CanonicalModuleCatalog.AdminModuleId);
+        if (profile == FunctionalProfile.Admin)
+        {
+            if (!hasAdmin || moduleIds.Any(id => id != CanonicalModuleCatalog.AdminModuleId))
+                return DomainError.Validation(
+                    "ADMIN_PROFILE_TEMPLATE_MISMATCH",
+                    "O perfil Admin deve usar apenas o módulo Administração.");
+        }
+        else if (hasAdmin)
+        {
+            return DomainError.Validation(
+                "ADMIN_PROFILE_TEMPLATE_MISMATCH",
+                "Perfis Operador e Responsável não podem incluir o módulo Administração.");
+        }
+
+        return null;
+    }
+
+    private static FunctionalProfile? ValidateFunctionalProfile(string? functionalProfile)
+        => FunctionalProfileNames.TryParse(functionalProfile, out var profile)
+            ? profile
+            : null;
 
     /// <summary>
     /// Strict canonical validation of submitted grants. Any entry outside the

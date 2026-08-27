@@ -35,6 +35,15 @@ public class AdminUserServiceTests
         _repository.Templates["tpl-inactive"] = new AdminTemplateRow(
             "tpl-inactive", "Template inativo", "[]", Active: false,
             new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        _repository.Templates["tpl-second"] = new AdminTemplateRow(
+            "tpl-second", "Segundo template", "[]", Active: true,
+            new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+
+        // Template-owned functional profiles (D-1): the authority the service
+        // validates against and the source of the profile_title mirror.
+        _repository.TemplateProfiles["tpl-active"] = FunctionalProfileNames.OperatorController;
+        _repository.TemplateProfiles["tpl-second"] = FunctionalProfileNames.Responsible;
+        _repository.TemplateProfiles["tpl-inactive"] = FunctionalProfileNames.OperatorController;
 
         _repository.Users["user-1"] = new AdminUserRow(
             "user-1", Guid.Parse("11111111-2222-3333-4444-555555555555"),
@@ -66,7 +75,7 @@ public class AdminUserServiceTests
         _identity.User = null;
 
         var result = await _service.CreateUserAsync(new CreateAdminUserRequest(
-            "novo@ba-dmo.example", "password", "Novo", null, "tpl-active"));
+            "novo@ba-dmo.example", "password", "Novo", "tpl-active"));
 
         Assert.True(result.IsFailure);
         Assert.Equal(ErrorCategory.Forbidden, result.Error.Category);
@@ -79,8 +88,7 @@ public class AdminUserServiceTests
     public async Task CreateUser_HappyPath_ProvisionsPersistsAndAudits_WithoutSecrets()
     {
         var result = await _service.CreateUserAsync(new CreateAdminUserRequest(
-            "novo@ba-dmo.example", "secret-password-value", "Novo Utilizador",
-            FunctionalProfileNames.OperatorController, "tpl-active"));
+            "novo@ba-dmo.example", "secret-password-value", "Novo Utilizador", "tpl-active"));
 
         Assert.True(result.IsSuccess);
         Assert.Equal("create", Assert.Single(_repository.Audits).ActionCode);
@@ -94,11 +102,27 @@ public class AdminUserServiceTests
     }
 
     [Fact]
+    public async Task CreateUser_AssignsExactlyOneTemplate_AndMirrorsTemplateProfile()
+    {
+        // D-2: exactly ONE template is assigned (internal_users.template_id).
+        // D-1: the profile_title mirror comes from the template's profile.
+        var result = await _service.CreateUserAsync(new CreateAdminUserRequest(
+            "novo@ba-dmo.example", "password", "Novo Utilizador", "tpl-active"));
+
+        Assert.True(result.IsSuccess);
+        var row = _repository.Users[NewAuthUserId.ToString()];
+        Assert.Equal("tpl-active", row.TemplateId);
+        Assert.Single(row.AssignedTemplateIds);
+        Assert.Equal("tpl-active", row.TemplateIds!.Single());
+        Assert.Equal(FunctionalProfileNames.OperatorController, row.ProfileTitle);
+        Assert.True(row.Active);
+    }
+
+    [Fact]
     public async Task CreateUser_InactiveTemplate_IsRejected_BeforeProvisioning()
     {
         var result = await _service.CreateUserAsync(new CreateAdminUserRequest(
-            "novo@ba-dmo.example", "password", "Novo",
-            FunctionalProfileNames.OperatorController, "tpl-inactive"));
+            "novo@ba-dmo.example", "password", "Novo", "tpl-inactive"));
 
         Assert.True(result.IsFailure);
         Assert.Equal("ADMIN_TEMPLATE_INVALID", result.Error.Code);
@@ -107,10 +131,26 @@ public class AdminUserServiceTests
     }
 
     [Fact]
+    public async Task CreateUser_TemplateWithoutFunctionalProfile_IsRejected_BeforeProvisioning()
+    {
+        // D-1: the template-owned profile is required; a template without one
+        // is not assignable (no invented profile), fail closed.
+        _repository.TemplateProfiles.Remove("tpl-active");
+
+        var result = await _service.CreateUserAsync(new CreateAdminUserRequest(
+            "novo@ba-dmo.example", "password", "Novo", "tpl-active"));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("ADMIN_TEMPLATE_PROFILE_MISSING", result.Error.Code);
+        Assert.Empty(_provisioning.Calls);
+        Assert.Empty(_repository.Writes);
+    }
+
+    [Fact]
     public async Task CreateUser_WeakPassword_IsRejected_BeforeProvisioning()
     {
         var result = await _service.CreateUserAsync(new CreateAdminUserRequest(
-            "novo@ba-dmo.example", "short12", "Novo", null, "tpl-active"));
+            "novo@ba-dmo.example", "short12", "Novo", "tpl-active"));
 
         Assert.True(result.IsFailure);
         Assert.Equal("ADMIN_USER_WEAK_PASSWORD", result.Error.Code);
@@ -123,7 +163,7 @@ public class AdminUserServiceTests
     public async Task CreateUser_InvalidEmail_IsRejected_BeforeProvisioning()
     {
         var result = await _service.CreateUserAsync(new CreateAdminUserRequest(
-            "not-an-email", "longenough-password", "Novo", null, "tpl-active"));
+            "not-an-email", "longenough-password", "Novo", "tpl-active"));
 
         Assert.True(result.IsFailure);
         Assert.Equal("ADMIN_USER_INVALID_EMAIL", result.Error.Code);
@@ -139,8 +179,7 @@ public class AdminUserServiceTests
             "AUTH_PROVIDER_UNAVAILABLE", "Provider down.");
 
         var result = await _service.CreateUserAsync(new CreateAdminUserRequest(
-            "novo@ba-dmo.example", "password", "Novo",
-            FunctionalProfileNames.OperatorController, "tpl-active"));
+            "novo@ba-dmo.example", "password", "Novo", "tpl-active"));
 
         Assert.True(result.IsFailure);
         Assert.Equal("AUTH_PROVIDER_UNAVAILABLE", result.Error.Code);
@@ -154,8 +193,7 @@ public class AdminUserServiceTests
         _provisioning.ProvisionedAuthUserId = _repository.Users["user-1"].AuthUserId.GetValueOrDefault();
 
         var result = await _service.CreateUserAsync(new CreateAdminUserRequest(
-            "existente@ba-dmo.example", "password", "Duplicado",
-            FunctionalProfileNames.OperatorController, "tpl-active"));
+            "existente@ba-dmo.example", "password", "Duplicado", "tpl-active"));
 
         Assert.True(result.IsFailure);
         Assert.Equal("ADMIN_USER_ALREADY_REGISTERED", result.Error.Code);
@@ -172,8 +210,7 @@ public class AdminUserServiceTests
     public async Task CreateUser_InternalInsertThrows_SurfacesAndRetryReconcilesNoOrphan()
     {
         var request = new CreateAdminUserRequest(
-            "novo@ba-dmo.example", "secret-password-value", "Novo Utilizador",
-            FunctionalProfileNames.OperatorController, "tpl-active");
+            "novo@ba-dmo.example", "secret-password-value", "Novo Utilizador", "tpl-active");
 
         // First attempt: Auth provisioned (one provisioning call), internal insert throws.
         _repository.FailCreateInternalOnce = true;
@@ -198,11 +235,27 @@ public class AdminUserServiceTests
     public async Task UpdateUser_PersistsAndAudits()
     {
         var result = await _service.UpdateUserAsync(new UpdateAdminUserRequest(
-            "user-1", "Nome Novo", FunctionalProfileNames.Responsible, Version("user-1")));
+            "user-1", "Nome Novo", Version("user-1")));
 
         Assert.True(result.IsSuccess);
         Assert.Equal("Nome Novo", _repository.Users["user-1"].DisplayName);
         Assert.Equal("update", Assert.Single(_repository.Audits).ActionCode);
+    }
+
+    [Fact]
+    public async Task UpdateUser_DoesNotWriteTheFunctionalProfileMirror()
+    {
+        // D-1: the functional profile is template-owned; a user edit never
+        // rewrites the profile_title mirror — divergences are healed by the
+        // template-owned profile resolution, not by user-level writes.
+        var result = await _service.UpdateUserAsync(new UpdateAdminUserRequest(
+            "user-1", "Nome Novo", Version("user-1")));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(
+            FunctionalProfileNames.OperatorController,
+            _repository.Users["user-1"].ProfileTitle);
+        Assert.Equal("tpl-active", _repository.Users["user-1"].TemplateId);
     }
 
     [Fact]
@@ -211,22 +264,11 @@ public class AdminUserServiceTests
         _repository.ConcurrencyNextWrite = true;
 
         var result = await _service.UpdateUserAsync(new UpdateAdminUserRequest(
-            "user-1", "Nome Novo", FunctionalProfileNames.OperatorController, Version("user-1")));
+            "user-1", "Nome Novo", Version("user-1")));
 
         Assert.True(result.IsFailure);
         Assert.Equal(ErrorCategory.ConcurrencyConflict, result.Error.Category);
         Assert.Contains("Recarregue", result.Error.Message, StringComparison.Ordinal);
-        Assert.Empty(_repository.Audits);
-    }
-
-    [Fact]
-    public async Task UpdateUser_InvalidFunctionalProfile_IsRejected()
-    {
-        var result = await _service.UpdateUserAsync(new UpdateAdminUserRequest(
-            "user-1", "Nome Novo", "Metrologia", Version("user-1")));
-
-        Assert.True(result.IsFailure);
-        Assert.Equal("ADMIN_USER_PROFILE_INVALID", result.Error.Code);
         Assert.Empty(_repository.Audits);
     }
 
@@ -267,6 +309,61 @@ public class AdminUserServiceTests
         Assert.True(result.IsFailure);
         Assert.Equal("ADMIN_SELF_LOCKOUT", result.Error.Code);
         Assert.Equal("tpl-active", _repository.Users["user-1"].TemplateId);
+    }
+
+    // ---- 2/8. TEMPLATE CHANGE REPLACES effective access ---------------------
+
+    [Fact]
+    public async Task ChangeTemplate_ReplacesPreviousTemplate_DoesNotAccumulate()
+    {
+        // D-2: changing the template REPLACES the canonical single assignment:
+        // the previous template does not accumulate anywhere.
+        var result = await _service.ChangeTemplateAsync(
+            new ChangeUserTemplateRequest("user-1", "tpl-second", Version("user-1")));
+
+        Assert.True(result.IsSuccess);
+        var row = _repository.Users["user-1"];
+        Assert.Equal("tpl-second", row.TemplateId);
+        Assert.Equal(["tpl-second"], row.AssignedTemplateIds);
+        Assert.Equal(FunctionalProfileNames.Responsible, row.ProfileTitle);
+        Assert.Equal("change_template", Assert.Single(_repository.Audits).ActionCode);
+    }
+
+    [Fact]
+    public async Task ChangeTemplate_InactiveTemplate_IsRejected()
+    {
+        var result = await _service.ChangeTemplateAsync(
+            new ChangeUserTemplateRequest("user-1", "tpl-inactive", Version("user-1")));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("ADMIN_TEMPLATE_INVALID", result.Error.Code);
+        Assert.Equal("tpl-active", _repository.Users["user-1"].TemplateId);
+    }
+
+    [Fact]
+    public async Task SaveUser_NewTemplate_ReplacesPriorEffectiveTemplate()
+    {
+        // Composite edit: a different template replaces the previous one and
+        // only one assignment remains.
+        var result = await _service.SaveUserAsync(
+            "user-1", "Nome Novo", "tpl-second", active: true, Version("user-1"));
+
+        Assert.True(result.IsSuccess);
+        var row = _repository.Users["user-1"];
+        Assert.Equal("tpl-second", row.TemplateId);
+        Assert.Single(row.AssignedTemplateIds);
+        Assert.Equal("tpl-second", row.TemplateIds!.Single());
+        Assert.Equal(FunctionalProfileNames.Responsible, row.ProfileTitle);
+    }
+
+    [Fact]
+    public async Task SaveUser_SameTemplate_DoesNotEmitTemplateChange()
+    {
+        var result = await _service.SaveUserAsync(
+            "user-1", "Nome Novo", "tpl-active", active: true, Version("user-1"));
+
+        Assert.True(result.IsSuccess);
+        Assert.DoesNotContain(_repository.Writes, w => w.StartsWith("change_templates:", StringComparison.Ordinal));
     }
 
     // ---- schema migration guard (N26 missing, GLM-DSN/owner decision) -------
