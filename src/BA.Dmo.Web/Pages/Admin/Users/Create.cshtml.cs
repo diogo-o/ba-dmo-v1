@@ -50,20 +50,30 @@ public class CreateModel : PageModel
         string email,
         string password,
         string displayName,
-        string templateId,
-        bool active)
+        string? templateId,
+        bool active,
+        List<string>? templateIds = null)
     {
         await LoadTemplatesAsync();
+
+        // Compatibility for pre-rework form posts/tests only. The rendered UI
+        // exposes a single `templateId`; if an old `templateIds` field arrives,
+        // only its first value is considered. It can never recreate a hybrid.
+        var selectedTemplateId = !string.IsNullOrWhiteSpace(templateId)
+            ? templateId.Trim()
+            : templateIds?.FirstOrDefault(id => !string.IsNullOrWhiteSpace(id))?.Trim()
+              ?? string.Empty;
+
         Input = new InputModel
         {
             Email = email,
             DisplayName = displayName,
-            TemplateId = templateId,
+            TemplateId = selectedTemplateId,
             Active = active
         };
 
-        if (string.IsNullOrWhiteSpace(templateId)
-            || !TemplateProfiles.TryGetValue(templateId, out var profile))
+        if (string.IsNullOrWhiteSpace(selectedTemplateId)
+            || !TemplateProfiles.TryGetValue(selectedTemplateId, out var profile))
         {
             ModelState.AddModelError(
                 string.Empty,
@@ -77,9 +87,9 @@ public class CreateModel : PageModel
                 password,
                 displayName,
                 profile,
-                templateId,
+                selectedTemplateId,
                 active,
-                [templateId]),
+                [selectedTemplateId]),
             HttpContext.RequestAborted);
 
         if (result.IsFailure)
