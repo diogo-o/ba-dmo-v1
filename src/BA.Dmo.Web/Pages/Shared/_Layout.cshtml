@@ -43,6 +43,10 @@
 <body data-can-edit-jobon="@canEdit" data-can-confirm-verifications="@canConfirm" class="@(adminScope ? "admin-scope" : null)">
     <partial name="_Header" />
     <main class="app-work-area@(adminScope ? " admin-work-area" : "")">
+        @if (adminScope)
+        {
+            <partial name="_AdminNav" />
+        }
         @if (accessDeniedFeedback)
         {
             <p role="status" data-testid="shell-feedback">
