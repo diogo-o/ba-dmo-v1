@@ -47,26 +47,27 @@ public class IndexModel : PageModel
 
     public int CurrentYear => DateTime.UtcNow.Year;
 
-    /// <summary>Years offered by the Ano select (current year back 5).</summary>
+    /// <summary>Years offered by the Ano select (current year back 4).</summary>
     public IReadOnlyList<int> Years =>
-        Enumerable.Range(CurrentYear, 5).Select(y => CurrentYear - (y - 1)).ToList();
+        Enumerable.Range(0, 5).Select(offset => CurrentYear - offset).ToList();
 
     public async Task OnGetAsync(int? year, string? actor, string? module,
         string? action, string? result, string? from, string? to, int pageSize = 20, int p = 1)
     {
-        Year = year;
-        Actor = actor;
-        Module = module;
-        Action = action;
-        Result = result;
-        From = NormalizeDate(from);
-        To = NormalizeDate(to);
-        PageSize = pageSize;
+        ApplyFilters(year, actor, module, action, result, from, to, pageSize);
 
         await LoadUsersAsync();
 
+        var fromUtc = ParseUtcFrom(From);
+        var toUtc = ParseUtcTo(To);
+        if (fromUtc is not null && toUtc is not null && fromUtc > toUtc)
+        {
+            ModelState.AddModelError(string.Empty, "A data 'Desde' não pode ser posterior à data 'Até'.");
+            return;
+        }
+
         var query = await _audit.QueryAsync(
-            BuildFilter(p, ParseUtcFrom(From), ParseUtcTo(To)),
+            BuildFilter(Math.Max(1, p), fromUtc, toUtc),
             HttpContext.RequestAborted);
         if (query.IsFailure)
         {
@@ -81,33 +82,65 @@ public class IndexModel : PageModel
         string? module, string? action, string? result, string? from, string? to,
         int pageSize = 20, int p = 1)
     {
+        // Export must use exactly the filter values posted by the current page.
+        // Previously BuildFilter read the model's unset properties, causing the
+        // export to silently ignore the selected filters.
+        ApplyFilters(year, actor, module, action, result, from, to, pageSize);
+
+        var fromUtc = ParseUtcFrom(From);
+        var toUtc = ParseUtcTo(To);
+        if (fromUtc is not null && toUtc is not null && fromUtc > toUtc)
+        {
+            ModelState.AddModelError(string.Empty, "A data 'Desde' não pode ser posterior à data 'Até'.");
+            await LoadUsersAsync();
+            return Page();
+        }
+
         var export = await _audit.ExportAsync(
-            BuildFilter(p, ParseUtcFrom(NormalizeDate(from)), ParseUtcTo(NormalizeDate(to))),
+            BuildFilter(Math.Max(1, p), fromUtc, toUtc),
             HttpContext.RequestAborted);
         if (export.IsFailure)
         {
             ModelState.AddModelError(string.Empty, export.Error.Message);
-            await OnGetAsync(year, actor, module, action, result, from, to, pageSize, p);
+            await OnGetAsync(Year, Actor, Module, Action, Result, From, To, PageSize, p);
             return Page();
         }
 
         return File(
             Encoding.UTF8.GetBytes(export.Value),
-            "text/csv",
+            "text/csv; charset=utf-8",
             $"auditoria-{Year?.ToString() ?? "tudo"}.csv");
+    }
+
+    private void ApplyFilters(int? year, string? actor, string? module,
+        string? action, string? result, string? from, string? to, int pageSize)
+    {
+        // Audit is an annual registry. Invalid/stale values such as 0/-1 from
+        // the former year-list bug are normalised to the current year.
+        Year = year is >= 2000 && year <= CurrentYear ? year : CurrentYear;
+        Actor = NormalizeText(actor);
+        Module = NormalizeText(module);
+        Action = NormalizeText(action);
+        Result = NormalizeText(result);
+        From = NormalizeDate(from);
+        To = NormalizeDate(to);
+        PageSize = AuditQueryFilter.IsValidPageSize(pageSize) ? pageSize : 20;
     }
 
     private AuditQueryFilter BuildFilter(int page, DateTimeOffset? fromUtc, DateTimeOffset? toUtc) =>
         new(
             Year,
-            string.IsNullOrWhiteSpace(Actor) ? null : Actor,
-            string.IsNullOrWhiteSpace(Module) ? null : Module,
-            string.IsNullOrWhiteSpace(Action) ? null : Action,
-            string.IsNullOrWhiteSpace(Result) ? null : Result,
+            Actor,
+            Module,
+            Action,
+            Result,
             FromUtc: fromUtc,
             ToUtc: toUtc,
             Page: page,
             PageSize: PageSize);
+
+    private static string? NormalizeText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static string? NormalizeDate(string? value) =>
         DateTime.TryParse(value, out var parsed) ? parsed.Date.ToString("yyyy-MM-dd") : null;
