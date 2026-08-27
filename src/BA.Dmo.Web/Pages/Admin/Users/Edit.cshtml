@@ -24,12 +24,10 @@ else if (Model.Entry is null)
 }
 else
 {
-    var jobOnBlocked = Model.TemplateGrantsAdmin || Model.PostedGrantsAdmin;
-    var jobOnModuleId = BA.Dmo.Application.Shared.Access.CanonicalModuleCatalog.JobonModuleId;
     <div class="dmo-page-head">
         <div>
             <h2>Editar utilizador</h2>
-            <p>Nome, título/função, template de acesso, estado e módulos associados.</p>
+            <p>Nome, perfil funcional, template de acesso e estado.</p>
         </div>
         <a class="dmo-button" href="/admin/users">Voltar à lista</a>
     </div>
@@ -65,21 +63,25 @@ else
                         <input id="displayName" name="displayName" type="text" required value="@Model.Entry.DisplayName" />
                     </div>
                     <div class="dmo-field">
-                        <label for="templateId">Template de acesso</label>
-                        <select id="templateId" name="templateId" required>
+                        <label for="templateIds">Templates de acesso</label>
+                        <select id="templateIds" name="templateIds" required multiple size="5">
                             @foreach (var template in Model.Templates)
                             {
-                                <option value="@template.TemplateId" selected="@(Model.Entry.TemplateId == template.TemplateId)">
+                                <option value="@template.TemplateId" selected="@(Model.Entry.AssignedTemplateIds.Contains(template.TemplateId))">
                                     @template.Name (@(template.Active ? "ativo" : "inativo"))
                                 </option>
                             }
                         </select>
+                        <p class="dmo-field__helper">Selecione um ou mais templates.</p>
                     </div>
                     <div class="dmo-field span2">
-                        <label for="profileTitle">Título / função apresentado no cabeçalho</label>
-                        <input id="profileTitle" name="profileTitle" type="text" maxlength="40"
-                               placeholder="Ex.: Chefe, Engenheiro, Metrologia" value="@Model.Entry.ProfileTitle" />
-                        <p class="dmo-field__helper">Texto visual livre; não altera permissões.</p>
+                        <label for="profileTitle">Perfil funcional</label>
+                        <select id="profileTitle" name="profileTitle" required>
+                            <option value="Admin" selected="@(Model.Entry.ProfileTitle == "Admin")">Admin</option>
+                            <option value="Operador / Controlador" selected="@(Model.Entry.ProfileTitle == "Operador / Controlador")">Operador / Controlador</option>
+                            <option value="Responsável" selected="@(Model.Entry.ProfileTitle == "Responsável")">Responsável</option>
+                        </select>
+                        <p class="dmo-field__helper">O perfil determina o comportamento dentro dos módulos atribuídos pelos templates.</p>
                     </div>
                     <div class="dmo-field">
                         <label for="active">Estado</label>
@@ -88,76 +90,6 @@ else
                             <option value="false" selected="@(!Model.Entry.Active)">Inativo</option>
                         </select>
                     </div>
-                </div>
-
-                @* Módulos associados — per-user grants (contract §6.7). One row
-                   per canonical catalog module; state pill + capability checklist
-                   inside .dmo-field. Effective state shown = stored override (if
-                   set) else the template grants. Job On is rendered disabled and
-                   its inputs are excluded from the POST when the user's template
-                   (or the posted set) grants admin — server guard authoritative. *@
-                <div class="dmo-card dmo-modules-card">
-                    <div class="dmo-table-title">
-                        <h3>Módulos associados</h3>
-                    </div>
-                    <p class="dmo-field__helper">
-                        Acesso por utilizador, sobreposto ao template. Marcos de acesso não apagam permissões nem dados.
-                    </p>
-                    @foreach (var module in Model.CatalogModules)
-                    {
-                        var isArea = BA.Dmo.Web.Pages.Admin.Users.EditModel.IsFunctionalArea(module);
-                        var hasCaps = module.Capabilities.Count > 0;
-                        IReadOnlySet<string>? grantedCaps = null;
-                        var isGranted = !isArea
-                            && Model.EffectiveGrants.TryGetValue(module.ModuleId, out grantedCaps);
-                        var isJobOn = module.ModuleId == jobOnModuleId;
-                        var rowDisabled = isJobOn && jobOnBlocked;
-                        <div class="dmo-module-row" aria-disabled="@(rowDisabled ? "true" : "false")">
-                            <div class="dmo-module-row__head">
-                                <strong>@module.DisplayName</strong>
-                                <span class="@((isArea ? Model.IsAreaGranted(module.ModuleId) : isGranted) ? "dmo-pill active" : "dmo-pill inactive")">
-                                    @(isArea
-                                        ? (Model.IsAreaGranted(module.ModuleId) ? "Acesso" : "Sem acesso")
-                                        : (isGranted ? "Acesso" : "Sem acesso"))
-                                </span>
-                            </div>
-                            @if (isArea)
-                            {
-                                <p class="dmo-field__helper">Área composta; o acesso é definido pelos submódulos.</p>
-                            }
-                            else if (rowDisabled)
-                            {
-                                <p class="dmo-field__helper">Não pode ser atribuído a administradores puros.</p>
-                            }
-                            else if (hasCaps)
-                            {
-                                <div class="dmo-field-group">
-                                    @foreach (var capability in module.Capabilities)
-                                    {
-                                        <label class="dmo-field dmo-field--check">
-                                            <input type="checkbox"
-                                                   name="Modules[@module.ModuleId]"
-                                                   value="@capability.Id"
-                                                   checked="@(grantedCaps != null && grantedCaps.Contains(capability.Id))" />
-                                            <span>@capability.Id</span>
-                                        </label>
-                                    }
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="dmo-field-group">
-                                    <label class="dmo-field dmo-field--check">
-                                        <input type="checkbox"
-                                               name="Modules[@module.ModuleId]"
-                                               value="true"
-                                               checked="@isGranted" />
-                                        <span>Conceder acesso</span>
-                                    </label>
-                                </div>
-                            }
-                        </div>
-                    }
                 </div>
 
                 <div class="dmo-modal-foot">

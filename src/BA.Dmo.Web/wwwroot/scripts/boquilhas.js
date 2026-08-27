@@ -76,7 +76,7 @@
     linha: 'Mudança de linha', contagem: 'Correção', fim: 'Fecho'
   }[t] || t);
 
-  const stateLabel = (s) => ({ available: 'Ativo', archived: 'Arquivado', scrapped: 'Sucata' }[s] || s);
+  const stateLabel = (s) => ({ available: 'Ativo', archived: 'Arquivado' }[s] || s);
 
   // ---- Side panel: live Job On production context (R009) --------------------
   // Reuses /api/reparacao-interna/line-cards via our own endpoint so the
@@ -91,7 +91,7 @@
         // machine card (reference boquilhas.html .machine anatomy):
         // name · job reference (production code) · BQ reference · meta.
         // The production tint marks lines with an active Job On context.
-        return `<div class="boquilhas-line${card.hasActiveContext ? ' production' : ''}" data-line="${esc(line)}">
+        return `<div class="dmo-sidebar__card boquilhas-line${card.hasActiveContext ? ' production' : ''}" data-line="${esc(line)}">
           <div class="boquilhas-line__head">
             <strong>${esc(line)}</strong>
             ${card.hasActiveContext

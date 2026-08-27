@@ -9,8 +9,9 @@ namespace BA.Dmo.IntegrationTests.Access;
 
 /// <summary>
 /// Regression guard for the admin user-list projection defect (dmo-5051):
-/// <see cref="AdminUserRow"/> carries nine constructor parameters (the last,
-/// optional <c>ModulesOverrideJson</c>, and <c>AuthEmail</c>, are filled later
+/// <see cref="AdminUserRow"/> carries ten constructor parameters (the last,
+/// optional <c>TemplateIds</c>, plus <c>ModulesOverrideJson</c> and
+/// <c>AuthEmail</c>, are filled later
 /// by the per-user override column and batched service-role email enrichment),
 /// yet <c>DapperAdminRepository.UserColumns</c> must return a column for every
 /// parameter so the real Dapper projection can materialize the row with
@@ -30,11 +31,11 @@ public class DapperAdminRepositoryProjectionTests
         var authUserId = Guid.Parse("11111111-2222-3333-4444-555555555555");
         var updatedAt = new DateTimeOffset(2026, 8, 17, 12, 0, 0, TimeSpan.Zero);
 
-        // Backing result set matching the nine AdminUserRow parameters. The
+        // Backing result set matching the ten AdminUserRow parameters. The
         // AuthEmail and ModulesOverrideJson columns deliberately carry real
         // typed columns present in the projection yet returned as NULL (no
         // auth.users access at the runtime connection; no per-user override set):
-        // Dapper must see all nine parameters.
+        // TemplateIds is the N27 authoritative association projection.
         var table = new DataTable();
         table.Columns.Add("ActorId", typeof(string));
         table.Columns.Add("AuthUserId", typeof(Guid));
@@ -45,9 +46,11 @@ public class DapperAdminRepositoryProjectionTests
         table.Columns.Add("UpdatedAtUtc", typeof(DateTimeOffset));
         table.Columns.Add("AuthEmail", typeof(string));
         table.Columns.Add("ModulesOverrideJson", typeof(string));
+        table.Columns.Add("TemplateIds", typeof(string[]));
         table.Rows.Add(
-            "user-1", authUserId, "Utilizador Um", "Metrologia",
-            "tpl-active", true, updatedAt, DBNull.Value, DBNull.Value);
+            "user-1", authUserId, "Utilizador Um", "Operador / Controlador",
+            "tpl-active", true, updatedAt, DBNull.Value, DBNull.Value,
+            new[] { "tpl-active", "tpl-jobon" });
 
         var connection = new DataReaderDbConnection(table);
         var repository = new DapperAdminRepository(new FixedReaderConnectionFactory(connection));
@@ -62,12 +65,13 @@ public class DapperAdminRepositoryProjectionTests
         Assert.Contains("AS AuthEmail", connection.IssuedSql, StringComparison.Ordinal);
         Assert.Contains("NULL::text", connection.IssuedSql, StringComparison.Ordinal);
         Assert.Contains("AS ModulesOverrideJson", connection.IssuedSql, StringComparison.Ordinal);
+        Assert.Contains("AS TemplateIds", connection.IssuedSql, StringComparison.Ordinal);
 
         var row = Assert.Single(rows);
         Assert.Equal("user-1", row.ActorId);
         Assert.Equal(authUserId, row.AuthUserId);
         Assert.Equal("Utilizador Um", row.DisplayName);
-        Assert.Equal("Metrologia", row.ProfileTitle);
+        Assert.Equal("Operador / Controlador", row.ProfileTitle);
         Assert.Equal("tpl-active", row.TemplateId);
         Assert.True(row.Active);
         Assert.Equal(updatedAt, row.UpdatedAtUtc);
@@ -75,6 +79,7 @@ public class DapperAdminRepositoryProjectionTests
         Assert.Null(row.AuthEmail);
         // No per-user override set: the override column materializes as null.
         Assert.Null(row.ModulesOverrideJson);
+        Assert.Equal(["tpl-active", "tpl-jobon"], row.AssignedTemplateIds);
         Assert.True(connection.WasDisposed);
     }
 

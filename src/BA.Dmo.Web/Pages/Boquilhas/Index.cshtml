@@ -19,19 +19,21 @@
         </div>
     </div>
 
-    <nav class="dmo-tabs boquilhas-tabs" aria-label="Navegação Boquilhas">
-        <button class="dmo-tab active" data-view="registo" type="button">Registo</button>
-        <button class="dmo-tab" data-view="boquilhas" type="button">Boquilhas</button>
-        <button class="dmo-tab" data-view="historico" type="button">Histórico</button>
-        <button class="dmo-tab right" data-view="definicoes" type="button">Definições</button>
+    <nav class="dmo-module-tabs dmo-tabs boquilhas-tabs" aria-label="Navegação Boquilhas">
+        <button class="dmo-module-tab dmo-tab active" data-view="registo" type="button">Registo</button>
+        <button class="dmo-module-tab dmo-tab" data-view="boquilhas" type="button">Boquilhas</button>
+        <button class="dmo-module-tab dmo-tab" data-view="historico" type="button">Histórico</button>
+        <button class="dmo-module-tab dmo-tab right" data-view="definicoes" type="button">Definições</button>
     </nav>
 
-    <div class="boquilhas-layout">
-        <!-- Fixed line side panel (B1–C3): active reference/lot/qty; opens Job On by id / lot by body. -->
-        <aside class="dmo-card boquilhas-side" aria-label="Linhas em produção">
-            <h3 class="boquilhas-side__title">Linhas de produção</h3>
-            <p class="boquilhas-side__sub">Estado atual em máquina</p>
-            <div id="linePanel" class="boquilhas-lines" data-testid="line-panel">
+    <div class="dmo-work-split boquilhas-layout">
+        <!-- Canonical contextual sidebar (B1–C3): active reference/lot/qty. -->
+        <aside class="dmo-sidebar boquilhas-side" aria-label="Linhas em produção">
+            <div class="dmo-sidebar__head">
+                <h2>LINHAS DE PRODUÇÃO</h2>
+                <p>Estado atual em máquina</p>
+            </div>
+            <div id="linePanel" class="dmo-sidebar__cards boquilhas-lines" data-testid="line-panel">
                 <p class="peso-hint dmo-u-muted" id="linePanelEmpty">A carregar estado das linhas…</p>
             </div>
         </aside>
@@ -107,7 +109,6 @@
                             <option value="">Todos</option>
                             <option value="available">Atuais / ativas</option>
                             <option value="archived">Arquivados</option>
-                            <option value="scrapped">Sucata</option>
                         </select>
                     </div>
                     <div class="dmo-field">

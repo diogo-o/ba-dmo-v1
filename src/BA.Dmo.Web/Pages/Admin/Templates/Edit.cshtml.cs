@@ -27,7 +27,6 @@ public class EditModel : PageModel
         public string ModuleId { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
         public bool Granted { get; set; }
-        public string Capabilities { get; set; } = string.Empty;
     }
 
     public bool IsNew { get; private set; }
@@ -84,10 +83,7 @@ public class EditModel : PageModel
 
         var grants = (lines ?? new List<GrantLine>())
             .Where(l => l.Granted && !string.IsNullOrWhiteSpace(l.ModuleId))
-            .Select(l => new TemplateGrantInput(
-                l.ModuleId,
-                (l.Capabilities ?? string.Empty)
-                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)))
+            .Select(l => new TemplateGrantInput(l.ModuleId, Array.Empty<string>()))
             .ToList();
 
         if (string.IsNullOrWhiteSpace(version))
@@ -131,17 +127,14 @@ public class EditModel : PageModel
         var lines = new List<GrantLine>();
         foreach (var module in CanonicalModuleCatalog.Instance.Modules)
         {
-            if (module.Kind == BA.Dmo.Domain.Shared.Access.ModuleKind.FunctionalArea)
-                continue; // areas have no grants of their own (GLM-CAT-01)
+            if (!module.IsAssignable)
+                continue;
 
             lines.Add(new GrantLine
             {
                 ModuleId = module.ModuleId,
                 DisplayName = module.DisplayName,
-                Granted = granted.ContainsKey(module.ModuleId),
-                Capabilities = granted.TryGetValue(module.ModuleId, out var caps)
-                    ? string.Join(", ", caps)
-                    : string.Empty
+                Granted = granted.ContainsKey(module.ModuleId)
             });
         }
 

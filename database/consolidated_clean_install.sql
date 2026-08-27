@@ -437,7 +437,7 @@ CREATE TABLE IF NOT EXISTS job_on_revision (
     weight_snapshot     jsonb       NULL,
     process_snapshot    jsonb       NULL,
     general_notes       text        NULL,
-    image_asset_id      text        NULL,
+    image_asset_id      text        NULL, -- legacy/dormant; active association is reference-owned below
     change_reason       text        NULL,
     saved_by            text        NULL REFERENCES internal_users (actor_id),
     saved_at_utc        timestamptz NOT NULL DEFAULT now(),
@@ -446,6 +446,28 @@ CREATE TABLE IF NOT EXISTS job_on_revision (
 );
 
 CREATE INDEX IF NOT EXISTS ix_job_on_revision_job_on ON job_on_revision (job_on_id);
+
+-- Current master Article/Reference image association (N29). Job On consumes
+-- this image by its readable reference; immutable revisions do not own it.
+CREATE TABLE IF NOT EXISTS article_reference_images (
+    reference_code  text        PRIMARY KEY,
+    image_asset_id  text        NOT NULL,
+    updated_by      text        NULL REFERENCES internal_users (actor_id),
+    updated_at_utc  timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT ck_article_reference_images_reference CHECK (
+        reference_code <> ''
+        AND reference_code = upper(btrim(reference_code))),
+    CONSTRAINT ck_article_reference_images_asset CHECK (
+        image_asset_id <> ''
+        AND image_asset_id = btrim(image_asset_id)
+        AND image_asset_id NOT LIKE '%/%'
+        AND position(chr(92) in image_asset_id) = 0
+        AND image_asset_id NOT LIKE '%..%'
+        AND image_asset_id ~* '\.(jpe?g|png|gif|webp|bmp)$')
+);
+
+CREATE INDEX IF NOT EXISTS ix_article_reference_images_updated_by
+    ON article_reference_images (updated_by);
 
 -- Circular link job_on.current_revision_id → job_on_revision (as in N05).
 ALTER TABLE job_on
@@ -809,9 +831,8 @@ CREATE TABLE IF NOT EXISTS repair_exit_items (
 
 CREATE INDEX IF NOT EXISTS ix_repair_exit_items_exit ON repair_exit_items (repair_exit_id);
 
--- internal_repair_records: N08 base + N22 additive context columns.
--- N22 redefined ck_internal_repair_records_type to include BQ; here we emit the
--- final (wider) CHECK directly.
+-- internal_repair_records: N08 base + N22 additive context columns + N28
+-- CM/MF-only convergence. BQ remains production/reference context only.
 CREATE TABLE IF NOT EXISTS internal_repair_records (
     internal_repair_record_id uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     line                      text        NOT NULL,
@@ -829,7 +850,7 @@ CREATE TABLE IF NOT EXISTS internal_repair_records (
     production_code           text        NULL,                                     -- N22
     reference                 text        NULL,                                     -- N22
     lot_id                    uuid        NULL,                                     -- N22
-    CONSTRAINT ck_internal_repair_records_type CHECK (tool_type IN ('CM', 'MF', 'BQ')),
+    CONSTRAINT ck_internal_repair_records_type CHECK (tool_type IN ('CM', 'MF')),
     CONSTRAINT ck_internal_repair_records_correction CHECK (
         (correction_of_id IS NULL) = (before_snapshot IS NULL))
 );
@@ -1594,4 +1615,52 @@ CREATE INDEX IF NOT EXISTS ix_audit_events_module_time
 ALTER TABLE internal_users
     ADD COLUMN IF NOT EXISTS modules_override jsonb;
 
--- END OF CONSOLIDATED CLEAN-INSTALL BASELINE (includes N25 remediation + N26 per-user module override)
+-- ----------------------------------------------------------------------------
+-- N27: final access convergence for clean installs.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS internal_user_access_templates (
+    actor_id        text        NOT NULL REFERENCES internal_users (actor_id),
+    template_id     text        NOT NULL REFERENCES access_templates (template_id),
+    assigned_at_utc timestamptz NOT NULL DEFAULT now(),
+    assigned_by     text        NULL,
+    PRIMARY KEY (actor_id, template_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_internal_user_access_templates_template
+    ON internal_user_access_templates (template_id, actor_id);
+
+ALTER TABLE internal_users
+    ALTER COLUMN profile_title SET NOT NULL;
+ALTER TABLE internal_users
+    DROP CONSTRAINT IF EXISTS ck_internal_users_functional_profile;
+ALTER TABLE internal_users
+    ADD CONSTRAINT ck_internal_users_functional_profile CHECK (
+        profile_title IN ('Admin', 'Operador / Controlador', 'Responsável'));
+
+ALTER TABLE internal_user_access_templates ENABLE ROW LEVEL SECURITY;
+
+DO $$
+DECLARE
+    role_name text;
+BEGIN
+    FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
+            EXECUTE format(
+                'REVOKE ALL ON TABLE internal_user_access_templates FROM %I', role_name);
+        END IF;
+    END LOOP;
+END
+$$;
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+    ON internal_user_access_templates TO ba_dmo_app;
+
+DROP POLICY IF EXISTS internal_user_access_templates_app_access
+    ON internal_user_access_templates;
+CREATE POLICY internal_user_access_templates_app_access
+    ON internal_user_access_templates
+    FOR ALL TO ba_dmo_app
+    USING (TRUE)
+    WITH CHECK (TRUE);
+
+-- END OF CONSOLIDATED CLEAN-INSTALL BASELINE (includes N25-N27)

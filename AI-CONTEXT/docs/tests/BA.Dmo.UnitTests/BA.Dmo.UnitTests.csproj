@@ -17,8 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\BA.Dmo.Domain\BA.Dmo.Domain.csproj" />
-    <ProjectReference Include="..\..\src\BA.Dmo.Application\BA.Dmo.Application.csproj" />
+    <ProjectReference Include="..\..\..\..\src\BA.Dmo.Domain\BA.Dmo.Domain.csproj" />
+    <ProjectReference Include="..\..\..\..\src\BA.Dmo.Application\BA.Dmo.Application.csproj" />
   </ItemGroup>
 
 </Project>

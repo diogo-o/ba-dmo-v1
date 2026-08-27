@@ -1,16 +1,8 @@
 using BA.Dmo.Application.Shared.Access;
+using BA.Dmo.Domain.Shared.Access;
 
 namespace BA.Dmo.UnitTests.Shared.Access;
 
-/// <summary>
-/// U-07 navigation derivation tests (Plan-V3 GLM-SHL-03, GLM-CTR-02,
-/// GLM-CAT-02, GLM-ACC-05): tabs = authorized modules ∩ catalog in canonical
-/// order; Controlo groups only authorized children and never appears empty;
-/// Peso renders ONE entry whose route resolves the Operador/Responsável
-/// experience via peso.aprovar (no manual selector); Administração is
-/// right-aligned and exists only with admin.gerir; zero-grant active users
-/// still see Job On (UD-16). No role-name branching anywhere.
-/// </summary>
 public class NavigationServiceTests
 {
     private static readonly AccessResolver Resolver = new(
@@ -21,152 +13,127 @@ public class NavigationServiceTests
     private static readonly NavigationService Service = new(
         CanonicalPageCatalog.Instance, Resolver, CanonicalModuleCatalog.Instance);
 
-    private static EffectiveAccess Access(params ModuleGrant[] grants) =>
-        Resolver.Resolve(new AccessTemplateDefinition(
-            "t-test", "Template de teste", active: true, grants));
+    private static EffectiveAccess Access(
+        FunctionalProfile profile,
+        params ModuleGrant[] grants) =>
+        Resolver.Resolve(
+            new AccessTemplateDefinition("t-test", "Template", active: true, grants),
+            profile);
 
     [Fact]
-    public void EmptyTemplate_ShowsOnlyJobOn_NoControlo_NoAdmin()
+    public void EmptyTemplate_ProducesNoNavigation()
     {
-        // GLM-SHL-03.4: zero operational tabs → Job On (consulta) remains.
-        var navigation = Service.Build(Access(), currentRoute: null);
+        var navigation = Service.Build(
+            Access(FunctionalProfile.OperatorController), currentRoute: null);
 
-        var tab = Assert.Single(navigation.LeftItems);
-        Assert.Equal(CanonicalModuleCatalog.JobonModuleId, tab.Id);
-        Assert.Equal("/jobon", tab.Route);
+        Assert.Empty(navigation.LeftItems);
         Assert.Null(navigation.AdminEntry);
     }
 
     [Fact]
-    public void MultipleModules_RenderInCanonicalOrder_OnlyAuthorized()
+    public void MultipleAssignedModules_RenderInCanonicalOrder()
     {
-        // GLM-SHL-03.1/03.5: canonical order + unauthorized tabs never exist.
         var navigation = Service.Build(Access(
-            new ModuleGrant("historia", []),
-            new ModuleGrant("boquilhas", []),
-            new ModuleGrant("ferramentas", []),
-            new ModuleGrant("peso", [])), currentRoute: null);
+            FunctionalProfile.OperatorController,
+            new ModuleGrant(CanonicalModuleCatalog.JobonModuleId, []),
+            new ModuleGrant(CanonicalModuleCatalog.BoquilhasModuleId, []),
+            new ModuleGrant(CanonicalModuleCatalog.ControloAreaId, []),
+            new ModuleGrant(CanonicalModuleCatalog.FerramentasModuleId, [])), null);
 
         Assert.Equal(
-            new[]
-            {
-                CanonicalModuleCatalog.JobonModuleId,
-                CanonicalModuleCatalog.BoquilhasModuleId,
-                CanonicalModuleCatalog.ControloAreaId,
-                CanonicalModuleCatalog.FerramentasModuleId,
-                CanonicalModuleCatalog.HistoriaModuleId
-            },
-            navigation.LeftItems.Select(i => i.Id).ToArray());
-        Assert.DoesNotContain(navigation.LeftItems,
-            i => i.Id == CanonicalModuleCatalog.ArmazemModuleId);
+            ["jobon", "boquilhas", "controlo", "ferramentas", "historia"],
+            navigation.LeftItems.Select(item => item.Id).ToArray());
     }
 
-    [Theory]
-    [InlineData(true, false, new[] { "/peso" })]
-    [InlineData(false, true, new[] { "/pegamentos" })]
-    [InlineData(true, true, new[] { "/peso", "/pegamentos" })]
-    public void ControloGroup_ShowsOnlyAuthorizedChildren(
-        bool peso, bool pegamentos, string[] expectedChildRoutes)
+    [Fact]
+    public void Controlo_RendersOneTopLevelEntry_WithoutInternalChildrenInTheShell()
     {
-        // Scenarios 4/5/6 (GLM-ACC-07): Controlo with the authorized child
-        // entries only — never fused, never empty.
-        var grants = new List<ModuleGrant>();
-        if (peso)
-            grants.Add(new ModuleGrant("peso", []));
-        if (pegamentos)
-            grants.Add(new ModuleGrant("pegamentos", []));
+        var navigation = Service.Build(Access(
+            FunctionalProfile.OperatorController,
+            new ModuleGrant(CanonicalModuleCatalog.ControloAreaId, [])), null);
 
-        var navigation = Service.Build(Access(grants.ToArray()), currentRoute: null);
-
-        var area = Assert.Single(navigation.LeftItems.OfType<NavigationArea>());
-        Assert.Equal(CanonicalModuleCatalog.ControloAreaId, area.Id);
-        Assert.Equal(expectedChildRoutes, area.Children.Select(c => c.Route).ToArray());
-        Assert.Equal(expectedChildRoutes[0], area.Route); // primeira entrada filha
-        // Children never appear as top-level tabs.
+        var tab = Assert.Single(navigation.LeftItems,
+            item => item.Id == CanonicalModuleCatalog.ControloAreaId);
+        Assert.IsType<NavigationTab>(tab);
+        Assert.Equal("/controlo", tab.Route);
+        Assert.Empty(navigation.LeftItems.OfType<NavigationArea>());
         Assert.DoesNotContain(navigation.LeftItems,
-            i => i.Id is CanonicalModuleCatalog.PesoModuleId
+            item => item.Id is CanonicalModuleCatalog.PesoModuleId
                 or CanonicalModuleCatalog.PegamentosModuleId);
     }
 
     [Fact]
-    public void NoControloChildren_NoAreaEntry()
+    public void ControloEntry_IsStableAcrossFunctionalProfiles()
     {
-        // GLM-CTR-02.4: area without authorized children never appears.
-        var navigation = Service.Build(
-            Access(new ModuleGrant("boquilhas", [])), currentRoute: null);
+        var operatorNavigation = Service.Build(Access(
+            FunctionalProfile.OperatorController,
+            new ModuleGrant(CanonicalModuleCatalog.ControloAreaId, [])), null);
+        var responsibleNavigation = Service.Build(Access(
+            FunctionalProfile.Responsible,
+            new ModuleGrant(CanonicalModuleCatalog.ControloAreaId, [])), null);
 
-        Assert.DoesNotContain(navigation.LeftItems.OfType<NavigationArea>(),
-            a => a.Id == CanonicalModuleCatalog.ControloAreaId);
+        var operatorTab = Assert.Single(operatorNavigation.LeftItems,
+            item => item.Id == CanonicalModuleCatalog.ControloAreaId);
+        var responsibleTab = Assert.Single(responsibleNavigation.LeftItems,
+            item => item.Id == CanonicalModuleCatalog.ControloAreaId);
+        Assert.Equal("/controlo", operatorTab.Route);
+        Assert.Equal("/controlo", responsibleTab.Route);
     }
 
     [Fact]
-    public void PesoEntry_ResolvesTheExperienceByCapability()
+    public void Historia_IsDerivedAsAReadSurface()
     {
-        // GLM-ACC-05/GLM-SHL-03.3: ONE Peso entry; the route resolves the
-        // exclusive experience — no manual selector.
-        var operador = Service.Build(
-            Access(new ModuleGrant("peso", [])), currentRoute: null);
-        var responsavel = Service.Build(
-            Access(new ModuleGrant("peso", new[] { "peso.aprovar" })), currentRoute: null);
+        var navigation = Service.Build(Access(
+            FunctionalProfile.OperatorController,
+            new ModuleGrant(CanonicalModuleCatalog.BoquilhasModuleId, [])), null);
 
-        var operadorArea = Assert.Single(operador.LeftItems.OfType<NavigationArea>());
-        var operadorPeso = Assert.Single(operadorArea.Children);
-        Assert.Equal("/peso", operadorPeso.Route);
-
-        var responsavelArea = Assert.Single(responsavel.LeftItems.OfType<NavigationArea>());
-        var responsavelPeso = Assert.Single(responsavelArea.Children);
-        Assert.Equal("/peso/responsavel", responsavelPeso.Route);
+        Assert.Equal(["boquilhas", "historia"],
+            navigation.LeftItems.Select(item => item.Id).ToArray());
     }
 
     [Fact]
-    public void AdminEntry_RequiresAdminGerir_AndIsRightAligned()
+    public void AdminEntry_IsRightAligned_ForAdminProfileOnly()
     {
-        // GLM-SHL-03.1: Administração à direita; tab only when accessible.
-        var withoutAdmin = Service.Build(
-            Access(new ModuleGrant("boquilhas", [])), currentRoute: null);
-        Assert.Null(withoutAdmin.AdminEntry);
+        var admin = Service.Build(Access(
+            FunctionalProfile.Admin,
+            new ModuleGrant(CanonicalModuleCatalog.AdminModuleId, [])), null);
+        var operational = Service.Build(Access(
+            FunctionalProfile.OperatorController,
+            new ModuleGrant(CanonicalModuleCatalog.AdminModuleId, [])), null);
 
-        var adminOnly = Service.Build(
-            Access(new ModuleGrant("admin", new[] { "admin.gerir" })), currentRoute: null);
-        Assert.NotNull(adminOnly.AdminEntry);
-        Assert.Equal("/admin", adminOnly.AdminEntry!.Route);
-        // Administração is never a left operational tab.
-        Assert.DoesNotContain(adminOnly.LeftItems,
-            i => i.Id == CanonicalModuleCatalog.AdminModuleId);
+        Assert.NotNull(admin.AdminEntry);
+        Assert.Equal("/admin", admin.AdminEntry!.Route);
+        Assert.Empty(admin.LeftItems);
+        Assert.Null(operational.AdminEntry);
     }
 
     [Fact]
-    public void ActiveState_FollowsTheCurrentRoute()
+    public void ActiveState_FollowsCurrentRoute()
     {
-        var access = Access(
-            new ModuleGrant("peso", new[] { "peso.aprovar" }),
-            new ModuleGrant("admin", new[] { "admin.gerir" }));
+        var controloAccess = Access(
+            FunctionalProfile.Responsible,
+            new ModuleGrant(CanonicalModuleCatalog.ControloAreaId, []));
+        var onPeso = Service.Build(controloAccess, "/peso/responsavel");
+        var controlo = Assert.Single(onPeso.LeftItems,
+            item => item.Id == CanonicalModuleCatalog.ControloAreaId);
+        Assert.True(controlo.IsActive);
 
-        // Both peso routes mark the same Peso entry active (one module).
-        var onResponsavel = Service.Build(access, "/peso/responsavel");
-        var area = Assert.Single(onResponsavel.LeftItems.OfType<NavigationArea>());
-        Assert.True(area.IsActive);
-        Assert.True(Assert.Single(area.Children).IsActive);
-
-        // Module sub-pages keep the module entry active.
-        var onAdminSubPage = Service.Build(access, "/admin/users");
-        Assert.True(onAdminSubPage.AdminEntry!.IsActive);
-
-        // Unknown routes leave everything inactive.
-        var unknown = Service.Build(access, "/unknown-route");
-        Assert.False(unknown.AdminEntry!.IsActive);
-        Assert.All(unknown.LeftItems, i => Assert.False(i.IsActive));
+        var adminAccess = Access(
+            FunctionalProfile.Admin,
+            new ModuleGrant(CanonicalModuleCatalog.AdminModuleId, []));
+        Assert.True(Service.Build(adminAccess, "/admin/users").AdminEntry!.IsActive);
     }
 
     [Fact]
     public void InactiveTemplate_ProducesNoNavigation()
     {
-        // Scenario 12 (GLM-ACC-07): deactivated template → no tabs at all.
-        var access = Resolver.Resolve(new AccessTemplateDefinition(
-            "t-off", "Inativo", active: false,
-            new[] { new ModuleGrant("boquilhas", []) }));
+        var access = Resolver.Resolve(
+            new AccessTemplateDefinition(
+                "t-off", "Inativo", active: false,
+                [new ModuleGrant(CanonicalModuleCatalog.JobonModuleId, [])]),
+            FunctionalProfile.OperatorController);
 
-        var navigation = Service.Build(access, currentRoute: null);
+        var navigation = Service.Build(access, null);
 
         Assert.Empty(navigation.LeftItems);
         Assert.Null(navigation.AdminEntry);

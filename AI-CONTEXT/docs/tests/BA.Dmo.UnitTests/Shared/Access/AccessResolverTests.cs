@@ -3,15 +3,6 @@ using BA.Dmo.Domain.Shared.Access;
 
 namespace BA.Dmo.UnitTests.Shared.Access;
 
-/// <summary>
-/// U-04 access resolution tests (Plan-V3 GLM-ACC-02/03/06/07, GLM-SHL-03/04,
-/// GLM-CTR-02, UD-16/DS-01). Landing rule (owner-confirmed design):
-/// functional users land on Job On (universal jobon.view); templates holding
-/// the admin module receive no jobon.view and fall back to the first
-/// accessible page in canonical order (/admin for the bootstrap admin);
-/// deterministic fallback only when Job On is genuinely unavailable;
-/// explicit NoAccess when nothing is accessible.
-/// </summary>
 public class AccessResolverTests
 {
     private readonly AccessResolver _resolver = new(
@@ -19,291 +10,249 @@ public class AccessResolverTests
         CanonicalPageCatalog.Instance,
         CanonicalModuleCatalog.AreaChildren);
 
-    private static AccessTemplateDefinition Template(
-        params ModuleGrant[] grants) =>
+    private static AccessTemplateDefinition Template(params ModuleGrant[] grants) =>
         new("t-test", "Template de teste", active: true, grants);
 
+    private EffectiveAccess Resolve(
+        FunctionalProfile profile = FunctionalProfile.OperatorController,
+        params ModuleGrant[] grants) =>
+        _resolver.Resolve(Template(grants), profile);
+
     [Fact]
-    public void InactiveTemplate_GrantsNothing_SafeState()
+    public void InactiveTemplate_GrantsNothing()
     {
-        // Scenario 12 (GLM-ACC-07): deactivated template → no access.
         var template = new AccessTemplateDefinition(
             "t-off", "Inativo", active: false,
-            new[] { new ModuleGrant("boquilhas", []) });
+            [new ModuleGrant(CanonicalModuleCatalog.JobonModuleId, [])]);
 
-        var access = _resolver.Resolve(template);
+        var access = _resolver.Resolve(template, FunctionalProfile.OperatorController);
 
         Assert.True(access.IsEmpty);
-        Assert.Empty(access.NavigationModules);
-        var resolution = _resolver.ResolveFirstPage(access);
-        Assert.Equal(FirstPageOutcome.NoAccess, resolution.Outcome);
-        Assert.Null(resolution.Page);
+        Assert.Equal(FirstPageOutcome.NoAccess, _resolver.ResolveFirstPage(access).Outcome);
     }
 
     [Fact]
-    public void Landing_IsJobOn_ForABoquilhasOnlyUser()
+    public void JobOn_MustBeAssigned_AndIsTheOperationalLanding()
     {
-        // Scenario 1: Boquilhas-only user → landing Job On (consulta).
-        var access = _resolver.Resolve(Template(new ModuleGrant("boquilhas", [])));
+        var assigned = Resolve(
+            FunctionalProfile.OperatorController,
+            new ModuleGrant(CanonicalModuleCatalog.JobonModuleId, []));
+        var notAssigned = Resolve(
+            FunctionalProfile.OperatorController,
+            new ModuleGrant(CanonicalModuleCatalog.BoquilhasModuleId, []));
 
-        var resolution = _resolver.ResolveFirstPage(access);
-
-        Assert.Equal(FirstPageOutcome.Landing, resolution.Outcome);
-        Assert.Equal("/jobon", resolution.Page!.Route);
+        Assert.Equal(FirstPageOutcome.Landing, _resolver.ResolveFirstPage(assigned).Outcome);
+        Assert.True(assigned.HasCapability(CanonicalModuleCatalog.JobonViewCapabilityId));
+        Assert.False(notAssigned.HasModule(CanonicalModuleCatalog.JobonModuleId));
+        Assert.Equal("/boquilhas", _resolver.ResolveFirstPage(notAssigned).Page!.Route);
     }
 
     [Fact]
-    public void Landing_IsAdmin_ForAnAdminOnlyTemplate()
+    public void EmptyOperationalTemplate_HasNoAccess()
     {
-        // Owner decision: an Administrator's only working area is the single
-        // Admin page (users/applications/audit/definitions). It is NOT granted
-        // jobon.view, so it does not land on the Job On work landing; its first
-        // accessible page resolves to /admin.
-        var access = _resolver.Resolve(Template(
-            new ModuleGrant("admin", new[] { "admin.gerir", "audit.view" })));
+        var access = Resolve();
 
-        var resolution = _resolver.ResolveFirstPage(access);
-
-        Assert.False(access.HasCapability("jobon.view"));
-        Assert.False(access.HasModule("jobon"));
-        Assert.Equal(FirstPageOutcome.FallbackCanonicalOrder, resolution.Outcome);
-        Assert.Equal("/admin", resolution.Page!.Route);
-        Assert.True(access.HasModule("admin"));
-        Assert.Contains(access.AccessiblePagesFor(_resolver), p => p.Route == "/admin");
+        Assert.True(access.IsEmpty);
+        Assert.Equal(FirstPageOutcome.NoAccess, _resolver.ResolveFirstPage(access).Outcome);
     }
 
     [Fact]
-    public void Landing_IsJobOn_EvenWithZeroOperationalGrants()
+    public void MultipleTemplates_UnionTheirAssignedModules_UnderOneProfile()
     {
-        // GLM-SHL-03.4: zero own tabs → the user still sees Job On (consulta).
-        var access = _resolver.Resolve(Template());
+        var access = _resolver.Resolve(
+            [
+                new AccessTemplateDefinition(
+                    "t-jobon", "Job On", active: true,
+                    [new ModuleGrant(CanonicalModuleCatalog.JobonModuleId, [])]),
+                new AccessTemplateDefinition(
+                    "t-controlo", "Controlo", active: true,
+                    [new ModuleGrant(CanonicalModuleCatalog.ControloAreaId, [])]),
+                new AccessTemplateDefinition(
+                    "t-inactive", "Ignorado", active: false,
+                    [new ModuleGrant(CanonicalModuleCatalog.BoquilhasModuleId, [])])
+            ],
+            FunctionalProfile.Responsible);
 
-        var resolution = _resolver.ResolveFirstPage(access);
-
-        Assert.Equal(FirstPageOutcome.Landing, resolution.Outcome);
-        Assert.Equal("/jobon", resolution.Page!.Route);
-        Assert.True(access.HasCapability("jobon.view"));
+        Assert.True(access.HasModule(CanonicalModuleCatalog.JobonModuleId));
+        Assert.True(access.HasModule(CanonicalModuleCatalog.ControloAreaId));
+        Assert.True(access.HasModule(CanonicalModuleCatalog.PesoModuleId));
+        Assert.True(access.HasModule(CanonicalModuleCatalog.PegamentosModuleId));
+        Assert.False(access.HasModule(CanonicalModuleCatalog.BoquilhasModuleId));
+        Assert.True(access.HasCapability(CanonicalModuleCatalog.JobonEditCapabilityId));
+        Assert.True(access.HasCapability(CanonicalModuleCatalog.ControloReviewCapabilityId));
     }
 
     [Fact]
-    public void Landing_DoesNotDependOnRoleNames()
+    public void AdminProfile_IsPure_AndGetsConfirmedAdminCapabilities()
     {
-        // Templates NAMED like roles but holding identical grants resolve
-        // identically: behavior derives from grants, never from names.
-        var operador = new AccessTemplateDefinition(
-            "t-1", "Operador", active: true, new[] { new ModuleGrant("peso", []) });
-        var responsavel = new AccessTemplateDefinition(
-            "t-2", "Administrador", active: true, new[] { new ModuleGrant("peso", []) });
+        var access = Resolve(
+            FunctionalProfile.Admin,
+            new ModuleGrant(CanonicalModuleCatalog.AdminModuleId, []),
+            new ModuleGrant(CanonicalModuleCatalog.JobonModuleId, []));
 
+        Assert.True(access.HasModule(CanonicalModuleCatalog.AdminModuleId));
+        Assert.False(access.HasModule(CanonicalModuleCatalog.JobonModuleId));
+        Assert.True(access.HasCapability(CanonicalModuleCatalog.AdminGerirCapabilityId));
+        Assert.True(access.HasCapability(CanonicalModuleCatalog.AuditViewCapabilityId));
+        Assert.True(access.HasCapability(CanonicalModuleCatalog.AuditExportCapabilityId));
+        Assert.Equal("/admin", _resolver.ResolveFirstPage(access).Page!.Route);
+    }
+
+    [Theory]
+    [InlineData(FunctionalProfile.OperatorController)]
+    [InlineData(FunctionalProfile.Responsible)]
+    public void OperationalProfiles_CannotReceiveAdmin(FunctionalProfile profile)
+    {
+        var access = Resolve(profile, new ModuleGrant(CanonicalModuleCatalog.AdminModuleId, []));
+
+        Assert.True(access.IsEmpty);
+        Assert.False(access.HasCapability(CanonicalModuleCatalog.AdminGerirCapabilityId));
+    }
+
+    [Fact]
+    public void Profile_DerivesJobOnBehavior_AndLegacyCapabilityArraysDoNot()
+    {
+        var legacyCapabilities = new[]
+        {
+            CanonicalModuleCatalog.JobonViewCapabilityId,
+            CanonicalModuleCatalog.JobonEditCapabilityId,
+            CanonicalModuleCatalog.JobonConfigureCapabilityId
+        };
+        var operatorAccess = Resolve(
+            FunctionalProfile.OperatorController,
+            new ModuleGrant(CanonicalModuleCatalog.JobonModuleId, legacyCapabilities));
+        var responsibleAccess = Resolve(
+            FunctionalProfile.Responsible,
+            new ModuleGrant(CanonicalModuleCatalog.JobonModuleId, []));
+
+        Assert.True(operatorAccess.HasCapability(CanonicalModuleCatalog.JobonViewCapabilityId));
+        Assert.True(operatorAccess.HasCapability(CanonicalModuleCatalog.JobonConfirmarCapabilityId));
+        Assert.False(operatorAccess.HasCapability(CanonicalModuleCatalog.JobonEditCapabilityId));
+        Assert.False(operatorAccess.HasCapability(CanonicalModuleCatalog.JobonConfigureCapabilityId));
+
+        Assert.True(responsibleAccess.HasCapability(CanonicalModuleCatalog.JobonViewCapabilityId));
+        Assert.True(responsibleAccess.HasCapability(CanonicalModuleCatalog.JobonConfirmarCapabilityId));
+        Assert.True(responsibleAccess.HasCapability(CanonicalModuleCatalog.JobonEditCapabilityId));
+        Assert.True(responsibleAccess.HasCapability(CanonicalModuleCatalog.JobonConfigureCapabilityId));
+    }
+
+    [Fact]
+    public void Controlo_IsOneGrant_AndExpandsItsInternalTechnicalAreas()
+    {
+        var access = Resolve(
+            FunctionalProfile.OperatorController,
+            new ModuleGrant(CanonicalModuleCatalog.ControloAreaId, []));
+
+        Assert.True(access.HasModule(CanonicalModuleCatalog.ControloAreaId));
+        Assert.True(access.HasModule(CanonicalModuleCatalog.PesoModuleId));
+        Assert.True(access.HasModule(CanonicalModuleCatalog.PegamentosModuleId));
         Assert.Equal(
-            _resolver.ResolveFirstPage(_resolver.Resolve(operador)).Page!.Route,
-            _resolver.ResolveFirstPage(_resolver.Resolve(responsavel)).Page!.Route);
-        Assert.Equal("/jobon", _resolver.ResolveFirstPage(_resolver.Resolve(operador)).Page!.Route);
+            [CanonicalModuleCatalog.PesoModuleId, CanonicalModuleCatalog.PegamentosModuleId],
+            access.VisibleAreaChildren[CanonicalModuleCatalog.ControloAreaId]
+                .Select(module => module.ModuleId).ToArray());
     }
 
     [Fact]
-    public void PreferredFirstPageId_IsNotUsedInV1()
+    public void ControloBehavior_ComesFromProfile()
     {
-        // 05_SHL §4: preferred_first_page remains read-only and unused; the
-        // fixed Job On policy applies regardless of the stored value.
-        var template = new AccessTemplateDefinition(
-            "t-pref", "Com preferência", active: true,
-            new[] { new ModuleGrant("boquilhas", []) },
-            preferredFirstPageId: "boquilhas.registo");
+        var operatorAccess = Resolve(
+            FunctionalProfile.OperatorController,
+            new ModuleGrant(CanonicalModuleCatalog.ControloAreaId, []));
+        var responsibleAccess = Resolve(
+            FunctionalProfile.Responsible,
+            new ModuleGrant(CanonicalModuleCatalog.ControloAreaId, []));
 
-        var resolution = _resolver.ResolveFirstPage(_resolver.Resolve(template));
+        Assert.True(operatorAccess.HasCapability(CanonicalModuleCatalog.ControloViewCapabilityId));
+        Assert.True(operatorAccess.HasCapability(CanonicalModuleCatalog.ControloEditCapabilityId));
+        Assert.True(operatorAccess.HasCapability(CanonicalModuleCatalog.ControloSubmitCapabilityId));
+        Assert.False(operatorAccess.HasCapability(CanonicalModuleCatalog.ControloReviewCapabilityId));
+        Assert.False(operatorAccess.HasCapability(CanonicalModuleCatalog.PesoAprovarCapabilityId));
 
-        Assert.Equal(FirstPageOutcome.Landing, resolution.Outcome);
-        Assert.Equal("/jobon", resolution.Page!.Route);
+        Assert.True(responsibleAccess.HasCapability(CanonicalModuleCatalog.ControloViewCapabilityId));
+        Assert.False(responsibleAccess.HasCapability(CanonicalModuleCatalog.ControloEditCapabilityId));
+        Assert.False(responsibleAccess.HasCapability(CanonicalModuleCatalog.ControloSubmitCapabilityId));
+        Assert.True(responsibleAccess.HasCapability(CanonicalModuleCatalog.ControloReviewCapabilityId));
+        Assert.True(responsibleAccess.HasCapability(CanonicalModuleCatalog.PesoAprovarCapabilityId));
     }
 
     [Fact]
-    public void Fallback_WhenLandingGenuinelyUnavailable_IsFirstAccessibleInCanonicalOrder()
+    public void FerramentasMasterEdit_IsResponsibleBehavior()
     {
-        // Page catalog WITHOUT an active Job On landing: deterministic
-        // canonical-order fallback (never Boquilhas/Peso/Admin hardcoded).
-        var pagesWithoutJobon = new PageCatalog(new[]
-        {
-            new PageDefinition("boquilhas.registo", "boquilhas", "/boquilhas", null, 10),
-            new PageDefinition("peso.operador", "peso", "/peso", null, 21),
-            new PageDefinition("tampoes.quantidades", "tampoes", "/tampoes", null, 80)
-        });
-        var resolver = new AccessResolver(
-            CanonicalModuleCatalog.Instance, pagesWithoutJobon,
-            CanonicalModuleCatalog.AreaChildren);
+        var operatorAccess = Resolve(
+            FunctionalProfile.OperatorController,
+            new ModuleGrant(CanonicalModuleCatalog.FerramentasModuleId, []));
+        var responsibleAccess = Resolve(
+            FunctionalProfile.Responsible,
+            new ModuleGrant(CanonicalModuleCatalog.FerramentasModuleId, []));
 
-        var access = resolver.Resolve(Template(
-            new ModuleGrant("tampoes", []),
-            new ModuleGrant("boquilhas", [])));
-
-        var resolution = resolver.ResolveFirstPage(access);
-
-        Assert.Equal(FirstPageOutcome.FallbackCanonicalOrder, resolution.Outcome);
-        // Canonical order decides: boquilhas (10) before tampoes (80).
-        Assert.Equal("/boquilhas", resolution.Page!.Route);
+        Assert.False(operatorAccess.HasCapability(CanonicalModuleCatalog.FerramentasConfigureCapabilityId));
+        Assert.True(responsibleAccess.HasCapability(CanonicalModuleCatalog.FerramentasConfigureCapabilityId));
     }
 
     [Fact]
-    public void NoAccessiblePage_YieldsExplicitNoAccess()
+    public void Historia_IsDerivedForOperationalAccess_AndNeverForPureAdmin()
     {
-        // Catalog without the Job On module + empty page catalog: nothing is
-        // accessible → explicit NoAccess (GLM-SHL-06 safe state).
-        var modules = new ModuleCatalog(new[]
-        {
-            new ModuleDefinition("boquilhas", "Boquilhas", ModuleKind.Module, 10, "/boquilhas")
-        });
-        var resolver = new AccessResolver(
-            modules, new PageCatalog(Array.Empty<PageDefinition>()),
-            new Dictionary<string, IReadOnlyList<string>>());
+        var operational = Resolve(
+            FunctionalProfile.OperatorController,
+            new ModuleGrant(CanonicalModuleCatalog.BoquilhasModuleId, []));
+        var admin = Resolve(
+            FunctionalProfile.Admin,
+            new ModuleGrant(CanonicalModuleCatalog.AdminModuleId, []));
 
-        var access = resolver.Resolve(Template());
+        Assert.True(operational.HasModule(CanonicalModuleCatalog.HistoriaModuleId));
+        Assert.False(admin.HasModule(CanonicalModuleCatalog.HistoriaModuleId));
+    }
 
-        var resolution = resolver.ResolveFirstPage(access);
+    [Fact]
+    public void PesoPageVariant_FollowsProfileDerivedCapability()
+    {
+        var operatorAccess = Resolve(
+            FunctionalProfile.OperatorController,
+            new ModuleGrant(CanonicalModuleCatalog.ControloAreaId, []));
+        var responsibleAccess = Resolve(
+            FunctionalProfile.Responsible,
+            new ModuleGrant(CanonicalModuleCatalog.ControloAreaId, []));
 
-        Assert.Equal(FirstPageOutcome.NoAccess, resolution.Outcome);
-        Assert.Null(resolution.Page);
+        Assert.True(_resolver.IsPageAccessible(operatorAccess, Page("peso.operador")));
+        Assert.False(_resolver.IsPageAccessible(operatorAccess, Page("peso.responsavel")));
+        Assert.False(_resolver.IsPageAccessible(responsibleAccess, Page("peso.operador")));
+        Assert.True(_resolver.IsPageAccessible(responsibleAccess, Page("peso.responsavel")));
     }
 
     [Fact]
     public void NavigationModules_FollowCanonicalOrder()
     {
-        var access = _resolver.Resolve(Template(
-            new ModuleGrant("tampoes", []),
-            new ModuleGrant("boquilhas", []),
-            new ModuleGrant("armazem", [])));
+        var access = Resolve(
+            FunctionalProfile.OperatorController,
+            new ModuleGrant(CanonicalModuleCatalog.TampoesModuleId, []),
+            new ModuleGrant(CanonicalModuleCatalog.JobonModuleId, []),
+            new ModuleGrant(CanonicalModuleCatalog.ControloAreaId, []));
 
         Assert.Equal(
-            ["jobon", "boquilhas", "armazem", "tampoes"],
-            access.NavigationModules.Select(m => m.ModuleId).ToArray());
+            ["jobon", "controlo", "peso", "pegamentos", "tampoes", "historia"],
+            access.NavigationModules.Select(module => module.ModuleId).ToArray());
     }
 
     [Fact]
-    public void ControloArea_VisibleOnlyWithAuthorizedChildren()
+    public void NewAssignableCatalogModule_RequiresNoResolverChange()
     {
-        // Scenarios 4/5/6 (GLM-ACC-07, GLM-CTR-05).
-        var pesoOnly = _resolver.Resolve(Template(new ModuleGrant("peso", [])));
-        Assert.True(pesoOnly.VisibleAreaChildren.ContainsKey("controlo"));
-        Assert.Equal(["peso"], pesoOnly.VisibleAreaChildren["controlo"].Select(m => m.ModuleId).ToArray());
+        var modules = new ModuleCatalog(CanonicalModuleCatalog.Instance.Modules.Append(
+            new ModuleDefinition("novo", "Novo", ModuleKind.Module, 45, "/novo")));
+        var pages = new PageCatalog(CanonicalPageCatalog.Instance.Pages.Append(
+            new PageDefinition("novo.index", "novo", "/novo", null, 45)));
+        var resolver = new AccessResolver(modules, pages, CanonicalModuleCatalog.AreaChildren);
 
-        var pegamentosOnly = _resolver.Resolve(Template(new ModuleGrant("pegamentos", [])));
-        Assert.Equal(
-            ["pegamentos"],
-            pegamentosOnly.VisibleAreaChildren["controlo"].Select(m => m.ModuleId).ToArray());
+        var access = resolver.Resolve(
+            Template(new ModuleGrant("novo", [])),
+            FunctionalProfile.OperatorController);
 
-        var both = _resolver.Resolve(Template(
-            new ModuleGrant("peso", []), new ModuleGrant("pegamentos", [])));
-        Assert.Equal(
-            ["peso", "pegamentos"],
-            both.VisibleAreaChildren["controlo"].Select(m => m.ModuleId).ToArray());
-
-        var neither = _resolver.Resolve(Template(new ModuleGrant("boquilhas", [])));
-        Assert.False(neither.VisibleAreaChildren.ContainsKey("controlo"));
-    }
-
-    [Fact]
-    public void AreaFirstPage_IsFirstAuthorizedChild_InCanonicalOrder()
-    {
-        // GLM-CAT-02 rule 1: área → primeira entrada filha autorizada.
-        var both = _resolver.Resolve(Template(
-            new ModuleGrant("pegamentos", []), new ModuleGrant("peso", [])));
-        var first = _resolver.ResolveAreaFirstPage(both, "controlo");
-        Assert.Equal("/peso", first!.Route); // peso (21) precedes pegamentos (22)
-
-        var pegamentosOnly = _resolver.Resolve(Template(new ModuleGrant("pegamentos", [])));
-        Assert.Equal("/pegamentos", _resolver.ResolveAreaFirstPage(pegamentosOnly, "controlo")!.Route);
-
-        var none = _resolver.Resolve(Template(new ModuleGrant("boquilhas", [])));
-        Assert.Null(_resolver.ResolveAreaFirstPage(none, "controlo"));
-    }
-
-    [Fact]
-    public void PesoExperience_IsResolvedByCapability_NotByRole()
-    {
-        // GLM-ACC-05/UD-06: mutually exclusive experiences.
-        var operador = _resolver.Resolve(Template(new ModuleGrant("peso", [])));
-        var responsavel = _resolver.Resolve(Template(
-            new ModuleGrant("peso", new[] { "peso.aprovar" })));
-
-        Assert.True(_resolver.IsPageAccessible(operador, Page("peso.operador")));
-        Assert.False(_resolver.IsPageAccessible(operador, Page("peso.responsavel")));
-
-        Assert.False(_resolver.IsPageAccessible(responsavel, Page("peso.operador")));
-        Assert.True(_resolver.IsPageAccessible(responsavel, Page("peso.responsavel")));
-    }
-
-    [Fact]
-    public void Capabilities_ConstrainPageAccess()
-    {
-        // Admin page requires admin.gerir; audit tab capabilities stay grants.
-        var withGerir = _resolver.Resolve(Template(
-            new ModuleGrant("admin", new[] { "admin.gerir" })));
-        var withoutGerir = _resolver.Resolve(Template(
-            new ModuleGrant("admin", new[] { "audit.view" })));
-
-        Assert.True(_resolver.IsPageAccessible(withGerir, Page("admin.gestao")));
-        Assert.False(_resolver.IsPageAccessible(withoutGerir, Page("admin.gestao")));
-        Assert.False(withoutGerir.HasCapability("admin.gerir"));
-        Assert.True(withoutGerir.HasCapability("audit.view"));
-    }
-
-    [Fact]
-    public void UnauthorizedModule_PagesAreNotAccessible()
-    {
-        var access = _resolver.Resolve(Template(new ModuleGrant("boquilhas", [])));
-
-        Assert.False(_resolver.IsPageAccessible(access, Page("peso.operador")));
-        Assert.False(_resolver.IsPageAccessible(access, Page("admin.gestao")));
-        Assert.False(_resolver.IsPageAccessible(access, Page("armazem.mapa")));
-    }
-
-    [Fact]
-    public void NewCatalogModule_RequiresNoNavigationChanges_Acceptance()
-    {
-        // U-04 acceptance (GLM-ARCH-08): adding a module = catalog entry +
-        // page; navigation/derivation pick it up automatically.
-        var extendedModules = new ModuleCatalog(CanonicalModuleCatalog.Instance.Modules
-            .Append(new ModuleDefinition("novo", "Novo Módulo", ModuleKind.Module, 45, "/novo")));
-        var extendedPages = new PageCatalog(CanonicalPageCatalog.Instance.Pages
-            .Append(new PageDefinition("novo.pagina", "novo", "/novo", null, 45)));
-        var resolver = new AccessResolver(
-            extendedModules, extendedPages, CanonicalModuleCatalog.AreaChildren);
-        CatalogValidator.Validate(extendedModules, extendedPages, CanonicalModuleCatalog.AreaChildren);
-
-        var access = resolver.Resolve(Template(new ModuleGrant("novo", [])));
-
-        Assert.Equal(
-            new[] { "jobon", "novo" },
-            access.NavigationModules.Select(m => m.ModuleId).Take(2).ToArray());
-        Assert.Contains(access.NavigationModules, m => m.ModuleId == "novo");
-        Assert.Contains(resolver.AccessiblePages(access), p => p.Route == "/novo");
-    }
-
-    [Fact]
-    public void InactivePage_IsNeverAccessible()
-    {
-        var pages = new PageCatalog(new[]
-        {
-            new PageDefinition("jobon.folha", "jobon", "/jobon", "jobon.view", 5, isLanding: true),
-            new PageDefinition("peso.operador", "peso", "/peso", null, 21, isActive: false)
-        });
-        var resolver = new AccessResolver(
-            CanonicalModuleCatalog.Instance, pages, CanonicalModuleCatalog.AreaChildren);
-
-        var access = resolver.Resolve(Template(new ModuleGrant("peso", [])));
-
-        Assert.False(resolver.IsPageAccessible(access, pages.Pages.First(p => p.PageId == "peso.operador")));
+        Assert.True(access.HasModule("novo"));
+        Assert.Contains(resolver.AccessiblePages(access), page => page.Route == "/novo");
     }
 
     private static PageDefinition Page(string pageId)
     {
-        Assert.True(CanonicalPageCatalog.Instance.TryGetById(pageId, out var page), pageId);
+        Assert.True(CanonicalPageCatalog.Instance.TryGetById(pageId, out var page));
         return page!;
     }
-}
-
-internal static class EffectiveAccessTestExtensions
-{
-    public static IReadOnlyList<PageDefinition> AccessiblePagesFor(
-        this EffectiveAccess access, AccessResolver resolver) =>
-        resolver.AccessiblePages(access);
 }

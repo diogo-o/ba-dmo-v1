@@ -14,7 +14,7 @@ public sealed class ControloFolhaItem
 
     public Guid ControloSheetId { get; set; }
 
-    /// <summary>Component family (MP_CM / MF / BQ).</summary>
+    /// <summary>Resumo component family (MP_CM / MF / BQ / PU / CS).</summary>
     public string Family { get; set; } = null!;
 
     public Guid? SourceToolId { get; set; }

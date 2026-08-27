@@ -16,18 +16,23 @@ public class ControloFolhaTests
     private static ControloFolhaProductionContext Ctx(params ControloFolhaComponent[] components) =>
         new(Guid.NewGuid(), Guid.NewGuid(), "202601", "5447T173", "B1", components);
 
-    private static ControloFolhaComponent Component(string family = "MP_CM", string? reference = "5447", string? lot = "L3") =>
+    private static ControloFolhaComponent Component(string family = "MP_CM", string? reference = "5447", string? lot = "3") =>
         new(family, Guid.NewGuid(), Guid.NewGuid(), reference, lot, $"{family} {reference}");
 
     [Fact]
     public void Create_SnapshotsComponentsAndPinsRevision()
     {
-        var result = ControloFolha.Create(Ctx(Component("MP_CM"), Component("MF"), Component("BQ")), "actor", When);
+        var result = ControloFolha.Create(
+            Ctx(Component("MP_CM"), Component("MF"), Component("BQ"), Component("PU"), Component("CS")),
+            "actor", When);
 
         Assert.True(result.IsSuccess);
         var sheet = result.Value;
-        Assert.Equal(3, sheet.Items.Count);
+        Assert.Equal(5, sheet.Items.Count);
         Assert.Equal("MP_CM", sheet.Items[0].Family);
+        Assert.Equal(new[] { "BQ", "CS", "MF", "MP_CM", "PU" },
+            sheet.Items.Select(item => item.Family).OrderBy(family => family));
+        Assert.All(sheet.Items, item => Assert.Equal("3", item.LotSnapshot));
         Assert.NotEqual(Guid.Empty, sheet.JobOnRevisionId);
         Assert.Equal(ControloFolhaState.Rascunho, sheet.State);
         Assert.Equal("Controlo_202601_5447T173_B1", sheet.DisplayId);

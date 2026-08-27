@@ -59,15 +59,15 @@ public class GrantNormalizerTests
     }
 
     [Fact]
-    public void OwnedCapability_IsPreserved()
+    public void CapabilityOnAssignableModule_IsPreservedBySyntaxNormalization()
     {
         var result = _normalizer.Normalize(new[]
         {
-            new ModuleGrant("peso", new[] { "peso.aprovar" })
+            new ModuleGrant("jobon", new[] { "jobon.edit" })
         });
 
         var grant = Assert.Single(result.Grants);
-        Assert.Equal(["peso.aprovar"], grant.Capabilities);
+        Assert.Equal(["jobon.edit"], grant.Capabilities);
         Assert.Empty(result.DiscardedEntries);
     }
 
@@ -85,7 +85,9 @@ public class GrantNormalizerTests
         });
 
         Assert.Equal(3, Assert.Single(valid.Grants).Capabilities.Count);
-        Assert.Empty(Assert.Single(invalid.Grants).Capabilities);
+        Assert.Empty(invalid.Grants);
+        Assert.Contains(invalid.DiscardedEntries, entry =>
+            entry.Contains("not assignable", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -93,12 +95,12 @@ public class GrantNormalizerTests
     {
         var result = _normalizer.Normalize(new[]
         {
-            new ModuleGrant("peso", new[] { "peso.aprovar" }),
-            new ModuleGrant("peso", new string[0])
+            new ModuleGrant("jobon", new[] { "jobon.edit" }),
+            new ModuleGrant("jobon", [])
         });
 
         var grant = Assert.Single(result.Grants);
-        Assert.Equal(["peso.aprovar"], grant.Capabilities);
+        Assert.Equal(["jobon.edit"], grant.Capabilities);
         var discard = Assert.Single(result.DiscardedEntries);
         Assert.Contains("duplicate entry", discard, StringComparison.Ordinal);
     }
@@ -116,17 +118,19 @@ public class GrantNormalizerTests
     }
 
     [Fact]
-    public void FunctionalArea_GrantIsDiscarded()
+    public void NonassignableTechnicalEntries_AreDiscarded()
     {
-        // Controlo has no grants of its own (GLM-CAT-01/GLM-CTR-01).
         var result = _normalizer.Normalize(new[]
         {
-            new ModuleGrant("controlo", [])
+            new ModuleGrant("peso", []),
+            new ModuleGrant("pegamentos", []),
+            new ModuleGrant("historia", [])
         });
 
         Assert.Empty(result.Grants);
-        var discard = Assert.Single(result.DiscardedEntries);
-        Assert.Contains("functional area has no grants", discard, StringComparison.Ordinal);
+        Assert.Equal(3, result.DiscardedEntries.Count);
+        Assert.All(result.DiscardedEntries,
+            discard => Assert.Contains("module is not assignable", discard, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -134,7 +138,7 @@ public class GrantNormalizerTests
     {
         var result = _normalizer.Normalize(new[]
         {
-            new ModuleGrant("peso", new[] { " ", "" })
+            new ModuleGrant("jobon", new[] { " ", "" })
         });
 
         Assert.Empty(Assert.Single(result.Grants).Capabilities);

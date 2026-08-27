@@ -43,7 +43,7 @@ public class AdminTemplateServiceTests
             "tpl-novo", "Template Novo",
             new[]
             {
-                new TemplateGrantInput("peso", new[] { "peso.aprovar" }),
+                new TemplateGrantInput("controlo", Array.Empty<string>()),
                 new TemplateGrantInput("boquilhas", Array.Empty<string>())
             }));
 
@@ -52,7 +52,7 @@ public class AdminTemplateServiceTests
         // Canonical: modules sorted, capabilities sorted, exact ids only.
         Assert.Equal(
             "[{\"moduleId\":\"boquilhas\",\"capabilities\":[]}," +
-            "{\"moduleId\":\"peso\",\"capabilities\":[\"peso.aprovar\"]}]",
+            "{\"moduleId\":\"controlo\",\"capabilities\":[]}]",
             saved.ModulesJson);
         Assert.Equal("create", Assert.Single(_repository.Audits).ActionCode);
         Assert.Equal("access_template", _repository.Audits[0].EntityType);
@@ -61,7 +61,8 @@ public class AdminTemplateServiceTests
     [Theory]
     [InlineData("ghost_module", "")]                    // unknown module
     [InlineData("boquilhas", "peso.aprovar")]          // capability of another module
-    [InlineData("controlo", "")]                       // functional area takes no grants
+    [InlineData("peso", "")]                           // internal, nonassignable
+    [InlineData("jobon", "jobon.view")]                // capabilities come from profile
     public async Task CreateTemplate_InvalidGrants_AreRejected_WithExplicitReport(
         string moduleId, string capability)
     {
@@ -94,12 +95,12 @@ public class AdminTemplateServiceTests
     {
         var result = await _service.UpdateAsync(new UpdateTemplateRequest(
             "tpl-1", "Template 1 (revisto)",
-            new[] { new TemplateGrantInput("peso", new[] { "peso.aprovar" }) },
+            new[] { new TemplateGrantInput("controlo", Array.Empty<string>()) },
             Active: true,
             _repository.Templates["tpl-1"].UpdatedAtUtc));
 
         Assert.True(result.IsSuccess);
-        Assert.Contains("peso.aprovar", _repository.Templates["tpl-1"].ModulesJson);
+        Assert.Contains("\"moduleId\":\"controlo\"", _repository.Templates["tpl-1"].ModulesJson);
         Assert.Equal("update_modules", Assert.Single(_repository.Audits).ActionCode);
     }
 

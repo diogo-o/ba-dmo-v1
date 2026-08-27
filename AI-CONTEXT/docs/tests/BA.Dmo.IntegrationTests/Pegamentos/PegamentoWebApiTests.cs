@@ -103,18 +103,18 @@ public class PegamentoWebApiTests : IClassFixture<PegamentoWebApiTests.PegFixtur
             ActorId: "peg-actor",
             AuthUserId: AuthUserId,
             DisplayName: "Utilizador Pegamentos",
-            ProfileTitle: "Metrologia",
+            ProfileTitle: "Operador / Controlador",
             UserActive: true,
             TemplateId: "tpl-peg",
             TemplateName: "Pegamentos",
             TemplateActive: true,
-            ModulesJson: "[{\"moduleId\":\"pegamentos\",\"capabilities\":[]}]");
+            ModulesJson: "[{\"moduleId\":\"controlo\",\"capabilities\":[]}]");
 
         public InternalUserRecord UserWithoutPegamentos() => new(
             ActorId: "other-actor",
             AuthUserId: AuthUserId,
             DisplayName: "Outro",
-            ProfileTitle: null,
+            ProfileTitle: "Operador / Controlador",
             UserActive: true,
             TemplateId: "tpl-other",
             TemplateName: "Outro",

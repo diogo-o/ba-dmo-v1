@@ -91,12 +91,15 @@ public class ShellAndCalendarGuardTests : IClassFixture<ShellAndCalendarGuardTes
         Assert.Contains("dmo-app-header__logo", header);
         Assert.Contains("data-user-profile-name", header);   // DMO §26
         Assert.Contains("data-user-profile-title", header);
+        Assert.Contains("<partial name=\"_Navigation\"", header);
 
         var nav = File.ReadAllText(
             Path.Combine(WebRoot, "Pages", "Shared", "_Navigation.cshtml"));
         Assert.Contains("app-nav-left", nav);
         Assert.Contains("app-nav-right", nav); // Administração right-aligned
         Assert.Contains("nav-active", nav);    // active indication
+        Assert.Contains("primary-nav", nav);   // authority header composition
+        Assert.DoesNotContain("area.Children", nav); // Peso/Pegamentos are internal
 
         // Canonical responsive breakpoints + reference sidebar behavior.
         var layoutCss = File.ReadAllText(
@@ -110,6 +113,9 @@ public class ShellAndCalendarGuardTests : IClassFixture<ShellAndCalendarGuardTes
         }
         Assert.Contains("var(--dmo-sidebar-width-compact)", layoutCss);
         Assert.Contains("var(--dmo-sidebar-gradient)", layoutCss);
+        Assert.Contains(".dmo-app-header__page", layoutCss);
+        Assert.Contains("flex: 0 0 auto", layoutCss);
+        Assert.Contains("white-space: nowrap", layoutCss);
     }
 
     [Fact]
@@ -183,12 +189,12 @@ public class ShellAndCalendarGuardTests : IClassFixture<ShellAndCalendarGuardTes
             ActorId: "shell-actor",
             AuthUserId: AuthUserId,
             DisplayName: "Utilizador Shell",
-            ProfileTitle: null,
+            ProfileTitle: "Operador / Controlador",
             UserActive: true,
             TemplateId: "tpl-shell",
             TemplateName: "Shell",
             TemplateActive: true,
-            ModulesJson: "[]");
+            ModulesJson: "[{\"moduleId\":\"jobon\",\"capabilities\":[]}]");
 
         public HttpClient CreateTestClient() => CreateClient(new WebApplicationFactoryClientOptions
         {

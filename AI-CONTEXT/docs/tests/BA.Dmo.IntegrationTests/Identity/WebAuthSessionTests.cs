@@ -373,12 +373,12 @@ public class WebAuthSessionTests : IClassFixture<WebAuthSessionTests.AuthTestFix
             ActorId: "actor-1",
             AuthUserId: AuthUserId,
             DisplayName: "Utilizador Um",
-            ProfileTitle: null,
+            ProfileTitle: "Operador / Controlador",
             UserActive: true,
             TemplateId: "tpl-1",
             TemplateName: "Template 1",
             TemplateActive: true,
-            ModulesJson: "[{\"moduleId\":\"boquilhas\",\"capabilities\":[]}]");
+            ModulesJson: "[{\"moduleId\":\"jobon\",\"capabilities\":[]},{\"moduleId\":\"boquilhas\",\"capabilities\":[]}]");
 
         public HttpClient CreateTestClient() => CreateClient(new WebApplicationFactoryClientOptions
         {

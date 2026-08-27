@@ -33,22 +33,25 @@
                     <input id="displayName" name="displayName" type="text" required value="@Model.Input.DisplayName" />
                 </div>
                 <div class="dmo-field span2">
-                    <label for="profileTitle">Título / função apresentado no cabeçalho</label>
-                    <input id="profileTitle" name="profileTitle" type="text" maxlength="40"
-                           placeholder="Ex.: Chefe, Engenheiro, Metrologia" value="@Model.Input.ProfileTitle" />
-                    <p class="dmo-field__helper">Texto visual livre; não altera permissões.</p>
+                    <label for="profileTitle">Perfil funcional</label>
+                    <select id="profileTitle" name="profileTitle" required>
+                        <option value="Admin" selected="@(Model.Input.ProfileTitle == "Admin")">Admin</option>
+                        <option value="Operador / Controlador" selected="@(Model.Input.ProfileTitle == "Operador / Controlador")">Operador / Controlador</option>
+                        <option value="Responsável" selected="@(Model.Input.ProfileTitle == "Responsável")">Responsável</option>
+                    </select>
+                    <p class="dmo-field__helper">O perfil determina o comportamento dentro dos módulos atribuídos pelos templates.</p>
                 </div>
                 <div class="dmo-field">
-                    <label for="templateId">Template de acesso</label>
-                    <select id="templateId" name="templateId" required>
-                        <option value="">— escolher —</option>
+                    <label for="templateIds">Templates de acesso</label>
+                    <select id="templateIds" name="templateIds" required multiple size="5">
                         @foreach (var template in Model.Templates)
                         {
-                            <option value="@template.TemplateId" selected="@(Model.Input.TemplateId == template.TemplateId)">
+                            <option value="@template.TemplateId" selected="@(Model.Input.TemplateIds.Contains(template.TemplateId))">
                                 @template.Name (@(template.Active ? "ativo" : "inativo"))
                             </option>
                         }
                     </select>
+                    <p class="dmo-field__helper">Selecione um ou mais templates.</p>
                 </div>
                 <div class="dmo-field">
                     <label for="active">Estado</label>

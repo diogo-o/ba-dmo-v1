@@ -14,7 +14,12 @@ public sealed record AdminUserRow(
     bool Active,
     DateTimeOffset UpdatedAtUtc,
     string? AuthEmail = null,
-    string? ModulesOverrideJson = null);
+    string? ModulesOverrideJson = null,
+    string[]? TemplateIds = null)
+{
+    public IReadOnlyList<string> AssignedTemplateIds =>
+        TemplateIds is { Length: > 0 } ? TemplateIds : [TemplateId];
+}
 
 public sealed record AdminTemplateRow(
     string TemplateId,
@@ -92,7 +97,12 @@ public sealed record CreateAdminUserRequest(
     string DisplayName,
     string? ProfileTitle,
     string TemplateId,
-    bool Active = true);
+    bool Active = true,
+    IReadOnlyList<string>? TemplateIds = null)
+{
+    public IReadOnlyList<string> AssignedTemplateIds =>
+        TemplateIds is { Count: > 0 } ? TemplateIds : [TemplateId];
+}
 
 /// <summary>Request to edit identity/display fields of an internal user.</summary>
 public sealed record UpdateAdminUserRequest(
@@ -105,6 +115,12 @@ public sealed record UpdateAdminUserRequest(
 public sealed record ChangeUserTemplateRequest(
     string ActorId,
     string TemplateId,
+    DateTimeOffset ExpectedUpdatedAt);
+
+/// <summary>Request to replace a user's one-or-more template associations.</summary>
+public sealed record ChangeUserTemplatesRequest(
+    string ActorId,
+    IReadOnlyList<string> TemplateIds,
     DateTimeOffset ExpectedUpdatedAt);
 
 /// <summary>Request to activate/deactivate an internal user.</summary>

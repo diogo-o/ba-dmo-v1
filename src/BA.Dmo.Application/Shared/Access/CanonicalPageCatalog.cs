@@ -11,6 +11,7 @@ public static class CanonicalPageCatalog
 {
     public const string JobonFolhaPageId = "jobon.folha";
     public const string BoquilhasRegistoPageId = "boquilhas.registo";
+    public const string ControloResumoPageId = "controlo.resumo";
     public const string PesoOperadorPageId = "peso.operador";
     public const string PesoResponsavelPageId = "peso.responsavel";
     public const string PegamentosFolhaPageId = "pegamentos.folha";
@@ -37,6 +38,11 @@ public static class CanonicalPageCatalog
         new PageDefinition(
             BoquilhasRegistoPageId, CanonicalModuleCatalog.BoquilhasModuleId, "/boquilhas",
             requiredCapabilityId: null, displayOrder: 10),
+        // Controlo is the single top-level access and navigation surface.
+        // Peso and Pegamentos remain internal technical pages beneath it.
+        new PageDefinition(
+            ControloResumoPageId, CanonicalModuleCatalog.ControloAreaId, "/controlo",
+            CanonicalModuleCatalog.ControloViewCapabilityId, displayOrder: 20),
         // Peso experience (UD-06/UD-15): Operador = module entry WITHOUT
         // peso.aprovar; Responsável = peso.aprovar. Exclusivity guards are
         // enforced by the shell/routing unit (U-07); the catalog states the

@@ -8,8 +8,8 @@ namespace BA.Dmo.Application.Shared.Access;
 /// valid when they BELONG to the granted module as registered in the catalog
 /// (capability ownership is the canonical catalog membership — GLM-CAT-03;
 /// e.g. audit.view/audit.export belong to the admin module); duplicate module
-/// entries are ignored (first occurrence prevails). Functional areas have no
-/// grants of their own (GLM-CAT-01) and are discarded as grant targets.
+/// entries are ignored (first occurrence prevails). Nonassignable technical
+/// entries are discarded as direct grant targets.
 /// Nothing is silently repaired: discarded entries are reported.
 /// </summary>
 public sealed class GrantNormalizer
@@ -43,9 +43,9 @@ public sealed class GrantNormalizer
                 continue;
             }
 
-            if (module.Kind == ModuleKind.FunctionalArea)
+            if (!module.IsAssignable)
             {
-                discarded.Add($"module '{grant.ModuleId}' (functional area has no grants)");
+                discarded.Add($"module '{grant.ModuleId}' (module is not assignable)");
                 continue;
             }
 

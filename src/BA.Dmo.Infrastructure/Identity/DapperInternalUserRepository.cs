@@ -22,11 +22,12 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
                u.active            AS UserActive,
                t.template_id       AS TemplateId,
                t.name              AS TemplateName,
-               t.active            AS TemplateActive,
+               COALESCE(t.active, FALSE) AS TemplateActive,
                t.modules::text     AS ModulesJson,
                u.modules_override::text AS ModulesOverrideJson
         FROM internal_users u
-        JOIN access_templates t ON t.template_id = u.template_id
+        LEFT JOIN internal_user_access_templates ut ON ut.actor_id = u.actor_id
+        LEFT JOIN access_templates t ON t.template_id = ut.template_id
         WHERE u.auth_user_id = @AuthUserId;
         """;
 
@@ -34,8 +35,10 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
         """
         SELECT 1
         FROM internal_users u
-        JOIN access_templates t ON t.template_id = u.template_id
+        JOIN internal_user_access_templates ut ON ut.actor_id = u.actor_id
+        JOIN access_templates t ON t.template_id = ut.template_id
         WHERE u.active
+          AND u.profile_title = 'Admin'
           AND t.active
           AND t.modules @> @AdminGrantPattern::jsonb
         LIMIT 1;
@@ -56,9 +59,17 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
                                     display_name, profile_title, active,
                                     created_at_utc, updated_at_utc)
         VALUES (@ActorId, @AuthUserId, @TemplateId,
-                @DisplayName, NULL, TRUE,
+                @DisplayName, 'Admin', TRUE,
                 @CreatedAtUtc, @CreatedAtUtc)
         ON CONFLICT (actor_id) DO NOTHING;
+        """;
+
+    private const string InsertUserTemplateSql =
+        """
+        INSERT INTO internal_user_access_templates (
+            actor_id, template_id, assigned_at_utc, assigned_by)
+        VALUES (@ActorId, @TemplateId, @CreatedAtUtc, @ActorId)
+        ON CONFLICT (actor_id, template_id) DO NOTHING;
         """;
 
     private const string InsertAuditEventSql =
@@ -73,8 +84,7 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
                 'succeeded', 'One-shot CLI bootstrap of the first Admin (GLM-ACC-13).');
         """;
 
-    private const string AdminGrantPatternJson =
-        "[{\"moduleId\":\"admin\",\"capabilities\":[\"admin.gerir\"]}]";
+    private const string AdminGrantPatternJson = "[{\"moduleId\":\"admin\"}]";
 
     private readonly IDbConnectionFactory _connectionFactory;
 
@@ -96,17 +106,39 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
             // which the resolution service would misclassify as a backend
             // outage. A duplicate is a data-integrity condition with its own
             // typed exception (IDENTITY_AMBIGUOUS), never an outage.
-            var rows = await Db.QueryAsync<InternalUserRecord>(
+            var rows = await Db.QueryAsync<IdentityRow>(
                 connection, FindByAuthUserIdSql,
                 new { AuthUserId = authUserId },
                 cancellationToken: cancellationToken);
             var list = rows.ToList();
-            return list.Count switch
-            {
-                0 => null,
-                1 => list[0],
-                _ => throw new AmbiguousIdentityException(authUserId)
-            };
+            if (list.Count == 0)
+                return null;
+
+            var actorIds = list.Select(row => row.ActorId).Distinct(StringComparer.Ordinal).ToList();
+            if (actorIds.Count != 1)
+                throw new AmbiguousIdentityException(authUserId);
+
+            var first = list[0];
+            var templates = list
+                .Where(row => !string.IsNullOrWhiteSpace(row.TemplateId))
+                .Select(row => new InternalUserAccessTemplateRecord(
+                    row.TemplateId!, row.TemplateName!, row.TemplateActive, row.ModulesJson!))
+                .DistinctBy(template => template.TemplateId, StringComparer.Ordinal)
+                .ToList();
+            var legacy = templates.FirstOrDefault();
+
+            return new InternalUserRecord(
+                first.ActorId,
+                first.AuthUserId,
+                first.DisplayName,
+                first.ProfileTitle,
+                first.UserActive,
+                legacy?.TemplateId ?? string.Empty,
+                legacy?.TemplateName ?? string.Empty,
+                legacy?.TemplateActive ?? false,
+                legacy?.ModulesJson ?? "[]",
+                first.ModulesOverrideJson,
+                templates);
         }
         finally
         {
@@ -157,6 +189,13 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
                 creation.CreatedAtUtc
             }, transaction: transaction, cancellationToken: ct);
 
+            await Db.ExecuteAsync(connection, InsertUserTemplateSql, new
+            {
+                creation.ActorId,
+                creation.TemplateId,
+                creation.CreatedAtUtc
+            }, transaction: transaction, cancellationToken: ct);
+
             await Db.ExecuteAsync(connection, InsertAuditEventSql, new
             {
                 OccurredAtUtc = creation.CreatedAtUtc,
@@ -178,4 +217,16 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
         else
             connection.Dispose();
     }
+
+    private sealed record IdentityRow(
+        string ActorId,
+        Guid AuthUserId,
+        string DisplayName,
+        string? ProfileTitle,
+        bool UserActive,
+        string? TemplateId,
+        string? TemplateName,
+        bool TemplateActive,
+        string? ModulesJson,
+        string? ModulesOverrideJson);
 }

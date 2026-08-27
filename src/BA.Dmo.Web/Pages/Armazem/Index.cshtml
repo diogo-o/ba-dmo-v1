@@ -4,13 +4,12 @@
 @{
     ViewData["Title"] = "Armazém";
 }
-<link rel="stylesheet" href="~/styles/modules/armazem-layout.css" />
+<link rel="stylesheet" href="~/styles/modules/armazem-layout.css" asp-append-version="true" />
 
-<nav class="armazem-tabs" aria-label="Navegação Armazém">
-    <button class="tab active" data-view="registo" type="button">Registo</button>
-    <button class="tab" data-view="consulta" type="button">Consulta</button>
-    <button class="tab" data-view="programadas" type="button">Programadas</button>
-    <button class="tab" data-view="historico" type="button">Histórico</button>
+<nav class="dmo-module-tabs armazem-tabs" aria-label="Navegação Armazém">
+    <button class="dmo-module-tab tab active" data-view="registo" type="button">Registo</button>
+    <button class="dmo-module-tab tab" data-view="consulta" type="button">Consulta</button>
+    <button class="dmo-module-tab tab" data-view="historico" type="button">Histórico</button>
 </nav>
 
 <main data-testid="page-armazem" class="armazem-page">
@@ -19,20 +18,22 @@
     <section class="armazem-view active" id="registo">
         <div class="dmo-page-head">
             <div>
-                <h2>Registo</h2>
-                <p>Posições e movimentos de ferramentas (CM/MF). O Armazém apenas regista onde a ferramenta está; os dados técnicos pertencem ao domínio da ferramenta.</p>
+                <h2>Registar movimento</h2>
+                <p>Selecione Entrada ou Saída para abrir os campos necessários.</p>
+            </div>
+            <div class="armazem-action-row">
+                <button type="button" class="dmo-button" data-open="entrada">Entrada</button>
+                <button type="button" class="dmo-button" data-open="saida">Saída</button>
+                @if (Model.CanCreateNewTool)
+                {
+                    <button type="button" class="dmo-button" data-open="novo">+ Criar novo</button>
+                }
             </div>
         </div>
 
-        <div class="armazem-action-row">
-            <button type="button" class="dmo-button" data-open="entrada">Entrada</button>
-            <button type="button" class="dmo-button" data-open="saida">Saída</button>
-            <button type="button" class="dmo-button" data-open="substituir">Substituir</button>
-        </div>
-
         <div class="armazem-empty dmo-empty-state" data-testid="registo-empty">
-            <strong>Escolha Entrada, Saída ou Substituir para começar.</strong>
-            <span>O formulário abre nesta página.</span>
+            <strong>Escolha Entrada ou Saída para começar.</strong>
+            <span>O formulário abre nesta página e mantém o contexto visível.</span>
         </div>
 
         <form id="entradaForm" class="armazem-card dmo-card" hidden>
@@ -43,6 +44,7 @@
                     <select id="entradaType">
                         <option value="CM">CM</option>
                         <option value="MF">MF</option>
+                        <option value="BQ">BQ</option>
                     </select>
                 </div>
                 <div class="dmo-field">
@@ -76,6 +78,7 @@
                     <select id="saidaType">
                         <option value="CM">CM</option>
                         <option value="MF">MF</option>
+                        <option value="BQ">BQ</option>
                     </select>
                 </div>
                 <div class="dmo-field">
@@ -105,38 +108,102 @@
             </div>
         </form>
 
-        <form id="substituirForm" class="armazem-card dmo-card" hidden>
-            <h3>Substituir posição (uma ação atómica)</h3>
-            <div class="armazem-grid">
+        @if (Model.CanCreateNewTool)
+        {
+            <form id="novoForm" class="armazem-card dmo-card" hidden>
+                <h3>+ Criar novo</h3>
+                <p>Cria o master em Ferramentas e, depois, regista a Entrada física no Armazém.</p>
+                <div class="armazem-grid">
+                    <div class="dmo-field">
+                        <label for="novoType">Tipo</label>
+                        <select id="novoType"><option value="CM">CM</option><option value="MF">MF</option><option value="BQ">BQ</option></select>
+                    </div>
+                    <div class="dmo-field"><label for="novoRef">Referência</label><input id="novoRef" type="text" autocomplete="off" /></div>
+                    <div class="dmo-field"><label for="novoTechnicalName">Nome técnico</label><input id="novoTechnicalName" type="text" autocomplete="off" /></div>
+                    <div class="dmo-field"><label for="novoOwnerPlant">Owner plant</label><input id="novoOwnerPlant" type="text" value="MG — Marinha Grande" /></div>
+                    <div class="dmo-field"><label for="novoLot">Lote</label><input id="novoLot" type="text" autocomplete="off" /></div>
+                    <div class="dmo-field"><label for="novoProcess">Processo do lote</label><select id="novoProcess"><option value="">—</option><option value="NNPB">NNPB</option><option value="PS">PS</option></select></div>
+                    <div class="dmo-field"><label for="novoQty">Quantidade</label><input id="novoQty" type="number" min="0" step="1" /></div>
+                    <div class="dmo-field"><label for="novoDrawing">Nome/número do desenho</label><input id="novoDrawing" type="text" autocomplete="off" /></div>
+                    <div class="dmo-field"><label for="novoDrawingRevision">Revisão do desenho</label><input id="novoDrawingRevision" type="text" autocomplete="off" /></div>
+                    <div class="dmo-field">
+                        <label>Linhas permitidas</label>
+                        <div id="novoLines">
+                            @foreach (var line in new[] { "B1", "B2", "B3", "C1", "C2", "C3" })
+                            {
+                                <label><input type="checkbox" value="@line" /> @line</label>
+                            }
+                        </div>
+                    </div>
+                    <div class="dmo-field"><label for="novoPosition">Posição de Entrada (4 dígitos)</label><input id="novoPosition" type="text" inputmode="numeric" maxlength="4" autocomplete="off" /></div>
+                    <div class="dmo-field"><label for="novoObservations">Observações da Entrada</label><input id="novoObservations" type="text" autocomplete="off" /></div>
+                </div>
+                <div class="armazem-actions dmo-row-actions">
+                    <button type="button" class="dmo-button" data-close>Cancelar</button>
+                    <button type="button" class="dmo-button success" id="saveNewTool">Criar e registar Entrada</button>
+                </div>
+            </form>
+        }
+
+        <section class="armazem-card dmo-card armazem-recent" aria-labelledby="recent-heading">
+            <div class="armazem-panel-head">
+                <div>
+                    <h3 id="recent-heading">Últimos registos</h3>
+                    <p>Movimentos mais recentes do Armazém.</p>
+                </div>
+            </div>
+            <div class="armazem-recent-filters">
                 <div class="dmo-field">
-                    <label for="substPosition">Posição (4 dígitos)</label>
-                    <input id="substPosition" type="text" inputmode="numeric" maxlength="4" autocomplete="off" />
+                    <label for="recentSearch">Referência, lote, número ou posição</label>
+                    <input id="recentSearch" type="search" placeholder="Filtrar últimos registos" autocomplete="off" />
                 </div>
                 <div class="dmo-field">
-                    <label for="substType">Novo tipo</label>
-                    <select id="substType">
-                        <option value="CM">CM</option>
-                        <option value="MF">MF</option>
+                    <label for="recentMovement">Movimento</label>
+                    <select id="recentMovement">
+                        <option value="">Todos</option>
+                        <option value="entrada">Entrada</option>
+                        <option value="saida">Saída</option>
+                        <option value="correcao">Correção</option>
                     </select>
                 </div>
                 <div class="dmo-field">
-                    <label for="substRef">Nova referência</label>
-                    <input id="substRef" type="text" autocomplete="off" />
-                </div>
-                <div class="dmo-field">
-                    <label for="substLot">Novo lote</label>
-                    <input id="substLot" type="text" autocomplete="off" />
-                </div>
-                <div class="dmo-field">
-                    <label for="substObs">Observações</label>
-                    <input id="substObs" type="text" autocomplete="off" />
+                    <label for="recentLimit">Linhas</label>
+                    <select id="recentLimit">
+                        <option value="20">20</option>
+                        <option value="40">40</option>
+                        <option value="60">60</option>
+                    </select>
                 </div>
             </div>
-            <div class="armazem-actions dmo-row-actions">
-                <button type="button" class="dmo-button" data-close>Cancelar</button>
-                <button type="button" class="dmo-button danger" data-submit="substituir">Substituir</button>
+            <div class="dmo-table-wrap armazem-recent-table">
+                <table class="dmo-table" id="recentList">
+                    <thead>
+                        <tr>
+                            <th>Data/hora</th>
+                            <th>Tipo</th>
+                            <th>Referência</th>
+                            <th>Lote / N.º</th>
+                            <th>Movimento</th>
+                            <th>Posição</th>
+                            <th>Destino</th>
+                            <th>Operador</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentBody">
+                        <tr><td colspan="8" class="empty">A carregar movimentos…</td></tr>
+                    </tbody>
+                </table>
             </div>
-        </form>
+            <div class="armazem-list-footer">
+                <span id="recentCount">0 registos · Página 1 de 1</span>
+                <div class="armazem-pager-controls">
+                    <button class="dmo-button" type="button" disabled aria-label="Página anterior">‹</button>
+                    <span>1 / 1</span>
+                    <button class="dmo-button" type="button" disabled aria-label="Página seguinte">›</button>
+                </div>
+            </div>
+        </section>
+
     </section>
 
     <!-- ===== Consulta ===== -->
@@ -144,71 +211,128 @@
         <div class="dmo-page-head">
             <div>
                 <h2>Consulta</h2>
-                <p>Pesquise por tipo, referência, lote ou posição. Posições com ferramentas de referências diferentes geram alerta de qualidade de dados.</p>
+                <p>Localize ferramentas e identifique inconsistências.</p>
             </div>
         </div>
 
-        <div class="armazem-search dmo-card">
-            <div class="armazem-grid">
+        <div class="armazem-consultation-panel dmo-card">
+            <div class="armazem-consultation-filters">
                 <div class="dmo-field">
-                    <label for="seekType">Tipo</label>
-                    <select id="seekType">
-                        <option value="">—</option>
+                    <label for="queryText">Referência, lote, número ou posição</label>
+                    <input id="queryText" type="search" placeholder="Pesquisar" autocomplete="off" />
+                </div>
+                <div class="dmo-field">
+                    <label for="queryType">Tipo</label>
+                    <select id="queryType">
+                        <option value="">Todos</option>
                         <option value="CM">CM</option>
                         <option value="MF">MF</option>
+                        <option value="BQ">BQ</option>
                     </select>
                 </div>
                 <div class="dmo-field">
-                    <label for="seekRef">Referência</label>
-                    <input id="seekRef" type="text" autocomplete="off" />
+                    <label for="queryContext">Contexto</label>
+                    <select id="queryContext">
+                        <option value="">Todos</option>
+                        <option value="armazem">Armazém</option>
+                        <option value="fora">Fora do Armazém</option>
+                    </select>
                 </div>
                 <div class="dmo-field">
-                    <label for="seekLot">Lote</label>
-                    <input id="seekLot" type="text" autocomplete="off" />
+                    <label for="queryVerification">Verificação</label>
+                    <select id="queryVerification">
+                        <option value="">Todos</option>
+                        <option value="conflict">Com alerta</option>
+                        <option value="clear">Sem alerta</option>
+                    </select>
                 </div>
                 <div class="dmo-field">
-                    <label for="seekPosition">Posição</label>
-                    <input id="seekPosition" type="text" inputmode="numeric" maxlength="4" autocomplete="off" />
+                    <label for="queryLimit">Linhas</label>
+                    <select id="queryLimit">
+                        <option value="20">20</option>
+                        <option value="40">40</option>
+                        <option value="60">60</option>
+                    </select>
                 </div>
+                <button type="button" class="dmo-button" id="clearQuery">Limpar filtros</button>
             </div>
-            <div class="armazem-actions dmo-row-actions">
-                <button type="button" class="dmo-button" data-seek>Pesquisar</button>
-                <button type="button" class="dmo-button" data-seek-clear>Limpar</button>
-            </div>
-        </div>
-
-        <div class="armazem-results dmo-table-card">
+            <p class="armazem-helper">Um clique seleciona a ferramenta para corrigir a localização física.</p>
             <div class="dmo-table-wrap">
                 <table class="dmo-table" id="consultationTable">
                     <thead>
                         <tr>
                             <th>Tipo</th>
                             <th>Referência</th>
-                            <th>Nome técnico</th>
-                            <th>Lote</th>
-                            <th>Localização/contexto</th>
+                            <th>Lote / N.º</th>
                             <th>Posição</th>
+                            <th>Contexto</th>
+                            <th>Nome técnico</th>
                             <th>Alerta</th>
                         </tr>
                     </thead>
-                    <tbody id="consultationBody"></tbody>
+                    <tbody id="consultationBody">
+                        <tr><td colspan="7" class="empty">A carregar ferramentas…</td></tr>
+                    </tbody>
                 </table>
             </div>
-            <div class="dmo-empty-state" hidden id="consultationEmpty">Sem resultados.</div>
+            <div class="armazem-list-footer">
+                <span id="consultationCount">0 registos · Página 1 de 1</span>
+                <div class="armazem-pager-controls">
+                    <button class="dmo-button" type="button" disabled aria-label="Página anterior">‹</button>
+                    <span>1 / 1</span>
+                    <button class="dmo-button" type="button" disabled aria-label="Página seguinte">›</button>
+                </div>
+            </div>
+            <div class="table-actions">
+                <button type="button" class="dmo-button" id="correctLocation" disabled>Corrigir localização</button>
+            </div>
         </div>
+
+        <form id="correctionForm" class="armazem-card dmo-card" hidden>
+            <h3>Corrigir localização</h3>
+            <p>Compare a localização registada com a realidade física. A correção cria novos factos e preserva o histórico anterior.</p>
+            <div class="armazem-grid">
+                <div class="dmo-field">
+                    <label for="correctionTool">Ferramenta selecionada</label>
+                    <input id="correctionTool" type="text" readonly />
+                </div>
+                <div class="dmo-field">
+                    <label for="correctionRegisteredPosition">Posição registada</label>
+                    <input id="correctionRegisteredPosition" type="text" readonly />
+                </div>
+                <div class="dmo-field">
+                    <label for="correctionFoundPosition">Posição encontrada (4 dígitos)</label>
+                    <input id="correctionFoundPosition" type="text" inputmode="numeric" maxlength="4" autocomplete="off" />
+                </div>
+                <div class="dmo-field">
+                    <label class="armazem-check-label">
+                        <input id="correctionNotPresent" type="checkbox" />
+                        Não está fisicamente presente no Armazém
+                    </label>
+                </div>
+                <div class="dmo-field">
+                    <label for="correctionObservations">Observações</label>
+                    <input id="correctionObservations" type="text" autocomplete="off" />
+                </div>
+            </div>
+            <div class="armazem-actions dmo-row-actions">
+                <button type="button" class="dmo-button" data-correction-close>Cancelar</button>
+                <button type="button" class="dmo-button success" id="saveLocationCorrection">Guardar correção</button>
+            </div>
+        </form>
     </section>
 
-    <!-- ===== Programadas ===== -->
-    <section class="armazem-view" id="programadas">
+    <!-- Programadas remains dormant until its external-repair owner workflow is confirmed. -->
+    <section class="armazem-view" id="programadas" hidden aria-hidden="true">
         <div class="dmo-page-head">
             <div>
                 <h2>Entradas programadas</h2>
-                <p>Movimentos de entrada planeados para ferramentas CM/MF no Armazém.</p>
+                <p>Movimentos de entrada planeados para ferramentas CM/MF/BQ no Armazém.</p>
             </div>
         </div>
         <div class="dmo-card">
             <div class="armazem-grid">
-                <div class="dmo-field"><label>Tipo</label><select id="progType"><option value="CM">CM</option><option value="MF">MF</option></select></div>
+                <div class="dmo-field"><label>Tipo</label><select id="progType"><option value="CM">CM</option><option value="MF">MF</option><option value="BQ">BQ</option></select></div>
                 <div class="dmo-field dmo-field--compact"><label>Referência</label><input id="progRef" type="text" autocomplete="off" /></div>
                 <div class="dmo-field"><label>Data prevista</label><input id="progDate" type="date" /></div>
             </div>
@@ -225,22 +349,48 @@
     <section class="armazem-view" id="historico">
         <div class="dmo-page-head">
             <div>
-                <h2>Histórico de movimentos</h2>
-                <p>Movimentos registados no Armazém: entradas, saídas e substituições.</p>
+                <h2>Histórico</h2>
+                <p>Consulta geral dos movimentos registados.</p>
             </div>
+            <span class="dmo-pill" id="historyMonthPill"></span>
         </div>
-        <div class="dmo-card">
-            <div class="armazem-grid">
-                <div class="dmo-field"><label>Tipo</label><select id="histType"><option value="">Todos</option><option value="entrada">Entrada</option><option value="saida">Saída</option><option value="substituir">Substituição</option></select></div>
-                <div class="dmo-field"><label>Desde</label><input id="histFrom" type="date" /></div>
-                <div class="dmo-field"><label>Até</label><input id="histTo" type="date" /></div>
-            </div>
-            <div class="dmo-table-wrap">
-                <table class="dmo-table">
-                    <thead><tr><th>Data/hora</th><th>Tipo</th><th>Referência</th><th>Lote</th><th>Posição</th><th>Destino/Nota</th><th>Operador</th></thead>
-                    <tbody id="historicoBody"><tr><td colspan="7" class="empty">Sem movimentos no período.</td></tr></tbody>
-                </table>
-            </div>
+        <div class="armazem-calendar-layout">
+            <section class="dmo-card armazem-calendar" aria-label="Calendário do histórico">
+                <div class="armazem-calendar-head">
+                    <button class="dmo-button" type="button" id="historyPreviousMonth" aria-label="Mês anterior">‹</button>
+                    <strong id="historyMonthLabel"></strong>
+                    <button class="dmo-button" type="button" id="historyNextMonth" aria-label="Mês seguinte">›</button>
+                </div>
+                <div class="armazem-calendar-week" aria-hidden="true">
+                    <span>SEG</span><span>TER</span><span>QUA</span><span>QUI</span><span>SEX</span><span>SÁB</span><span>DOM</span>
+                </div>
+                <div class="armazem-calendar-grid" id="historyCalendarGrid"></div>
+            </section>
+
+            <section class="dmo-card armazem-history-panel" aria-label="Movimentos do histórico">
+                <div class="armazem-history-filters">
+                    <div class="dmo-field"><label for="historyQuery">Referência, lote ou posição</label><input id="historyQuery" type="search" placeholder="Pesquisar movimentos" autocomplete="off" /></div>
+                    <div class="dmo-field"><label for="historyToolType">Tipo</label><select id="historyToolType"><option value="">Todos</option><option value="CM">CM</option><option value="MF">MF</option><option value="BQ">BQ</option></select></div>
+                    <div class="dmo-field"><label for="historyMovement">Movimento</label><select id="historyMovement"><option value="">Todos</option><option value="entrada">Entrada</option><option value="saida">Saída</option><option value="correcao">Correção</option></select></div>
+                    <div class="dmo-field"><label for="historyOperator">Operador</label><select id="historyOperator"><option value="">Todos</option></select></div>
+                    <div class="dmo-field"><label for="historyLimit">Linhas</label><select id="historyLimit"><option value="20">20</option><option value="40">40</option><option value="60">60</option></select></div>
+                    <button class="dmo-button" type="button" id="clearHistoryFilters">Limpar filtros</button>
+                </div>
+                <div class="dmo-table-wrap armazem-history-table">
+                    <table class="dmo-table">
+                        <thead><tr><th>Data/hora</th><th>Tipo</th><th>Referência</th><th>Lote / N.º</th><th>Movimento</th><th>Posição</th><th>Destino</th><th>Operador</th></tr></thead>
+                        <tbody id="historicoBody"><tr><td colspan="8" class="empty">A carregar movimentos…</td></tr></tbody>
+                    </table>
+                </div>
+                <div class="armazem-list-footer">
+                    <span id="historyCount">0 movimentos · Página 1 de 1</span>
+                    <div class="armazem-pager-controls">
+                        <button class="dmo-button" type="button" disabled aria-label="Página anterior">‹</button>
+                        <span>1 / 1</span>
+                        <button class="dmo-button" type="button" disabled aria-label="Página seguinte">›</button>
+                    </div>
+                </div>
+            </section>
         </div>
     </section>
 </main>

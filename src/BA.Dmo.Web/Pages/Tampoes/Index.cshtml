@@ -4,15 +4,14 @@
 @{
     ViewData["Title"] = "Tampões";
 }
-<link rel="stylesheet" href="~/styles/modules/tampoes-layout.css" />
+<link rel="stylesheet" href="~/styles/modules/tampoes-layout.css" asp-append-version="true" />
 
-<nav class="tampoes-tabs" aria-label="Navegação Tampões">
-    <button class="tab active" data-view="registo" type="button">Registo</button>
-    <button class="tab" data-view="consulta" type="button">Consulta</button>
-    <button class="tab" data-view="planeamento" type="button">Planeamento</button>
-    <button class="tab" data-view="historico" type="button">Histórico</button>
-    <button class="tab" data-view="linhas" type="button">Linhas e Máquinas</button>
-    <button class="tab right" data-view="opcoes" type="button">Opções</button>
+<nav class="dmo-module-tabs tampoes-tabs" aria-label="Navegação Tampões">
+    <button class="dmo-module-tab tab active" data-view="registo" type="button">Registo</button>
+    <button class="dmo-module-tab tab" data-view="consulta" type="button">Consulta</button>
+    <button class="dmo-module-tab tab" data-view="historico" type="button">Histórico</button>
+    <button class="dmo-module-tab tab" data-view="linhas" type="button">Linhas e Máquinas</button>
+    <button class="dmo-module-tab tab right" data-view="opcoes" type="button">Opções</button>
 </nav>
 
 <main data-testid="page-tampoes" class="tampoes-page">
@@ -181,54 +180,6 @@
             <div id="detalheHistory"></div>
             <div class="dmo-row-actions">
                 <button type="button" class="dmo-button" data-close-detalhe>Fechar</button>
-            </div>
-        </div>
-    </section>
-
-    <!-- ===== Planeamento ===== -->
-    <section class="tampoes-view" id="planeamento">
-        <div class="dmo-page-head">
-            <div>
-                <h2>Planeamento</h2>
-                <p>Planear cria uma necessidade prevista; não adiciona, remove nem reserva stock.</p>
-            </div>
-        </div>
-        <div class="tampoes-inline-card dmo-card">
-            <div class="tampoes-filter-row">
-                <div class="dmo-field">
-                    <label for="pConfiguration">Configuração</label>
-                    <select id="pConfiguration"></select>
-                </div>
-                <div class="dmo-field">
-                    <label for="pQty">Quantidade necessária</label>
-                    <input id="pQty" type="number" inputmode="numeric" min="1" step="1" autocomplete="off" />
-                </div>
-                <div class="dmo-field">
-                    <label for="pDate">Data prevista</label>
-                    <input id="pDate" type="date" />
-                </div>
-                <div class="dmo-field">
-                    <label for="pNotes">Notas (opcional)</label>
-                    <input id="pNotes" type="text" autocomplete="off" />
-                </div>
-            </div>
-            <div class="dmo-row-actions">
-                <button type="button" class="dmo-button success" data-planear>Planear</button>
-            </div>
-        </div>
-
-        <div class="dmo-table-card">
-            <div class="dmo-table-wrap">
-                <table class="dmo-table" id="planosTable">
-                    <thead>
-                        <tr><th>Configuração</th><th>Necessidade</th><th>Data prevista</th><th>Enchidos</th><th>Diferença</th><th>Estado</th></tr>
-                    </thead>
-                    <tbody id="planosBody"></tbody>
-                </table>
-            </div>
-            <div class="dmo-empty-state" hidden id="planosEmpty">Sem planos.</div>
-            <div class="dmo-row-actions tampoes-actions" id="planosActions" hidden>
-                <button type="button" class="dmo-button" data-cancelar-plano>Cancelar plano</button>
             </div>
         </div>
     </section>

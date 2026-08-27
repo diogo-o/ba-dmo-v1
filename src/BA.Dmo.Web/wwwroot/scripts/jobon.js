@@ -18,13 +18,10 @@
    The canonical calendar and list selections are delegated to the
    shared scripts; this file only binds Job On domain-free UX.
    No domain logic; purely presentational interaction.
-   ============================================================ */
+  ============================================================ */
 (function () {
   const qs = (s, r = document) => r.querySelector(s);
   const qsa = (s, r = document) => [...r.querySelectorAll(s)];
-  const indexedDbName = "ba-dmo-jobon";
-  const indexedDbStore = "imageDirectories";
-  const indexedDbKey = "current";
 
   // Expose capability flags the shared design-system respects (the same the
   // server used for rendering). Defense-in-depth only: server-side checks are
@@ -40,45 +37,6 @@
   function esc(value) {
     var map = { "&": "&" + "amp;", "<": "&" + "lt;", ">": "&" + "gt;", "\"": "&" + "quot;", "'": "&" + "#39;" };
     return String(value ?? "").replace(/[&<>"']/g, function (c) { return map[c]; });
-  }
-
-  async function openDirectoryDb() {
-    return await new Promise((resolve, reject) => {
-      const request = window.indexedDB.open(indexedDbName, 1);
-      request.onupgradeneeded = () => {
-        request.result.createObjectStore(indexedDbStore);
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async function saveDirectoryHandle(handle) {
-    if (!window.indexedDB || !handle) {
-      return;
-    }
-
-    const db = await openDirectoryDb();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(indexedDbStore, "readwrite");
-      tx.objectStore(indexedDbStore).put({ handle }, indexedDbKey);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  }
-
-  async function readDirectoryHandle() {
-    if (!window.indexedDB) {
-      return null;
-    }
-
-    const db = await openDirectoryDb();
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(indexedDbStore, "readonly");
-      const request = tx.objectStore(indexedDbStore).get(indexedDbKey);
-      request.onsuccess = () => resolve(request.result?.handle ?? null);
-      request.onerror = () => reject(request.error);
-    });
   }
 
   // Tab switching (F-02)
@@ -224,13 +182,17 @@
     });
   }
 
-  // Image directory handling (TD-23 technical state only on the client side)
+  // Reference-owned article image. The browser selects a file from the
+  // configured company image directory; only its safe file name is persisted.
   const imageInput = qs("#job-image-input");
   const linkImageDirBtn = qs("#link-image-dir-btn");
   const replaceImageBtn = qs("#replace-image-btn");
   const removeImageBtn = qs("#remove-image-btn");
   const imagePreview = qs("#imagePreview");
   const imageDirectoryStatus = qs("#image-directory-status");
+  const serverImage = qs("#article-reference-image");
+  const emptyImage = qs("#article-image-empty");
+  let pendingImageAction = "attach";
 
   // Resolve the current Job On ID from the page context (rendered by the server
   // into a meta tag when a specific Job On is open).
@@ -265,74 +227,50 @@
     return await response.json();
   }
 
-  function showPreviewMessage(text) {
-    if (imagePreview) {
-      imagePreview.textContent = text;
+  function showEmptyImage() {
+    if (serverImage) serverImage.hidden = true;
+    if (emptyImage) emptyImage.hidden = false;
+  }
+
+  function showServerImage() {
+    if (serverImage) serverImage.hidden = false;
+    if (emptyImage) emptyImage.hidden = true;
+  }
+
+  if (serverImage) {
+    serverImage.addEventListener("load", showServerImage);
+    serverImage.addEventListener("error", showEmptyImage);
+    if (serverImage.complete) {
+      if (serverImage.naturalWidth > 0) showServerImage();
+      else showEmptyImage();
     }
   }
 
   if (linkImageDirBtn) {
-    linkImageDirBtn.onclick = async () => {
-      if (typeof window.showDirectoryPicker === "function") {
-        try {
-          const handle = await window.showDirectoryPicker();
-          await saveDirectoryHandle(handle);
-          const persisted = await persistImageAction("attach", handle.name);
-          if (imageDirectoryStatus) {
-            imageDirectoryStatus.textContent = persisted
-              ? `Diretório ligado: ${handle.name}`
-              : "Não foi possível ligar o diretório.";
-          }
-          if (persisted) {
-            showPreviewMessage("Imagem ligada");
-          }
-        } catch {
-          // User cancelled the picker; keep the current state unchanged.
-        }
-        return;
-      }
-
-      imageInput?.click();
-    };
+    linkImageDirBtn.addEventListener("click", () => {
+      pendingImageAction = "attach";
+    });
   }
 
   if (replaceImageBtn) {
-    replaceImageBtn.onclick = async () => {
-      if (typeof window.showDirectoryPicker === "function") {
-        try {
-          const handle = await window.showDirectoryPicker();
-          await saveDirectoryHandle(handle);
-          const persisted = await persistImageAction("replace", handle.name);
-          if (imageDirectoryStatus) {
-            imageDirectoryStatus.textContent = persisted
-              ? `Diretório ligado: ${handle.name}`
-              : "Não foi possível substituir a imagem.";
-          }
-          if (persisted) {
-            showPreviewMessage("Imagem ligada");
-          }
-        } catch {
-          // User cancelled the picker; keep the current state unchanged.
-        }
-        return;
-      }
-
+    replaceImageBtn.onclick = () => {
+      pendingImageAction = "replace";
       imageInput?.click();
     };
   }
 
   if (removeImageBtn) {
     removeImageBtn.onclick = async () => {
-      if (!confirm("Remover a associação da imagem? Esta ação é auditada e cria uma nova revisão.")) {
+      if (!confirm("Remover a imagem associada a esta Referência? Esta ação é auditada.")) {
         return;
       }
 
       const result = await persistImageAction("remove", null);
       if (result) {
         if (imageDirectoryStatus) {
-          imageDirectoryStatus.textContent = "Nenhum diretório ligado.";
+          imageDirectoryStatus.textContent = "Sem imagem associada à Referência.";
         }
-        showPreviewMessage("Sem imagem");
+        showEmptyImage();
       }
     };
   }
@@ -341,40 +279,21 @@
     imageInput.onchange = async e => {
       const file = e.target.files[0];
       if (!file) return;
+      const persisted = await persistImageAction(pendingImageAction, file.name);
+      if (!persisted) return;
+
       if (imageDirectoryStatus) {
-        imageDirectoryStatus.textContent = "Pré-visualização carregada a partir do ficheiro selecionado.";
+        imageDirectoryStatus.textContent = `Imagem da Referência: ${file.name}`;
       }
-      imagePreview.innerHTML = "";
-      const img = document.createElement("img");
-      img.src = URL.createObjectURL(file);
-      img.alt = "Imagem do artigo";
-      imagePreview.appendChild(img);
 
-      // Persist the attach action server-side with the file name as image_asset_id.
-      await persistImageAction("attach", file.name);
+      if (serverImage) {
+        serverImage.src = URL.createObjectURL(file);
+        showServerImage();
+      }
+
+      pendingImageAction = "attach";
+      imageInput.value = "";
     };
-  }
-
-  if (imageDirectoryStatus) {
-    readDirectoryHandle()
-      .then(async handle => {
-        if (!handle) {
-          return;
-        }
-
-        if (typeof handle.queryPermission === "function") {
-          const permission = await handle.queryPermission({ mode: "read" });
-          imageDirectoryStatus.textContent = permission === "granted"
-            ? `Diretório ligado: ${handle.name}`
-            : "Permissão perdida. Religue ou reautorize o diretório da imagem.";
-          return;
-        }
-
-        imageDirectoryStatus.textContent = `Diretório ligado: ${handle.name}`;
-      })
-      .catch(() => {
-        imageDirectoryStatus.textContent = "Não foi possível recuperar o diretório ligado.";
-      });
   }
 
   // Catalog options management (Definições) — F-07 selectors

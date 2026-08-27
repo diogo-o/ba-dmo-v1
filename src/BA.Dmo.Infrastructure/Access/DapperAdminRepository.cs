@@ -17,8 +17,7 @@ namespace BA.Dmo.Infrastructure.Access;
 /// </summary>
 public sealed class DapperAdminRepository : IAdminRepository
 {
-    private const string AdminGrantPatternJson =
-        "[{\"moduleId\":\"admin\",\"capabilities\":[\"admin.gerir\"]}]";
+    private const string AdminGrantPatternJson = "[{\"moduleId\":\"admin\"}]";
 
     // PostgreSQL SQLSTATE 42703 = undefined_column. Detected internally ONLY to
 // recognise the N26-not-applied schema condition (internal_users.modules_override);
@@ -37,6 +36,12 @@ private const string UserColumns =
         u.updated_at_utc  AS UpdatedAtUtc,
         NULL::text        AS AuthEmail,
         u.modules_override::text AS ModulesOverrideJson
+        , ARRAY(
+            SELECT ut.template_id
+            FROM internal_user_access_templates ut
+            WHERE ut.actor_id = u.actor_id
+            ORDER BY ut.template_id
+          ) AS TemplateIds
         """;
 
     private const string TemplateColumns =
@@ -157,13 +162,21 @@ private const string UserColumns =
         {
             await Db.ExecuteAsync(connection,
                 """
-                INSERT INTO internal_users (actor_id, auth_user_id, template_id,
-                                            display_name, profile_title, active,
-                                            created_at_utc, updated_at_utc)
-                VALUES (@ActorId, @AuthUserId, @TemplateId,
-                        @DisplayName, @ProfileTitle, @Active,
-                        @CreatedAtUtc, @CreatedAtUtc)
-                ON CONFLICT (actor_id) DO NOTHING;
+                WITH inserted AS (
+                    INSERT INTO internal_users (actor_id, auth_user_id, template_id,
+                                                display_name, profile_title, active,
+                                                created_at_utc, updated_at_utc)
+                    VALUES (@ActorId, @AuthUserId, @TemplateId,
+                            @DisplayName, @ProfileTitle, @Active,
+                            @CreatedAtUtc, @CreatedAtUtc)
+                    ON CONFLICT (actor_id) DO NOTHING
+                    RETURNING actor_id
+                )
+                INSERT INTO internal_user_access_templates (
+                    actor_id, template_id, assigned_at_utc, assigned_by)
+                SELECT actor_id, @TemplateId, @CreatedAtUtc, NULL
+                FROM inserted
+                ON CONFLICT (actor_id, template_id) DO NOTHING;
                 """,
                 new
                 {
@@ -225,21 +238,69 @@ private const string UserColumns =
         DateTimeOffset expectedUpdatedAt,
         DateTimeOffset updatedAtUtc,
         CancellationToken cancellationToken = default) =>
-        GuardedUserWriteAsync(
-            """
-            UPDATE internal_users
-            SET template_id = @TemplateId,
-                updated_at_utc = @UpdatedAtUtc
-            WHERE actor_id = @ActorId AND updated_at_utc = @ExpectedUpdatedAt;
-            """,
-            new
-            {
-                ActorId = actorId,
-                TemplateId = templateId,
-                UpdatedAtUtc = updatedAtUtc,
-                ExpectedUpdatedAt = expectedUpdatedAt
-            },
-            cancellationToken);
+        ReplaceUserAccessTemplatesAsync(
+            actorId, [templateId], expectedUpdatedAt, updatedAtUtc, cancellationToken);
+
+    public async Task<bool> ReplaceUserAccessTemplatesAsync(
+        string actorId,
+        IReadOnlyList<string> templateIds,
+        DateTimeOffset expectedUpdatedAt,
+        DateTimeOffset updatedAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        var ids = templateIds.Distinct(StringComparer.Ordinal).ToArray();
+        if (ids.Length == 0)
+            throw new ArgumentException("At least one template is required.", nameof(templateIds));
+
+        try
+        {
+            await DapperUnitOfWork.RunAsync<int>(_connectionFactory,
+                async (connection, transaction, ct) =>
+                {
+                    var rows = await Db.ExecuteAsync(connection,
+                        """
+                        UPDATE internal_users
+                        SET template_id = @PrimaryTemplateId,
+                            updated_at_utc = @UpdatedAtUtc
+                        WHERE actor_id = @ActorId
+                          AND updated_at_utc = @ExpectedUpdatedAt;
+                        """,
+                        new
+                        {
+                            ActorId = actorId,
+                            PrimaryTemplateId = ids[0],
+                            UpdatedAtUtc = updatedAtUtc,
+                            ExpectedUpdatedAt = expectedUpdatedAt
+                        }, transaction: transaction, cancellationToken: ct);
+                    ConcurrencyGuard.EnsureSingleRowUpdated(rows, "utilizador interno");
+
+                    await Db.ExecuteAsync(connection,
+                        "DELETE FROM internal_user_access_templates WHERE actor_id = @ActorId;",
+                        new { ActorId = actorId }, transaction: transaction, cancellationToken: ct);
+                    await Db.ExecuteAsync(connection,
+                        """
+                        INSERT INTO internal_user_access_templates (
+                            actor_id, template_id, assigned_at_utc, assigned_by)
+                        SELECT @ActorId, template_id, @UpdatedAtUtc, NULL
+                        FROM unnest(@TemplateIds::text[]) AS assigned(template_id);
+                        """,
+                        new { ActorId = actorId, TemplateIds = ids, UpdatedAtUtc = updatedAtUtc },
+                        transaction: transaction, cancellationToken: ct);
+
+                    var admins = await CountActiveAdminsOnAsync(
+                        connection, transaction, excludeActorId: null, ct);
+                    if (admins == 0)
+                        throw new LockoutViolationException();
+
+                    return 1;
+                }, cancellationToken);
+            return true;
+        }
+        catch (LockoutViolationException)
+        {
+            return false;
+        }
+    }
 
     public Task<bool> SetUserActiveAsync(
         string actorId,
@@ -360,10 +421,12 @@ private const string UserColumns =
     {
         var row = await Db.QuerySingleOrDefaultAsync<int?>(connection,
             """
-            SELECT COUNT(*)
+            SELECT COUNT(DISTINCT u.actor_id)
             FROM internal_users u
-            JOIN access_templates t ON t.template_id = u.template_id
+            JOIN internal_user_access_templates ut ON ut.actor_id = u.actor_id
+            JOIN access_templates t ON t.template_id = ut.template_id
             WHERE u.active
+              AND u.profile_title = 'Admin'
               AND t.active
               AND t.modules @> @AdminGrantPattern::jsonb
               AND (@ExcludeActorId::text IS NULL OR u.actor_id <> @ExcludeActorId);

@@ -105,10 +105,10 @@ public class PersistenceArchitectureGuardTests
             ProjectReferences("src/BA.Dmo.Web"));
         Assert.Equal(
             ["BA.Dmo.Application", "BA.Dmo.Domain"],
-            ProjectReferences("tests/BA.Dmo.UnitTests"));
+            ProjectReferences("AI-CONTEXT/docs/tests/BA.Dmo.UnitTests"));
         Assert.Equal(
             ["BA.Dmo.Infrastructure", "BA.Dmo.Web"],
-            ProjectReferences("tests/BA.Dmo.IntegrationTests"));
+            ProjectReferences("AI-CONTEXT/docs/tests/BA.Dmo.IntegrationTests"));
     }
 
     [Fact]

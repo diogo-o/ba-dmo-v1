@@ -99,11 +99,74 @@ public sealed class FakeArmazemRepository : IArmazemRepository
         return Task.CompletedTask;
     }
 
+    public Task CorrectLocationAsync(
+        Guid? currentStockId,
+        WarehouseStock? correctedStock,
+        WarehouseMovement? outMovement,
+        WarehouseMovement? inMovement,
+        CancellationToken ct = default)
+    {
+        if (FailAtomicWrite) throw new InvalidOperationException("simulated atomic write failure");
+        if (currentStockId is null && correctedStock is null)
+            throw new ArgumentException("A location correction must release or occupy stock.");
+
+        var current = currentStockId is null
+            ? null
+            : Stocks.FirstOrDefault(s => s.WarehouseStockId == currentStockId && s.IsActive);
+        if (currentStockId is not null && current is null)
+            throw new InvalidOperationException("warehouse_stock (correção de localização) was changed concurrently.");
+
+        if (correctedStock is not null && Stocks.Any(s =>
+                s.WarehouseLocationId == correctedStock.WarehouseLocationId && s.IsActive))
+            throw new ArmazemLocationOccupiedException(
+                "A posição encontrada já está ocupada por outra ferramenta.");
+
+        if (current is not null)
+        {
+            current.ReleasedAtUtc = outMovement!.OccurredAtUtc;
+            current.ReleasedBy = outMovement.ActorId;
+            Movements.Add(ToMovementWithStock(outMovement, current.WarehouseStockId));
+        }
+
+        if (correctedStock is not null)
+        {
+            Stocks.Add(correctedStock);
+            Movements.Add(ToMovementWithStock(inMovement!, correctedStock.WarehouseStockId));
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task<IReadOnlyList<WarehouseMovement>> GetMovementHistoryAsync(Guid toolId, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<WarehouseMovement>>(
             Movements.Where(m => m.WarehouseStockId.HasValue &&
                 Stocks.Any(s => s.WarehouseStockId == m.WarehouseStockId && s.ToolId == toolId))
                 .OrderBy(m => m.OccurredAtUtc).ToList());
+
+    public Task<IReadOnlyList<WarehouseMovementFact>> ListMovementFactsAsync(
+        DateTimeOffset? fromUtc,
+        DateTimeOffset? toUtc,
+        int limit,
+        CancellationToken ct = default)
+    {
+        var facts = Movements
+            .Where(m => (!fromUtc.HasValue || m.OccurredAtUtc >= fromUtc.Value) &&
+                        (!toUtc.HasValue || m.OccurredAtUtc < toUtc.Value))
+            .Select(m =>
+            {
+                var stock = Stocks.FirstOrDefault(s => s.WarehouseStockId == m.WarehouseStockId);
+                if (stock is null) return null;
+                var position = Locations.GetValueOrDefault(stock.WarehouseLocationId)?.Code;
+                return new WarehouseMovementFact(stock.ToolId, position, m);
+            })
+            .Where(f => f is not null)
+            .Cast<WarehouseMovementFact>()
+            .OrderByDescending(f => f.Movement.OccurredAtUtc)
+            .ThenByDescending(f => f.Movement.WarehouseMovementId)
+            .Take(limit)
+            .ToList();
+        return Task.FromResult<IReadOnlyList<WarehouseMovementFact>>(facts);
+    }
 
     public Task InsertAuditEventAsync(Guid? entityId, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken ct = default)
     {

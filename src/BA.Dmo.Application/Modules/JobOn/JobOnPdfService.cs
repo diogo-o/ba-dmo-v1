@@ -51,6 +51,20 @@ public sealed class JobOnPdfService
                 "JOBON_NOT_FOUND", "Job On não encontrado."));
 
         var data = BuildPdfData(jobOn);
+        if (_imageProvider is not null)
+        {
+            // A historical revision does not own an image snapshot. Printing
+            // consumes the current master association for its Article/Reference.
+            var image = await _imageProvider.ResolveAsync(jobOnId, ct);
+            if (image is not null)
+            {
+                data = data with
+                {
+                    ImageBytes = image.Bytes,
+                    ImageMimeType = image.MimeType
+                };
+            }
+        }
         var pdfBytes = renderer.RenderJobOnDocument(data);
         var fileName = BuildFileName(jobOn);
 
@@ -80,7 +94,8 @@ public sealed class JobOnPdfService
 
         return new JobOnPdfData
         {
-            Reference = ExtractReference(revision.ReferenceSnapshot),
+            Reference = ArticleReferenceImageRules.ExtractReferenceCode(
+                revision.ReferenceSnapshot),
             ProductionCode = jobOn.ProductionCode,
             MachineCode = jobOn.MachineCode,
             Sections = ParseSections(revision.Sections),
@@ -171,27 +186,6 @@ public sealed class JobOnPdfService
         };
     }
 
-    private static string ExtractReference(string? snapshotJson)
-    {
-        if (string.IsNullOrWhiteSpace(snapshotJson)) return string.Empty;
-
-        try
-        {
-            using var doc = JsonDocument.Parse(snapshotJson);
-            if (doc.RootElement.ValueKind == JsonValueKind.String)
-                return doc.RootElement.GetString() ?? string.Empty;
-
-            if (doc.RootElement.TryGetProperty("reference", out var refProp))
-                return refProp.GetString() ?? string.Empty;
-        }
-        catch (JsonException)
-        {
-            return snapshotJson.Trim();
-        }
-
-        return string.Empty;
-    }
-
     private static int ParseSections(string? sectionsJson)
     {
         if (string.IsNullOrWhiteSpace(sectionsJson)) return 0;
@@ -207,7 +201,8 @@ public sealed class JobOnPdfService
 
     internal static string BuildFileName(JobOnEntity jobOn)
     {
-        var reference = ExtractReference(jobOn.CurrentRevision?.ReferenceSnapshot);
+        var reference = ArticleReferenceImageRules.ExtractReferenceCode(
+            jobOn.CurrentRevision?.ReferenceSnapshot);
         return $"JobOn_{jobOn.ProductionCode}_{reference}_{jobOn.MachineCode}.pdf";
     }
 }

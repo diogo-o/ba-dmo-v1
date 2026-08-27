@@ -208,7 +208,7 @@ public class AdminUserListResetTests : IClassFixture<AdminUserListResetTests.Res
                 Guid authUserId, CancellationToken cancellationToken = default) =>
                 authUserId == AdminAuthUserId
                     ? Task.FromResult<InternalUserRecord?>(new InternalUserRecord(
-                        "admin-actor", AdminAuthUserId, "Administrador", null,
+                        "admin-actor", AdminAuthUserId, "Administrador", "Admin",
                         UserActive: true, TemplateId: "tpl-admin", TemplateName: "Admin",
                         TemplateActive: true,
                         ModulesJson: "[{\"moduleId\":\"admin\",\"capabilities\":[\"admin.gerir\",\"audit.view\"]}]"))
@@ -297,6 +297,11 @@ public class AdminUserListResetTests : IClassFixture<AdminUserListResetTests.Res
 
         public Task<bool> ChangeUserTemplateAsync(
             string actorId, string templateId, DateTimeOffset expectedUpdatedAt,
+            DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default) =>
+            Task.FromResult(true);
+
+        public Task<bool> ReplaceUserAccessTemplatesAsync(
+            string actorId, IReadOnlyList<string> templateIds, DateTimeOffset expectedUpdatedAt,
             DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default) =>
             Task.FromResult(true);
 

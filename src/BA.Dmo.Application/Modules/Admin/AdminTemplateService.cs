@@ -8,9 +8,9 @@ namespace BA.Dmo.Application.Modules.Admin;
 /// <summary>
 /// Administration use cases for access templates (Plan-V3 04_ACC §9, U-06).
 /// Every write is validated server-side against the canonical catalog
-/// (GLM-ACC-03): module ids must exist, capabilities must belong to their
-/// module, functional areas take no grants (GLM-CAT-01), and invalid entries
-/// are REJECTED — never silently granted or silently discarded. The U-04
+/// (GLM-ACC-03): module ids must be assignable catalog entries. Templates
+/// assign modules only; functional profile projection owns capabilities.
+/// Invalid entries are REJECTED — never silently granted or discarded. The U-04
 /// catalog/normalizer is the single model; no second template model exists.
 /// Self-lockout: GLM-ACC-10. Concurrency: GLM-ACC-12. Templates are
 /// deactivated, never deleted (UD-10).
@@ -152,13 +152,18 @@ public sealed class AdminTemplateService
 
     /// <summary>
     /// Strict canonical validation of submitted grants. Any entry outside the
-    /// catalog (unknown module, capability not owned by the module, area
-    /// grant, duplicates) rejects the whole write with an explicit report.
+    /// catalog (unknown/nonassignable module, capability input or duplicates)
+    /// rejects the whole write with an explicit report.
     /// Returns the canonical JSON persisted in access_templates.modules.
     /// </summary>
     private Result<string, DomainError> ValidateGrants(
         IReadOnlyList<TemplateGrantInput> grants)
     {
+        if ((grants ?? []).Any(grant => grant.Capabilities?.Count > 0))
+            return Result<string, DomainError>.Failure(DomainError.Validation(
+                "ACCESS_TEMPLATE_GRANTS_INVALID",
+                "Os templates atribuem apenas módulos; o perfil determina as capacidades."));
+
         var input = (grants ?? new List<TemplateGrantInput>())
             .Where(g => g is not null && !string.IsNullOrWhiteSpace(g.ModuleId))
             .Select(g => new ModuleGrant(

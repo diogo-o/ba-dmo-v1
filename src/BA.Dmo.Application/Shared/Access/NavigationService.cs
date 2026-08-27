@@ -4,7 +4,7 @@ namespace BA.Dmo.Application.Shared.Access;
 
 /// <summary>
 /// One derived navigation item (Plan-V3 GLM-SHL-03): a module tab or a
-/// functional-area group (Controlo — UD-14). Items are DERIVED from the
+/// legacy functional-area group. Items are DERIVED from the
 /// resolved grants ∩ canonical catalog in canonical order; unauthorized
 /// entries are never produced, so they can never be rendered (GLM-SHL-03.6).
 /// </summary>
@@ -15,8 +15,9 @@ public sealed record NavigationTab(string Id, string Label, string Route, bool I
     : NavigationItem(Id, Label, Route, IsActive);
 
 /// <summary>
-/// Functional-area group: visible only when at least one child is authorized;
-/// contains ONLY authorized children — never an empty area (GLM-CTR-02).
+/// Compatibility model for internal functional-area routing. The shared shell
+/// now renders Controlo as one top-level tab; its technical children remain
+/// available inside the Controlo workspace, never as global navigation tabs.
 /// </summary>
 public sealed record NavigationArea(
     string Id,
@@ -52,11 +53,10 @@ public interface INavigationService
 
 /// <summary>
 /// Canonical navigation derivation (GLM-SHL-03, GLM-CTR-02, GLM-CAT-02):
-/// tabs = authorized modules ∩ catalog in canonical order; Controlo groups
-/// its authorized children (Peso/Pegamentos, never fused); Peso presents ONE
-/// entry whose route resolves the Operador/Responsável experience through
-/// peso.aprovar (GLM-ACC-05); Administração is right-aligned and only exists
-/// when the admin page is accessible (admin.gerir).
+/// tabs = authorized top-level modules ∩ catalog in canonical order. Controlo
+/// is one global entry; Peso/Pegamentos are technical pages inside it and make
+/// that parent entry active when visited. Administração is right-aligned and
+/// only exists when the admin page is accessible (admin.gerir).
 /// </summary>
 public sealed class NavigationService : INavigationService
 {
@@ -82,7 +82,7 @@ public sealed class NavigationService : INavigationService
         foreach (var module in access.NavigationModules)
         {
             // Administração is right-aligned (GLM-SHL-03.1), never a left tab;
-            // area children render inside their area entry, never top-level.
+            // internal area children never render as global shell tabs.
             if (module.ModuleId == CanonicalModuleCatalog.AdminModuleId ||
                 areaChildIds.Contains(module.ModuleId))
                 continue;
@@ -90,29 +90,6 @@ public sealed class NavigationService : INavigationService
             var tab = BuildTab(access, module.ModuleId, activeModuleId);
             if (tab is not null)
                 leftItems.Add(tab);
-        }
-
-        foreach (var (areaId, children) in access.VisibleAreaChildren)
-        {
-            if (!_catalog.TryGetModule(areaId, out var area))
-                continue;
-
-            var childTabs = new List<NavigationTab>();
-            foreach (var child in children)
-            {
-                var childTab = BuildTab(access, child.ModuleId, activeModuleId);
-                if (childTab is not null)
-                    childTabs.Add(childTab);
-            }
-
-            // Area without authorized children never appears (GLM-CTR-02.4).
-            if (childTabs.Count == 0)
-                continue;
-
-            // Área → primeira entrada filha autorizada (GLM-CAT-02 rule 1).
-            leftItems.Add(new NavigationArea(
-                area.ModuleId, area.DisplayName, childTabs[0].Route,
-                childTabs.Any(t => t.IsActive), childTabs));
         }
 
         // Tabs are always emitted in canonical catalog order.
@@ -153,8 +130,19 @@ public sealed class NavigationService : INavigationService
             moduleId,
             ModuleName(moduleId),
             firstPage.Route,
-            activeModuleId is not null &&
-            string.Equals(activeModuleId, moduleId, StringComparison.Ordinal));
+            IsModuleOrAreaActive(moduleId, activeModuleId));
+    }
+
+    private static bool IsModuleOrAreaActive(string moduleId, string? activeModuleId)
+    {
+        if (activeModuleId is null)
+            return false;
+
+        if (string.Equals(activeModuleId, moduleId, StringComparison.Ordinal))
+            return true;
+
+        return CanonicalModuleCatalog.AreaChildren.TryGetValue(moduleId, out var childIds)
+            && childIds.Contains(activeModuleId, StringComparer.Ordinal);
     }
 
     private string? ResolveActiveModuleId(EffectiveAccess access, string? currentRoute)

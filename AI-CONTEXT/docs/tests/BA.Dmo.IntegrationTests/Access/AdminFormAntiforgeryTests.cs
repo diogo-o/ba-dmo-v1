@@ -102,7 +102,8 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
             ["email"] = "new-user@ba-dmo.example",
             ["password"] = "P@ssw0rd-123",
             ["displayName"] = "Novo Utilizador",
-            ["templateId"] = "tpl-admin"
+            ["profileTitle"] = "Admin",
+            ["templateIds"] = "tpl-admin"
         }));
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
@@ -342,14 +343,14 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
             {
                 if (authUserId == AdminAuthUserId)
                     return Task.FromResult<InternalUserRecord?>(new InternalUserRecord(
-                        "admin-actor", AdminAuthUserId, "Administrador", null,
+                        "admin-actor", AdminAuthUserId, "Administrador", "Admin",
                         UserActive: true, TemplateId: "tpl-admin", TemplateName: "Admin",
                         TemplateActive: true,
                         ModulesJson: "[{\"moduleId\":\"admin\",\"capabilities\":[\"admin.gerir\",\"audit.view\",\"audit.export\"]}]"));
 
                 if (authUserId == OperatorAuthUserId)
                     return Task.FromResult<InternalUserRecord?>(new InternalUserRecord(
-                        "operator-actor", OperatorAuthUserId, "Operador", null,
+                        "operator-actor", OperatorAuthUserId, "Operador", "Operador / Controlador",
                         UserActive: true, TemplateId: "tpl-op", TemplateName: "Operador",
                         TemplateActive: true,
                         ModulesJson: "[{\"moduleId\":\"boquilhas\",\"capabilities\":[]}]"));
@@ -429,8 +430,14 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
         public Task<bool> ChangeUserTemplateAsync(
             string actorId, string templateId, DateTimeOffset expectedUpdatedAt,
             DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default)
+            => ReplaceUserAccessTemplatesAsync(
+                actorId, [templateId], expectedUpdatedAt, updatedAtUtc, cancellationToken);
+
+        public Task<bool> ReplaceUserAccessTemplatesAsync(
+            string actorId, IReadOnlyList<string> templateIds, DateTimeOffset expectedUpdatedAt,
+            DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default)
         {
-            Writes.Add("change_template");
+            Writes.Add("change_templates");
             return Task.FromResult(true);
         }
 

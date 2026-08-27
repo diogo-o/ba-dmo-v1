@@ -2,9 +2,9 @@ namespace BA.Dmo.Domain.Modules.Armazem;
 
 /// <summary>
 /// U-14 — Discriminator of the tool domain behind a warehouse identity.
-/// Ferramentas is the only supported domain in U-14 (CM/MF). Boquilhas is a
-/// future domain added by another resolver without redesigning warehouse
-/// ownership (owner decision C).
+/// Normal CM/MF/BQ warehouse identity comes from the Ferramentas master. The
+/// Boquilhas discriminator is retained for compatibility with identities from
+/// the separate BQ external-repair workflow; it is not a second BQ master.
 /// </summary>
 public enum WarehouseToolDomain
 {

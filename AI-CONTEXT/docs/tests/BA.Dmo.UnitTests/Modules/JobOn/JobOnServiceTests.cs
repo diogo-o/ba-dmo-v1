@@ -22,6 +22,7 @@ public class JobOnServiceTests
         new(2026, 8, 17, 8, 0, 0, TimeSpan.Zero);
 
     private readonly FakeJobOnRepository _repository = new();
+    private readonly FakeArticleReferenceImageRepository _articleImages = new();
     private readonly FakeCurrentUserAccessor _identity = new();
     private readonly FakeJobOnUserContextRepository _userContext = new();
     private readonly JobOnService _service;
@@ -31,7 +32,8 @@ public class JobOnServiceTests
         var gate = new JobOnAuthorizationGate(_identity);
         _service = new JobOnService(
             gate, _repository, _userContext, new FixedClock(
-                new DateTimeOffset(2026, 8, 17, 18, 0, 0, TimeSpan.Zero)));
+                new DateTimeOffset(2026, 8, 17, 18, 0, 0, TimeSpan.Zero)),
+            _articleImages);
         _identity.GrantJobOn();
     }
 
@@ -403,258 +405,167 @@ public class JobOnServiceTests
         return id;
     }
 
-    // ---- image acceptance (TD-23, modules/05 §5.7) -------------------------
-
-    [Fact]
-    public async Task AttachImage_CreatesNewRevision_WithImageAssetId()
+    private async Task<(Guid JobOnId, JobOnRevision Revision)> SeedRevisionWithReferenceAsync(
+        string reference)
     {
         var id = await CreateRascunhoAsync();
-        // Create an initial revision so there is a current revision to attach to.
-        var initialRevision = new JobOnRevision
+        var revision = new JobOnRevision
         {
             JobOnRevisionId = Guid.NewGuid(),
             JobOnId = id,
             RevisionNumber = 1,
+            ReferenceSnapshot = JsonSerializer.Serialize(new { article_reference = reference }),
             SavedBy = "test",
             SavedAtUtc = DateTime.UtcNow
         };
-        await _repository.InsertRevisionAsync(initialRevision);
-        await _repository.UpdateCurrentRevisionAsync(id, initialRevision.JobOnRevisionId);
+        await _repository.InsertRevisionAsync(revision);
+        await _repository.UpdateCurrentRevisionAsync(id, revision.JobOnRevisionId);
+        return (id, revision);
+    }
+
+    // ---- reference-owned article image -----------------------------------
+
+    [Fact]
+    public async Task AttachImage_UpdatesReferenceAssociation_WithoutCreatingRevision()
+    {
+        var (id, revision) = await SeedRevisionWithReferenceAsync("9262T288");
 
         var result = await _service.AttachImageAsync(
-            new AttachImageRequest(id, "dir-imagens/artigo-9262T288"));
+            new AttachImageRequest(id, "artigo-9262T288.jpg"));
 
         Assert.True(result.IsSuccess);
-        var newRevisionId = result.Value;
-        Assert.NotEqual(initialRevision.JobOnRevisionId, newRevisionId);
+        Assert.Equal("9262T288", result.Value.ReferenceCode);
+        Assert.Equal("artigo-9262T288.jpg", result.Value.ImageAssetId);
+        Assert.Single(_repository.Revisions);
+        Assert.Equal(revision.JobOnRevisionId, _repository.Revisions[0].JobOnRevisionId);
+        Assert.Null(_repository.Revisions[0].ImageAssetId);
 
-        // Verify the new revision has the image_asset_id.
-        var newRevision = _repository.Revisions.First(r => r.JobOnRevisionId == newRevisionId);
-        Assert.Equal("dir-imagens/artigo-9262T288", newRevision.ImageAssetId);
-
-        // Verify audit event was recorded.
-        var audit = _repository.AuditEvents.FirstOrDefault(e => e.EventType == "jobon.imagem.anexar");
-        Assert.NotEqual(default, audit);
-        Assert.Equal(id, audit.JobId);
-        Assert.Equal(newRevisionId, audit.RevisionId);
-        Assert.Null(audit.Before); // No previous image.
-        Assert.Equal("dir-imagens/artigo-9262T288", audit.After);
+        var stored = Assert.Single(_articleImages.Associations.Values);
+        Assert.Equal("9262T288", stored.ReferenceCode);
+        var audit = Assert.Single(_articleImages.AuditFacts);
+        Assert.Equal(revision.JobOnRevisionId, audit.RevisionId);
+        Assert.Equal("jobon.referencia.imagem.anexar", audit.EventType);
+        Assert.Null(audit.Before);
+        Assert.Equal("artigo-9262T288.jpg", audit.After);
     }
 
     [Fact]
-    public async Task AttachImage_WithoutEditCapability_IsDenied()
+    public async Task ReplaceImage_ChangesSameReferenceAssociation_WithoutCreatingRevision()
     {
-        _identity.GrantNone();
-        var id = Guid.NewGuid();
-
-        var result = await _service.AttachImageAsync(
-            new AttachImageRequest(id, "dir-imagens/test"));
-
-        Assert.True(result.IsFailure);
-        Assert.Equal(ErrorCategory.Forbidden, result.Error.Category);
-        Assert.Empty(_repository.AuditEvents);
-    }
-
-    [Fact]
-    public async Task AttachImage_WithEmptyImageAssetId_IsRejected()
-    {
-        var id = await CreateRascunhoAsync();
-        var initialRevision = new JobOnRevision
-        {
-            JobOnRevisionId = Guid.NewGuid(),
-            JobOnId = id,
-            RevisionNumber = 1,
-            SavedBy = "test",
-            SavedAtUtc = DateTime.UtcNow
-        };
-        await _repository.InsertRevisionAsync(initialRevision);
-        await _repository.UpdateCurrentRevisionAsync(id, initialRevision.JobOnRevisionId);
-
-        var result = await _service.AttachImageAsync(
-            new AttachImageRequest(id, ""));
-
-        Assert.True(result.IsFailure);
-        Assert.Equal("JOBON_IMAGE_INVALID", result.Error.Code);
-    }
-
-    [Fact]
-    public async Task AttachImage_WithoutCurrentRevision_IsRejected()
-    {
-        var id = await CreateRascunhoAsync();
-        // No revision exists yet.
-
-        var result = await _service.AttachImageAsync(
-            new AttachImageRequest(id, "dir-imagens/test"));
-
-        Assert.True(result.IsFailure);
-        Assert.Equal("JOBON_NO_REVISION", result.Error.Code);
-    }
-
-    [Fact]
-    public async Task ReplaceImage_CreatesNewRevision_WithNewImageAssetId()
-    {
-        var id = await CreateRascunhoAsync();
-        var initialRevision = new JobOnRevision
-        {
-            JobOnRevisionId = Guid.NewGuid(),
-            JobOnId = id,
-            RevisionNumber = 1,
-            ImageAssetId = "dir-imagens/old",
-            SavedBy = "test",
-            SavedAtUtc = DateTime.UtcNow
-        };
-        await _repository.InsertRevisionAsync(initialRevision);
-        await _repository.UpdateCurrentRevisionAsync(id, initialRevision.JobOnRevisionId);
+        var (id, revision) = await SeedRevisionWithReferenceAsync("9262T288");
+        _articleImages.Associations["9262T288"] =
+            new ArticleReferenceImage("9262T288", "original.jpg");
 
         var result = await _service.ReplaceImageAsync(
-            new ReplaceImageRequest(id, "dir-imagens/new"));
+            new ReplaceImageRequest(id, "nova.png"));
 
         Assert.True(result.IsSuccess);
-        var newRevisionId = result.Value;
-        Assert.NotEqual(initialRevision.JobOnRevisionId, newRevisionId);
-
-        var newRevision = _repository.Revisions.First(r => r.JobOnRevisionId == newRevisionId);
-        Assert.Equal("dir-imagens/new", newRevision.ImageAssetId);
-
-        // Verify audit event with before/after.
-        var audit = _repository.AuditEvents.FirstOrDefault(e => e.EventType == "jobon.imagem.substituir");
-        Assert.NotEqual(default, audit);
-        Assert.Equal("dir-imagens/old", audit.Before);
-        Assert.Equal("dir-imagens/new", audit.After);
+        Assert.Equal("nova.png", _articleImages.Associations["9262T288"].ImageAssetId);
+        Assert.Single(_repository.Revisions);
+        Assert.Equal(revision.JobOnRevisionId, _repository.Revisions[0].JobOnRevisionId);
+        var audit = Assert.Single(_articleImages.AuditFacts);
+        Assert.Equal("original.jpg", audit.Before);
+        Assert.Equal("nova.png", audit.After);
     }
 
     [Fact]
-    public async Task ReplaceImage_WithoutExistingImage_IsRejected()
+    public async Task RemoveImage_DeletesReferenceAssociation_WithoutCreatingRevision()
     {
-        var id = await CreateRascunhoAsync();
-        var initialRevision = new JobOnRevision
-        {
-            JobOnRevisionId = Guid.NewGuid(),
-            JobOnId = id,
-            RevisionNumber = 1,
-            ImageAssetId = null, // No image to replace.
-            SavedBy = "test",
-            SavedAtUtc = DateTime.UtcNow
-        };
-        await _repository.InsertRevisionAsync(initialRevision);
-        await _repository.UpdateCurrentRevisionAsync(id, initialRevision.JobOnRevisionId);
-
-        var result = await _service.ReplaceImageAsync(
-            new ReplaceImageRequest(id, "dir-imagens/new"));
-
-        Assert.True(result.IsFailure);
-        Assert.Equal("JOBON_NO_IMAGE", result.Error.Code);
-    }
-
-    [Fact]
-    public async Task RemoveImage_CreatesNewRevision_WithNullImageAssetId()
-    {
-        var id = await CreateRascunhoAsync();
-        var initialRevision = new JobOnRevision
-        {
-            JobOnRevisionId = Guid.NewGuid(),
-            JobOnId = id,
-            RevisionNumber = 1,
-            ImageAssetId = "dir-imagens/to-remove",
-            SavedBy = "test",
-            SavedAtUtc = DateTime.UtcNow
-        };
-        await _repository.InsertRevisionAsync(initialRevision);
-        await _repository.UpdateCurrentRevisionAsync(id, initialRevision.JobOnRevisionId);
+        var (id, revision) = await SeedRevisionWithReferenceAsync("9262T288");
+        _articleImages.Associations["9262T288"] =
+            new ArticleReferenceImage("9262T288", "artigo.jpg");
 
         var result = await _service.RemoveImageAsync(new RemoveImageRequest(id));
 
         Assert.True(result.IsSuccess);
-        var newRevisionId = result.Value;
-        Assert.NotEqual(initialRevision.JobOnRevisionId, newRevisionId);
-
-        var newRevision = _repository.Revisions.First(r => r.JobOnRevisionId == newRevisionId);
-        Assert.Null(newRevision.ImageAssetId);
-
-        // Verify audit event with before/after.
-        var audit = _repository.AuditEvents.FirstOrDefault(e => e.EventType == "jobon.imagem.remover");
-        Assert.NotEqual(default, audit);
-        Assert.Equal("dir-imagens/to-remove", audit.Before);
+        Assert.Empty(_articleImages.Associations);
+        Assert.Single(_repository.Revisions);
+        Assert.Equal(revision.JobOnRevisionId, _repository.Revisions[0].JobOnRevisionId);
+        var audit = Assert.Single(_articleImages.AuditFacts);
+        Assert.Equal("artigo.jpg", audit.Before);
         Assert.Null(audit.After);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("dir-imagens/artigo.jpg")]
+    [InlineData("..\\artigo.jpg")]
+    [InlineData("artigo.exe")]
+    public async Task AttachImage_WithUnsafeOrNonImageAsset_IsRejected(string assetId)
+    {
+        var (id, _) = await SeedRevisionWithReferenceAsync("9262T288");
+
+        var result = await _service.AttachImageAsync(new AttachImageRequest(id, assetId));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("JOBON_IMAGE_INVALID", result.Error.Code);
+        Assert.Empty(_articleImages.Associations);
+    }
+
     [Fact]
-    public async Task RemoveImage_WithoutExistingImage_IsRejected()
+    public async Task AttachImage_WithoutReadableReference_IsRejected()
     {
         var id = await CreateRascunhoAsync();
-        var initialRevision = new JobOnRevision
+        var revision = new JobOnRevision
         {
             JobOnRevisionId = Guid.NewGuid(),
             JobOnId = id,
             RevisionNumber = 1,
-            ImageAssetId = null, // No image to remove.
             SavedBy = "test",
             SavedAtUtc = DateTime.UtcNow
         };
-        await _repository.InsertRevisionAsync(initialRevision);
-        await _repository.UpdateCurrentRevisionAsync(id, initialRevision.JobOnRevisionId);
+        await _repository.InsertRevisionAsync(revision);
+        await _repository.UpdateCurrentRevisionAsync(id, revision.JobOnRevisionId);
 
-        var result = await _service.RemoveImageAsync(new RemoveImageRequest(id));
+        var result = await _service.AttachImageAsync(
+            new AttachImageRequest(id, "artigo.jpg"));
 
         Assert.True(result.IsFailure);
-        Assert.Equal("JOBON_NO_IMAGE", result.Error.Code);
+        Assert.Equal("JOBON_REFERENCE_MISSING", result.Error.Code);
     }
 
     [Fact]
-    public async Task RemoveImage_WithoutEditCapability_IsDenied()
+    public async Task ImageAction_WithoutEditCapability_IsDenied()
     {
         _identity.GrantNone();
-        var id = Guid.NewGuid();
 
-        var result = await _service.RemoveImageAsync(new RemoveImageRequest(id));
+        var result = await _service.AttachImageAsync(
+            new AttachImageRequest(Guid.NewGuid(), "artigo.jpg"));
 
         Assert.True(result.IsFailure);
         Assert.Equal(ErrorCategory.Forbidden, result.Error.Category);
+        Assert.Empty(_articleImages.AuditFacts);
     }
 
     [Fact]
-    public async Task DuplicateJobOn_PreservesSameImageAssetId()
+    public async Task DuplicateJobOn_DoesNotCopyLegacyRevisionImageOwnership()
     {
-        // Seed a source Job On with a revision that has an image.
         var sourceId = await CreateRascunhoAsync();
         var sourceRevision = new JobOnRevision
         {
             JobOnRevisionId = Guid.NewGuid(),
             JobOnId = sourceId,
             RevisionNumber = 1,
-            ImageAssetId = "dir-imagens/artigo-9262T288",
+            ImageAssetId = "legacy.jpg",
             ReferenceSnapshot = "9262T288",
             SavedBy = "test",
             SavedAtUtc = DateTime.UtcNow
         };
         await _repository.InsertRevisionAsync(sourceRevision);
         await _repository.UpdateCurrentRevisionAsync(sourceId, sourceRevision.JobOnRevisionId);
+        _articleImages.Associations["9262T288"] =
+            new ArticleReferenceImage("9262T288", "master.jpg");
 
-        // Duplicate the Job On.
         var result = await _service.DuplicateAsync(new DuplicateJobOnRequest(
             sourceId, "202620", "LINHA-1", Start.AddDays(3), Start.AddDays(3).AddHours(8)));
 
         Assert.True(result.IsSuccess);
-        var duplicatedId = result.Value;
-
-        // Verify the duplicated revision has the same ImageAssetId.
-        var duplicatedRevisions = _repository.Revisions
-            .Where(r => r.JobOnId == duplicatedId)
-            .OrderBy(r => r.RevisionNumber)
-            .ToList();
-        Assert.Single(duplicatedRevisions);
-        Assert.Equal("dir-imagens/artigo-9262T288", duplicatedRevisions[0].ImageAssetId);
-
-        // Verify the duplicated revision has the same article/reference.
-        Assert.Equal("9262T288", duplicatedRevisions[0].ReferenceSnapshot);
-
-        // Verify the source revision is unchanged.
-        var sourceRevisions = _repository.Revisions
-            .Where(r => r.JobOnId == sourceId)
-            .ToList();
-        Assert.Single(sourceRevisions);
-        Assert.Equal("dir-imagens/artigo-9262T288", sourceRevisions[0].ImageAssetId);
-        Assert.Equal("9262T288", sourceRevisions[0].ReferenceSnapshot);
+        var duplicatedRevision = Assert.Single(
+            _repository.Revisions.Where(r => r.JobOnId == result.Value));
+        Assert.Equal("9262T288", duplicatedRevision.ReferenceSnapshot);
+        Assert.Null(duplicatedRevision.ImageAssetId);
+        Assert.Equal("master.jpg", _articleImages.Associations["9262T288"].ImageAssetId);
+        Assert.Equal("legacy.jpg", _repository.Revisions.Single(r => r.JobOnId == sourceId).ImageAssetId);
     }
 
     [Fact]
@@ -839,36 +750,21 @@ public class JobOnServiceTests
     }
 
     [Fact]
-    public async Task ImageActions_PreserveRevisionImmutability()
+    public async Task SaveRevision_DoesNotPersistLegacyPerRevisionImageAssetId()
     {
         var id = await CreateRascunhoAsync();
-        var initialRevision = new JobOnRevision
-        {
-            JobOnRevisionId = Guid.NewGuid(),
-            JobOnId = id,
-            RevisionNumber = 1,
-            ImageAssetId = "dir-imagens/original",
-            GeneralNotes = "Notas originais",
-            SavedBy = "test",
-            SavedAtUtc = DateTime.UtcNow
-        };
-        await _repository.InsertRevisionAsync(initialRevision);
-        await _repository.UpdateCurrentRevisionAsync(id, initialRevision.JobOnRevisionId);
 
-        // Attach (replace) image.
-        await _service.ReplaceImageAsync(new ReplaceImageRequest(id, "dir-imagens/updated"));
+        var result = await _service.SaveRevisionAsync(new SaveJobOnRevisionRequest(
+            id,
+            "Notas originais",
+            ChangeReason: null,
+            ImageAssetId: "legacy.jpg",
+            Components: Array.Empty<JobOnComponent>()));
 
-        // Verify the original revision is untouched.
-        var original = _repository.Revisions.First(r => r.JobOnRevisionId == initialRevision.JobOnRevisionId);
-        Assert.Equal("dir-imagens/original", original.ImageAssetId);
-        Assert.Equal("Notas originais", original.GeneralNotes);
-        Assert.Equal(1, original.RevisionNumber);
-
-        // Verify a new revision was created.
-        var newRev = _repository.Revisions.First(r => r.JobOnRevisionId != initialRevision.JobOnRevisionId);
-        Assert.Equal("dir-imagens/updated", newRev.ImageAssetId);
-        Assert.Equal("Notas originais", newRev.GeneralNotes); // Preserved from original.
-        Assert.Equal(2, newRev.RevisionNumber);
+        Assert.True(result.IsSuccess);
+        var revision = Assert.Single(_repository.Revisions);
+        Assert.Null(revision.ImageAssetId);
+        Assert.Equal("Notas originais", revision.GeneralNotes);
     }
 
     private sealed class FakeCurrentUserAccessor : ICurrentUserAccessor

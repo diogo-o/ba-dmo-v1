@@ -14,8 +14,6 @@
   let valuesByField = {};   // fieldId -> TampaoFieldValueDto[]
   let selectedConfig = null; // selected TampaoConfigurationDto for actions
   let configs = [];         // all active configurations for the consult
-  let planos = [];
-  let selectedPlanoId = null;
   let selectedMovementId = null;
 
   // ---- Tabs ----------------------------------------------------------------
@@ -25,7 +23,6 @@
       $$('.tampoes-view').forEach((v) => v.classList.toggle('active', v.id === tab.dataset.view));
       if (tab.dataset.view === 'opcoes') loadOptions();
       if (tab.dataset.view === 'consulta') consult();
-      if (tab.dataset.view === 'planeamento') loadPlanos();
       if (tab.dataset.view === 'historico') loadHistory();
       if (tab.dataset.view === 'registo') loadDropdowns();
       if (tab.dataset.view === 'linhas') loadLinesMachines();
@@ -294,65 +291,6 @@
         openDetalhe(cfg);
       } catch (err) { showToast(err.message, true); }
     }
-  });
-
-  // ---- Planeamento --------------------------------------------------------------------
-  async function loadPlanos() {
-    try {
-      const configsForPlan = await api('/api/tampoes/consulta');
-      fillSelect($('#pConfiguration'), configsForPlan.map((c) => ({ configurationId: c.configurationId, label: configLabel(c) })), 'configurationId', 'label');
-      planos = await api('/api/tampoes/planos?includeCanceled=false');
-      renderPlanos();
-    } catch (err) { showToast(err.message, true); }
-  }
-
-  function renderPlanos() {
-    const body = $('#planosBody');
-    const empty = $('#planosEmpty');
-    const actions = $('#planosActions');
-    selectedPlanoId = null;
-    body.innerHTML = planos.map((p) =>
-      `<tr data-plano-id="${esc(p.planoId)}">
-        <td>${esc(p.configurationLabel || '—')}</td>
-        <td>${fmtValue(p.plannedQty)}</td>
-        <td>${p.plannedForDate || '—'}</td>
-        <td>${p.enchidos != null ? fmtValue(p.enchidos) : '—'}</td>
-        <td>${p.difference != null ? fmtValue(p.difference) : '—'}</td>
-        <td>${p.canceled ? 'Cancelado' : 'Ativo'}</td>
-      </tr>`).join('');
-    empty.hidden = body.children.length > 0;
-    actions.hidden = body.children.length === 0;
-    Array.from(body.children).forEach((tr) => {
-      tr.addEventListener('click', () => {
-        selectedPlanoId = tr.dataset.planoId;
-        Array.from(body.children).forEach((x) => x.classList.toggle('selected', x === tr));
-      });
-    });
-  }
-
-  $('[data-planear]').addEventListener('click', async () => {
-    const qty = parseInt($('#pQty').value, 10);
-    if (!qty || qty < 1) return showToast('Introduza uma quantidade inteira positiva.', true);
-    try {
-      await jsonPost('/api/tampoes/planear', {
-        configurationId: $('#pConfiguration').value,
-        plannedQty: qty,
-        plannedForDate: $('#pDate').value || null,
-        notes: $('#pNotes').value.trim() || null
-      });
-      showToast('Planeamento registado.');
-      $('#pQty').value = ''; $('#pDate').value = ''; $('#pNotes').value = '';
-      loadPlanos();
-    } catch (err) { showToast(err.message, true); }
-  });
-
-  $('[data-cancelar-plano]').addEventListener('click', async () => {
-    if (!selectedPlanoId) return showToast('Selecione um plano para cancelar.', true);
-    try {
-      await jsonPost(`/api/tampoes/planos/${selectedPlanoId}/cancelar`, {});
-      showToast('Plano cancelado. Os saldos não foram alterados.');
-      loadPlanos();
-    } catch (err) { showToast(err.message, true); }
   });
 
   // ---- Histórico ----------------------------------------------------------------------

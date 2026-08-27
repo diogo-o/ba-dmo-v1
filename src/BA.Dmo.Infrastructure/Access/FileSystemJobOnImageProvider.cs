@@ -1,58 +1,57 @@
 using BA.Dmo.Application.Modules.JobOn;
 using BA.Dmo.Application.Shared;
-using BA.Dmo.Application.Shared.Persistence;
-using BA.Dmo.Domain.Modules.JobOn;
-
-using JobOnEntity = BA.Dmo.Domain.Modules.JobOn.JobOn;
-
 namespace BA.Dmo.Infrastructure.Access;
 
 /// <summary>
 /// Filesystem-based implementation of IJobOnImageProvider.
-/// Resolves the article image using the existing infrastructure:
-///   main_documents_output_root (app_settings)
-/// + production_folder (job_on)
-/// + image_asset_id (job_on_revision.current_revision)
+/// Resolves the reference-owned article image using:
+///   main_documents_output_root (app_settings / company image directory)
+/// + image_asset_id (article_reference_images, keyed by Article/Reference)
 /// Returns null when any part of the chain is missing — never throws.
 /// </summary>
 public sealed class FileSystemJobOnImageProvider : IJobOnImageProvider
 {
     private readonly IJobOnRepository _repository;
+    private readonly IArticleReferenceImageRepository _articleImages;
     private readonly IAppSettingsReader _settings;
-    private readonly IDbConnectionFactory _connectionFactory;
 
     public FileSystemJobOnImageProvider(
         IJobOnRepository repository,
-        IAppSettingsReader settings,
-        IDbConnectionFactory connectionFactory)
+        IArticleReferenceImageRepository articleImages,
+        IAppSettingsReader settings)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _articleImages = articleImages ?? throw new ArgumentNullException(nameof(articleImages));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
     }
 
     public async Task<ImageResolution?> ResolveAsync(Guid jobOnId, CancellationToken ct = default)
     {
         try
         {
-            // 1. Load Job On (carries production_folder on the entity now)
+            // 1. Load the Job On only to resolve its Article/Reference context.
             var jobOn = await _repository.GetByIdAsync(jobOnId, ct);
             if (jobOn is null) return null;
 
-            // 2. Get output root from app settings
+            var referenceCode = ArticleReferenceImageRules.ExtractReferenceCode(
+                jobOn.CurrentRevision?.ReferenceSnapshot);
+            if (string.IsNullOrWhiteSpace(referenceCode)) return null;
+
+            // 2. Resolve the current master association for that Reference.
+            var association = await _articleImages.GetAsync(referenceCode, ct);
+            if (association is null) return null;
+
+            // 3. Get the configured company image-directory root.
             var outputRoot = await _settings.GetOutputRootAsync(ct);
             if (string.IsNullOrWhiteSpace(outputRoot)) return null;
 
-            // 3. Get production folder from entity
-            var productionFolder = jobOn.ProductionFolder;
-            if (string.IsNullOrWhiteSpace(productionFolder)) return null;
+            if (!ArticleReferenceImageRules.TryNormalizeImageAssetId(
+                    association.ImageAssetId,
+                    out var imageAssetId))
+                return null;
 
-            // 4. Get image_asset_id from current revision
-            var imageAssetId = jobOn.CurrentRevision?.ImageAssetId;
-            if (string.IsNullOrWhiteSpace(imageAssetId)) return null;
-
-            // 5. Build full path and read file
-            var fullPath = Path.Combine(outputRoot, productionFolder, imageAssetId);
+            // 4. Resolve only a validated file name under the configured root.
+            var fullPath = Path.Combine(outputRoot, imageAssetId);
             if (!File.Exists(fullPath)) return null;
 
             var bytes = await File.ReadAllBytesAsync(fullPath, ct);

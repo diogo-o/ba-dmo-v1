@@ -60,14 +60,13 @@ public class CanonicalModuleCatalogTests
     }
 
     [Fact]
-    public void Controlo_IsAFunctionalArea_WithFolhaControloCapabilities()
+    public void Controlo_IsTheAssignableModule_WithInternalTechnicalChildren()
     {
         var catalog = CanonicalModuleCatalog.Instance;
 
         Assert.True(catalog.TryGetModule("controlo", out var controlo));
-        Assert.Equal(ModuleKind.FunctionalArea, controlo.Kind);
-        // R010: the Folha de Controlo is a workflow INSIDE the Controlo area — the area
-        // carries its sheet capabilities (view/edit/submit/review) rather than a new module.
+        Assert.Equal(ModuleKind.Module, controlo.Kind);
+        Assert.True(controlo.IsAssignable);
         Assert.Equal(
             [
                 "controlo.edit", "controlo.review", "controlo.submit", "controlo.view"
@@ -78,16 +77,24 @@ public class CanonicalModuleCatalogTests
         Assert.Equal(
             ["peso", "pegamentos"],
             CanonicalModuleCatalog.AreaChildren["controlo"].ToArray());
+
+        foreach (var childId in CanonicalModuleCatalog.AreaChildren["controlo"])
+        {
+            Assert.True(catalog.TryGetModule(childId, out var child));
+            Assert.False(child.IsAssignable);
+        }
     }
 
     [Fact]
-    public void AllOtherEntries_AreModules()
+    public void AllEntries_AreTechnicalModules()
     {
         var catalog = CanonicalModuleCatalog.Instance;
 
         Assert.All(
-            catalog.Modules.Where(m => m.ModuleId != "controlo"),
+            catalog.Modules,
             m => Assert.Equal(ModuleKind.Module, m.Kind));
+
+        Assert.False(catalog.Modules.Single(m => m.ModuleId == "historia").IsAssignable);
     }
 
     [Fact]

@@ -15,9 +15,8 @@ namespace BA.Dmo.IntegrationTests.Access;
 
 /// <summary>
 /// U-18 — História transversal web tests (modules/11 GLM-HIST-07 E2E subset,
-/// TD-24). Verify: unauthenticated /historia redirects; a template without the
-/// <c>historia</c> module is denied; a template with <c>historia</c> + origin
-/// modules renders the page AND only events of the granted origin modules reach
+/// TD-24). Verify: unauthenticated /historia redirects; operational module
+/// assignment derives the História surface; only events of granted origin modules reach
 /// the read projection (TD-24) — administration events are excluded without
 /// audit.view. All collaborators are fakes — no live Supabase/DB.
 /// </summary>
@@ -45,15 +44,14 @@ public class HistoriaWebAuthorizationTests :
     }
 
     [Fact]
-    public async Task WithoutHistoriaModule_IsDenied()
+    public async Task Historia_IsDerivedFromAnOperationalModule()
     {
-        _fixture.Modules = "peso";
+        _fixture.Modules = "controlo";
         var client = _fixture.CreateTestClient();
         await LoginAsync(client);
 
         var page = await client.GetAsync("/historia");
-        Assert.Equal(HttpStatusCode.Redirect, page.StatusCode);
-        Assert.StartsWith("/access-denied", page.Headers.Location!.PathAndQuery);
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
     }
 
     [Fact]
@@ -61,7 +59,7 @@ public class HistoriaWebAuthorizationTests :
     {
         // TD-24: the identity holds the `historia` module (page policy) plus the
         // origin modules whose events we assert reach the projection.
-        _fixture.Modules = "historia,peso,tampoes";
+        _fixture.Modules = "controlo,tampoes";
         _fixture.Repository.Groups =
         [
             Group("armazem|lote-arm", "Lote Armazém AR-1", "armazem", "lote", "lote-arm"),
@@ -84,17 +82,16 @@ public class HistoriaWebAuthorizationTests :
         Assert.DoesNotContain("Lote Armazém AR-1", html);
 
         // TD-24: the repository received the granted origin modules (peso +
-        // tampoes); `jobon` is additionally authorized for every active user
-        // (UD-16 / GLM-SHL-03 universal jobon.view) and so always present.
+        // tampoes); Controlo also derives its other internal technical area.
         var lastVisible = _fixture.Repository.LastVisibleModules
             ?? Array.Empty<string>();
-        Assert.Equal(new[] { "jobon", "peso", "tampoes" }, lastVisible);
+        Assert.Equal(new[] { "pegamentos", "peso", "tampoes" }, lastVisible);
     }
 
     [Fact]
     public async Task WithHistoria_AdminEventsExcludedWithoutAuditView()
     {
-        _fixture.Modules = "historia,peso";
+        _fixture.Modules = "controlo";
         _fixture.Repository.Groups =
         [
             Group("admin|usr-1", "Utilizador Admin", "admin", "utilizador", "usr-1"),
@@ -178,7 +175,7 @@ public class HistoriaWebAuthorizationTests :
 
         public void Reset()
         {
-            Modules = "peso,tampoes";
+            Modules = "controlo,tampoes";
             Repository.Reset();
         }
 
@@ -234,7 +231,7 @@ public class HistoriaWebAuthorizationTests :
                 var grants = string.Join(",", moduleIds.Select(m =>
                     $"{{\"moduleId\":\"{m}\",\"capabilities\":[]}}"));
                 return Task.FromResult<InternalUserRecord?>(new InternalUserRecord(
-                    "historia-actor", AuthUserId, "Operador História", null,
+                    "historia-actor", AuthUserId, "Operador História", "Operador / Controlador",
                     UserActive: true, TemplateId: "tpl-hist", TemplateName: "História",
                     TemplateActive: true, ModulesJson: $"[{grants}]"));
             }
@@ -260,6 +257,8 @@ public class HistoriaWebAuthorizationTests :
             public Task UpdateUserAsync(string actorId, string displayName, string? profileTitle, DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc, CancellationToken ct = default) =>
                 Task.CompletedTask;
             public Task<bool> ChangeUserTemplateAsync(string actorId, string templateId, DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc, CancellationToken ct = default) =>
+                Task.FromResult(true);
+            public Task<bool> ReplaceUserAccessTemplatesAsync(string actorId, IReadOnlyList<string> templateIds, DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc, CancellationToken ct = default) =>
                 Task.FromResult(true);
             public Task<bool> SetUserActiveAsync(string actorId, bool active, DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc, CancellationToken ct = default) =>
                 Task.FromResult(true);

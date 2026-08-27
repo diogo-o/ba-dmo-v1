@@ -20,15 +20,15 @@
     <meta name="jobon-id" content="@Model.JobOnId">
 }
 
-<link rel="stylesheet" href="~/styles/modules/jobon-layout.css" />
+<link rel="stylesheet" href="~/styles/modules/jobon-layout.css" asp-append-version="true" />
 
-<nav class="jobon-tabs" aria-label="Job On navigation">
-    <button class="tab@(Model.JobOn is null ? " active" : "")" data-view="planeamento">Planeamento</button>
-    <button class="tab@(Model.JobOn is not null ? " active" : "")" data-view="folha">Job On</button>
-    <button class="tab" data-view="historico">Histórico</button>
+<nav class="dmo-module-tabs jobon-tabs" aria-label="Job On navigation">
+    <button class="dmo-module-tab tab@(Model.JobOn is null ? " active" : "")" data-view="planeamento">Planeamento</button>
+    <button class="dmo-module-tab tab@(Model.JobOn is not null ? " active" : "")" data-view="folha">Job On</button>
+    <button class="dmo-module-tab tab" data-view="historico">Histórico</button>
     @if (Model.CanConfigure)
     {
-        <button class="tab settings" data-view="definicoes">Definições</button>
+        <button class="dmo-module-tab tab settings" data-view="definicoes">Definições</button>
     }
 </nav>
 
@@ -237,6 +237,38 @@
                         <button class="dmo-button edit-only responsible-only" type="button">Alterar data</button>
                         <button class="dmo-button edit-only responsible-only" type="button">Duplicar</button>
                     }
+                    @if (Model.JobOnId.HasValue && Model.CanViewControlo)
+                    {
+                        <a class="dmo-button"
+                           asp-page="/Controlo/Index"
+                           asp-route-jobOn="@Model.JobOnId"
+                           asp-route-revision="@Model.CurrentRevisionId">Ver Controlo</a>
+                        <a class="dmo-button"
+                           asp-page="/Controlo/Index"
+                           asp-route-jobOn="@Model.JobOnId"
+                           asp-route-revision="@Model.CurrentRevisionId"
+                           asp-route-section="peso">Ver Peso</a>
+                        <a class="dmo-button"
+                           asp-page="/Controlo/Index"
+                           asp-route-jobOn="@Model.JobOnId"
+                           asp-route-revision="@Model.CurrentRevisionId"
+                           asp-route-section="pegamentos">Ver Pegamentos</a>
+                        <a class="dmo-button"
+                           asp-page="/Controlo/Index"
+                           asp-route-jobOn="@Model.JobOnId"
+                           asp-route-revision="@Model.CurrentRevisionId"
+                           asp-route-section="resumo">Ver Resumo</a>
+                    }
+                    @if (Model.JobOnId.HasValue && Model.CanViewRepairs)
+                    {
+                        <a class="dmo-button"
+                           asp-page="/ReparacaoInterna/Index"
+                           asp-route-view="historico"
+                           asp-route-jobOnId="@Model.JobOnId"
+                           asp-route-revision="@Model.CurrentRevisionId"
+                           asp-route-production="@Model.ProductionDisplay"
+                           asp-route-line="@Model.MachineDisplay">Ver reparações</a>
+                    }
                     <button class="dmo-button" type="button">Comparar</button>
                     <button class="dmo-button" type="button">Exportar</button>
                     <span class="dmo-pill sheet-mode" id="sheetMode">Modo consulta</span>
@@ -256,12 +288,19 @@
                 }
                 <div class="image-box">
                     <div class="image-preview" id="imagePreview">
-                        @(Model.HasImage ? "Imagem ligada" : "Sem imagem")
+                        @if (Model.JobOnId.HasValue)
+                        {
+                            <img id="article-reference-image"
+                                 src="/api/jobon/@Model.JobOnId.Value/image"
+                                 alt="Imagem do artigo @Model.ReferenceDisplay"
+                                 hidden />
+                        }
+                        <span id="article-image-empty">Sem imagem do artigo</span>
                     </div>
                     <div>
                         <strong>Imagem do artigo</strong>
                         <small id="image-directory-status">
-                            @(Model.HasImage ? Model.ImageAssetId : "Pré-visualização associada ao contexto aberto.")
+                            Associada à Referência @Model.ReferenceDisplay.
                         </small>
                         @if (Model.CanEdit)
                         {

@@ -4,15 +4,15 @@
 @{
     ViewData["Title"] = "Reparação Externa";
 }
-<link rel="stylesheet" href="~/styles/modules/reparacao-externa-layout.css" />
+<link rel="stylesheet" href="~/styles/modules/reparacao-externa-layout.css" asp-append-version="true" />
 
-<nav class="reparacao-externa-tabs" aria-label="Navegação Reparação Externa">
-    <button class="tab active" data-view="boquilhas" type="button">Boquilhas</button>
-    <button class="tab" data-view="contra-moldes" type="button">Contra moldes</button>
-    <button class="tab" data-view="moldes-finais" type="button">Moldes finais</button>
-    <button class="tab" data-view="envios" type="button">Envios</button>
-    <button class="tab" data-view="historico" type="button">Histórico</button>
-    <button class="tab" data-view="definicoes" type="button">Definições</button>
+<nav class="dmo-module-tabs reparacao-externa-tabs" aria-label="Navegação Reparação Externa">
+    <button class="dmo-module-tab tab active" data-view="boquilhas" type="button">Boquilhas</button>
+    <button class="dmo-module-tab tab" data-view="contra-moldes" type="button">Contra moldes</button>
+    <button class="dmo-module-tab tab" data-view="moldes-finais" type="button">Moldes finais</button>
+    <button class="dmo-module-tab tab" data-view="envios" type="button">Envios</button>
+    <button class="dmo-module-tab tab" data-view="historico" type="button">Histórico</button>
+    <button class="dmo-module-tab tab" data-view="definicoes" type="button">Definições</button>
 </nav>
 
 <main data-testid="page-reparacao-externa" class="reparacao-externa-page">

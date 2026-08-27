@@ -40,10 +40,13 @@ public class IndexModel : PageModel
     public bool CanEdit { get; private set; }
     public bool CanConfigure { get; private set; }
     public bool CanConfirm { get; private set; }
+    public bool CanViewControlo { get; private set; }
+    public bool CanViewRepairs { get; private set; }
 
     // ---- U-13 authoritative JobOn data ----
     public Domain.Modules.JobOn.JobOn? JobOn { get; private set; }
     public Guid? JobOnId => JobOn?.Id;
+    public Guid? CurrentRevisionId => JobOn?.CurrentRevision?.JobOnRevisionId;
 
     // ---- Planeamento ----
     public IReadOnlyList<PlaneamentoItem> PlaneamentoItems { get; private set; } = Array.Empty<PlaneamentoItem>();
@@ -77,7 +80,11 @@ public class IndexModel : PageModel
         _ => ""
     };
 
-    public string ReferenceDisplay => JobOn?.CurrentRevision?.ReferenceSnapshot ?? "—";
+    public string ReferenceDisplay =>
+        ArticleReferenceImageRules.ExtractReferenceCode(JobOn?.CurrentRevision?.ReferenceSnapshot)
+        is { Length: > 0 } reference
+            ? reference
+            : "—";
     public string ProductionDisplay => JobOn?.ProductionCode ?? "—";
     public string MachineDisplay => JobOn?.MachineCode ?? "—";
     public string StartDateDisplay => JobOn?.PlannedStartAt?.ToString("yyyy-MM-dd") ?? "—";
@@ -89,8 +96,6 @@ public class IndexModel : PageModel
     public string WeightDisplay => JobOn?.CurrentRevision?.WeightSnapshot?.ToString("0.00") ?? "—";
     public string ProcessDisplay => JobOn?.CurrentRevision?.ProcessSnapshot ?? "—";
     public string GeneralNotesDisplay => JobOn?.CurrentRevision?.GeneralNotes ?? "";
-    public string? ImageAssetId => JobOn?.CurrentRevision?.ImageAssetId;
-    public bool HasImage => !string.IsNullOrWhiteSpace(JobOn?.CurrentRevision?.ImageAssetId);
     public int RevisionCount => JobOn?.RevisionCount ?? 0;
     public int CurrentRevisionNumber => JobOn?.CurrentRevision?.RevisionNumber ?? 0;
 
@@ -115,6 +120,8 @@ public class IndexModel : PageModel
         CanEdit = user?.HasCapability(CanonicalModuleCatalog.JobonEditCapabilityId) == true;
         CanConfigure = user?.HasCapability(CanonicalModuleCatalog.JobonConfigureCapabilityId) == true;
         CanConfirm = user?.HasCapability(CanonicalModuleCatalog.JobonConfirmarCapabilityId) == true;
+        CanViewControlo = user?.HasModule(CanonicalModuleCatalog.ControloAreaId) == true;
+        CanViewRepairs = user?.HasModule(CanonicalModuleCatalog.ReparacaoInternaModuleId) == true;
 
         if (id.HasValue)
         {

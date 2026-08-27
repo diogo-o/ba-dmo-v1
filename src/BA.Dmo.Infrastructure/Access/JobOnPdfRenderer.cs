@@ -1,4 +1,6 @@
+using System.Buffers.Binary;
 using System.Globalization;
+using System.IO.Compression;
 using System.Text;
 using BA.Dmo.Application.Modules.JobOn;
 
@@ -53,13 +55,14 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
     {
         var pages = new List<string>();
         var streamOffsets = new List<int>();
+        var pdfImage = TryBuildPdfImage(data.ImageBytes, data.ImageMimeType);
 
         // Build each page's content stream text
         var pageTexts = new[] {
-            RenderFichaDeArtigo(data),        // Page 1
+            RenderFichaDeArtigo(data, articleImage: null), // Page 1
             RenderJobOnMoldes(data),          // Page 2
             RenderTrabalhoDeEquipa(data),     // Page 3
-            RenderFichaDeArtigo(data)         // Page 4 = duplicate of Page 1
+            RenderFichaDeArtigo(data, articleImage: pdfImage) // Page 4
         };
 
         // ---- PDF Structure ----
@@ -84,7 +87,10 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
 
             // Page
             sb.AppendLine($"{pageObj} 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 {PageWidth} {PageHeight}]");
-            sb.AppendLine($"/Resources<</Font<</F1 {fontObj} 0 R>>>/Contents {contentObj} 0 R>>endobj");
+            var imageResource = p == 3 && pdfImage is not null
+                ? "/XObject<</Im1 15 0 R>>"
+                : string.Empty;
+            sb.AppendLine($"/Resources<</Font<</F1 {fontObj} 0 R>>{imageResource}>>/Contents {contentObj} 0 R>>endobj");
 
             // Font
             sb.AppendLine($"{fontObj} 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj");
@@ -97,10 +103,17 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
             sb.AppendLine("endstream endobj");
         }
 
+        if (pdfImage is not null)
+        {
+            sb.AppendLine($"15 0 obj<</Type/XObject/Subtype/Image/Width {pdfImage.Width}/Height {pdfImage.Height}/ColorSpace/{pdfImage.ColorSpace}/BitsPerComponent 8/Filter {pdfImage.Filter}{pdfImage.DecodeParameters}/Length {pdfImage.HexData.Length + 1}>>stream");
+            sb.Append(pdfImage.HexData);
+            sb.AppendLine(">\nendstream endobj");
+        }
+
         // xref
         var xrefOffset = sb.Length;
         sb.AppendLine("xref");
-        sb.AppendLine("0 15");
+        sb.AppendLine(pdfImage is null ? "0 15" : "0 16");
         sb.AppendLine("0000000000 65535 f ");
 
         // Approximate offsets (we know exact positions aren't needed for a linear PDF
@@ -111,7 +124,7 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
             pos += Encoding.ASCII.GetByteCount(line) + 1;
         }
 
-        sb.AppendLine("trailer<</Size 15/Root 1 0 R>>");
+        sb.AppendLine($"trailer<</Size {(pdfImage is null ? 15 : 16)}/Root 1 0 R>>");
         sb.AppendLine("startxref");
         sb.AppendLine((xrefOffset).ToString());
         sb.AppendLine("%%EOF");
@@ -123,7 +136,7 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
     // PAGE 1 & 4: FICHA DE ARTIGO
     // =========================================================================
 
-    private string RenderFichaDeArtigo(JobOnPdfData data)
+    private string RenderFichaDeArtigo(JobOnPdfData data, PdfImage? articleImage)
     {
         var t = new StringBuilder();
         int y = TopStart;
@@ -137,6 +150,23 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
 
         // --- Top info block ---
         y = WriteHeaderBlock(t, data, y);
+
+        if (articleImage is not null)
+        {
+            // Only page 4 presents the reference-owned image. Object-fit contain
+            // is represented by a fixed aspect-preserving image box in the PDF.
+            const decimal boxWidth = 150m;
+            const decimal boxHeight = 128m;
+            var scale = Math.Min(
+                boxWidth / articleImage.Width,
+                boxHeight / articleImage.Height);
+            var imageWidth = articleImage.Width * scale;
+            var imageHeight = articleImage.Height * scale;
+            var imageX = 400m + (boxWidth - imageWidth) / 2m;
+            var imageY = 626m + (boxHeight - imageHeight) / 2m;
+            t.AppendLine(FormattableString.Invariant(
+                $"q {imageWidth:0.###} 0 0 {imageHeight:0.###} {imageX:0.###} {imageY:0.###} cm /Im1 Do Q"));
+        }
 
         // --- Tool sections ---
         y = WriteToolSection(t, "Contra-Moldes", data.Cm, y);
@@ -477,6 +507,260 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
         t.AppendLine($"BT /F1 9 Tf {MarginLeft + 140} {y} Td ({col1}) Tj ET");
         t.AppendLine($"BT /F1 9 Tf {MarginLeft + 260} {y} Td ({col2}) Tj ET");
         y -= 14;
+    }
+
+    private sealed record PdfImage(
+        int Width,
+        int Height,
+        string ColorSpace,
+        string Filter,
+        string DecodeParameters,
+        string HexData);
+
+    private static PdfImage? TryBuildPdfImage(byte[]? bytes, string? mimeType)
+    {
+        if (bytes is null || bytes.Length < 8)
+            return null;
+
+        try
+        {
+            if (bytes[0] == 0xFF && bytes[1] == 0xD8)
+                return BuildJpegImage(bytes);
+
+            ReadOnlySpan<byte> pngSignature = stackalloc byte[]
+                { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+            if (bytes.AsSpan(0, 8).SequenceEqual(pngSignature))
+                return BuildPngImage(bytes);
+        }
+        catch
+        {
+            // Corrupt/unsupported image bytes are equivalent to no associated
+            // printable image. Never substitute or guess another asset.
+        }
+
+        return null;
+    }
+
+    private static PdfImage? BuildJpegImage(byte[] bytes)
+    {
+        var offset = 2;
+        while (offset + 9 < bytes.Length)
+        {
+            if (bytes[offset] != 0xFF)
+            {
+                offset++;
+                continue;
+            }
+
+            while (offset < bytes.Length && bytes[offset] == 0xFF)
+                offset++;
+            if (offset >= bytes.Length) return null;
+
+            var marker = bytes[offset++];
+            if (marker is 0xD8 or 0xD9 || marker is >= 0xD0 and <= 0xD7)
+                continue;
+            if (offset + 2 > bytes.Length) return null;
+
+            var length = BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(offset, 2));
+            if (length < 2 || offset + length > bytes.Length) return null;
+
+            if (marker is 0xC0 or 0xC1 or 0xC2)
+            {
+                if (length < 8) return null;
+                var height = BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(offset + 3, 2));
+                var width = BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(offset + 5, 2));
+                var components = bytes[offset + 7];
+                if (width == 0 || height == 0 || components is not (1 or 3)) return null;
+
+                return new PdfImage(
+                    width,
+                    height,
+                    components == 1 ? "DeviceGray" : "DeviceRGB",
+                    "[/ASCIIHexDecode /DCTDecode]",
+                    string.Empty,
+                    Convert.ToHexString(bytes));
+            }
+
+            offset += length;
+        }
+
+        return null;
+    }
+
+    private static PdfImage? BuildPngImage(byte[] bytes)
+    {
+        var offset = 8;
+        var width = 0;
+        var height = 0;
+        byte bitDepth = 0;
+        byte colorType = 0;
+        byte interlace = 0;
+        byte[]? palette = null;
+        byte[]? transparency = null;
+        using var idat = new MemoryStream();
+
+        while (offset + 12 <= bytes.Length)
+        {
+            var length = BinaryPrimitives.ReadInt32BigEndian(bytes.AsSpan(offset, 4));
+            if (length < 0 || offset + 12 + length > bytes.Length) return null;
+            var type = Encoding.ASCII.GetString(bytes, offset + 4, 4);
+            var dataOffset = offset + 8;
+
+            switch (type)
+            {
+                case "IHDR":
+                    if (length != 13) return null;
+                    width = BinaryPrimitives.ReadInt32BigEndian(bytes.AsSpan(dataOffset, 4));
+                    height = BinaryPrimitives.ReadInt32BigEndian(bytes.AsSpan(dataOffset + 4, 4));
+                    bitDepth = bytes[dataOffset + 8];
+                    colorType = bytes[dataOffset + 9];
+                    interlace = bytes[dataOffset + 12];
+                    break;
+                case "PLTE":
+                    palette = bytes.AsSpan(dataOffset, length).ToArray();
+                    break;
+                case "tRNS":
+                    transparency = bytes.AsSpan(dataOffset, length).ToArray();
+                    break;
+                case "IDAT":
+                    idat.Write(bytes, dataOffset, length);
+                    break;
+                case "IEND":
+                    offset = bytes.Length;
+                    continue;
+            }
+
+            offset += length + 12;
+        }
+
+        if (width <= 0 || height <= 0 || bitDepth != 8 || interlace != 0)
+            return null;
+
+        var channels = colorType switch
+        {
+            0 => 1,
+            2 => 3,
+            3 => 1,
+            4 => 2,
+            6 => 4,
+            _ => 0
+        };
+        if (channels == 0 || colorType == 3 && (palette is null || palette.Length < 3))
+            return null;
+
+        var rowLength = checked(width * channels);
+        byte[] filtered;
+        idat.Position = 0;
+        using (var inflated = new MemoryStream())
+        {
+            using (var zlib = new ZLibStream(idat, CompressionMode.Decompress, leaveOpen: true))
+                zlib.CopyTo(inflated);
+            filtered = inflated.ToArray();
+        }
+
+        if (filtered.Length != checked((rowLength + 1) * height))
+            return null;
+
+        var pixels = new byte[checked(rowLength * height)];
+        for (var row = 0; row < height; row++)
+        {
+            var filter = filtered[row * (rowLength + 1)];
+            var source = filtered.AsSpan(row * (rowLength + 1) + 1, rowLength);
+            var target = pixels.AsSpan(row * rowLength, rowLength);
+            var prior = row == 0
+                ? ReadOnlySpan<byte>.Empty
+                : pixels.AsSpan((row - 1) * rowLength, rowLength);
+
+            for (var i = 0; i < rowLength; i++)
+            {
+                var left = i >= channels ? target[i - channels] : (byte)0;
+                var up = prior.IsEmpty ? (byte)0 : prior[i];
+                var upLeft = prior.IsEmpty || i < channels ? (byte)0 : prior[i - channels];
+                target[i] = filter switch
+                {
+                    0 => source[i],
+                    1 => unchecked((byte)(source[i] + left)),
+                    2 => unchecked((byte)(source[i] + up)),
+                    3 => unchecked((byte)(source[i] + ((left + up) >> 1))),
+                    4 => unchecked((byte)(source[i] + Paeth(left, up, upLeft))),
+                    _ => throw new InvalidDataException("Unsupported PNG row filter.")
+                };
+            }
+        }
+
+        var outputColors = colorType is 0 or 4 ? 1 : 3;
+        var rawRows = new byte[checked((width * outputColors + 1) * height)];
+        for (var row = 0; row < height; row++)
+        {
+            var source = pixels.AsSpan(row * rowLength, rowLength);
+            var target = rawRows.AsSpan(row * (width * outputColors + 1) + 1, width * outputColors);
+            rawRows[row * (width * outputColors + 1)] = 0;
+
+            for (var x = 0; x < width; x++)
+            {
+                switch (colorType)
+                {
+                    case 0:
+                        target[x] = source[x];
+                        break;
+                    case 2:
+                        source.Slice(x * 3, 3).CopyTo(target.Slice(x * 3, 3));
+                        break;
+                    case 3:
+                    {
+                        var paletteIndex = source[x];
+                        var paletteOffset = paletteIndex * 3;
+                        if (paletteOffset + 2 >= palette!.Length) return null;
+                        var alpha = transparency is not null && paletteIndex < transparency.Length
+                            ? transparency[paletteIndex]
+                            : (byte)255;
+                        for (var channel = 0; channel < 3; channel++)
+                            target[x * 3 + channel] = CompositeOnWhite(palette[paletteOffset + channel], alpha);
+                        break;
+                    }
+                    case 4:
+                        target[x] = CompositeOnWhite(source[x * 2], source[x * 2 + 1]);
+                        break;
+                    case 6:
+                    {
+                        var alpha = source[x * 4 + 3];
+                        for (var channel = 0; channel < 3; channel++)
+                            target[x * 3 + channel] = CompositeOnWhite(source[x * 4 + channel], alpha);
+                        break;
+                    }
+                }
+            }
+        }
+
+        byte[] compressed;
+        using (var compressedStream = new MemoryStream())
+        {
+            using (var zlib = new ZLibStream(compressedStream, CompressionLevel.SmallestSize, leaveOpen: true))
+                zlib.Write(rawRows);
+            compressed = compressedStream.ToArray();
+        }
+
+        return new PdfImage(
+            width,
+            height,
+            outputColors == 1 ? "DeviceGray" : "DeviceRGB",
+            "[/ASCIIHexDecode /FlateDecode]",
+            $"/DecodeParms[null<</Predictor 15/Colors {outputColors}/BitsPerComponent 8/Columns {width}>>]",
+            Convert.ToHexString(compressed));
+    }
+
+    private static byte CompositeOnWhite(byte color, byte alpha) =>
+        (byte)((color * alpha + 255 * (255 - alpha) + 127) / 255);
+
+    private static byte Paeth(byte left, byte up, byte upLeft)
+    {
+        var estimate = left + up - upLeft;
+        var leftDistance = Math.Abs(estimate - left);
+        var upDistance = Math.Abs(estimate - up);
+        var diagonalDistance = Math.Abs(estimate - upLeft);
+        return leftDistance <= upDistance && leftDistance <= diagonalDistance
+            ? left
+            : upDistance <= diagonalDistance ? up : upLeft;
     }
 
     // =========================================================================

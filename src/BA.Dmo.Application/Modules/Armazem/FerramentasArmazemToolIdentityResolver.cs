@@ -5,10 +5,10 @@ using BA.Dmo.Domain.Modules.Ferramentas;
 namespace BA.Dmo.Application.Modules.Armazem;
 
 /// <summary>
-/// U-14 — Armazém CM/MF tool identity resolver. Adapts the Ferramentas-owned
+/// U-14 — Armazém CM/MF/BQ tool identity resolver. Adapts the Ferramentas-owned
 /// <see cref="IFerramentasIdentityLookup"/> into the Armazém-owned
-/// <see cref="WarehouseToolIdentity"/>. Accepts CM and MF only (owner decision C:
-/// BQ/PU/CS rejected); read-only — never mutates Ferramentas.
+/// <see cref="WarehouseToolIdentity"/>. Accepts the warehouse-supported CM, MF and
+/// BQ types; rejects PU/CS; read-only — never mutates Ferramentas.
 /// </summary>
 public sealed class FerramentasArmazemToolIdentityResolver : IToolIdentityResolver
 {
@@ -49,8 +49,11 @@ public sealed class FerramentasArmazemToolIdentityResolver : IToolIdentityResolv
             case "MF":
                 toolType = FerramentasToolType.MF;
                 return true;
+            case "BQ":
+                toolType = FerramentasToolType.BQ;
+                return true;
             default:
-                // BQ / PU / CS are NOT supported by U-14 (owner decision C).
+                // PU / CS are Job On production configuration, not Armazém stock.
                 return false;
         }
     }
@@ -68,6 +71,7 @@ public sealed class FerramentasArmazemToolIdentityResolver : IToolIdentityResolv
     {
         FerramentasToolType.CM => "CM",
         FerramentasToolType.MF => "MF",
+        FerramentasToolType.BQ => "BQ",
         _ => type.ToString()
     };
 }

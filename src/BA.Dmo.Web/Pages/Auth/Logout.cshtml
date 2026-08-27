@@ -10,13 +10,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>BA DMO — Sair</title>
+    <link rel="stylesheet" href="~/styles/dmo-tokens.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/styles/dmo-foundation.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/styles/dmo-components.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/styles/dmo-layout.css" asp-append-version="true" />
 </head>
-<body>
-    <main>
+<body class="logout-body">
+    <main class="logout-card dmo-card">
         <h1>Sair</h1>
+        <p>Confirme que pretende terminar a sessão no Portal DMO.</p>
         <form method="post">
             @Html.AntiForgeryToken()
-            <button type="submit">Terminar sessão</button>
+            <button class="dmo-button" type="submit">Terminar sessão</button>
         </form>
     </main>
 </body>

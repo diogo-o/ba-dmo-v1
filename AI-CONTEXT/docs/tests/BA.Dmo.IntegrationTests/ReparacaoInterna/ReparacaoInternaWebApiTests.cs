@@ -60,6 +60,75 @@ public class ReparacaoInternaWebApiTests : IClassFixture<ReparacaoInternaWebApiT
     }
 
     [Fact]
+    public async Task ActiveSurface_ExposesOnlyCmMf_AndApiRejectsBq()
+    {
+        _fixture.Repository.User = _fixture.ValidRepIntUser(corrigir: true);
+        var client = _fixture.CreateTestClient();
+        var login = await PostFormAsync(client, "/login", new()
+        {
+            ["email"] = "repan@ba-dmo.example",
+            ["password"] = "correct"
+        });
+        Assert.Equal(HttpStatusCode.Redirect, login.StatusCode);
+
+        var page = await client.GetAsync("/reparacao-interna");
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        var html = await page.Content.ReadAsStringAsync();
+        Assert.Contains("data-type=\"CM\"", html, StringComparison.Ordinal);
+        Assert.Contains("data-type=\"MF\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-type=\"BQ\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("value=\"BQ\"", html, StringComparison.Ordinal);
+
+        var response = await client.PostAsync(
+            "/api/reparacao-interna",
+            new StringContent(
+                "{\"line\":\"B1\",\"toolType\":\"BQ\",\"numbers\":[\"1\"]}",
+                System.Text.Encoding.UTF8,
+                "application/json"));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task ProductionContext_IsReadOnly_InUiAndApi()
+    {
+        _fixture.Repository.User = _fixture.ValidRepIntUser(corrigir: true);
+        var client = _fixture.CreateTestClient();
+        var login = await PostFormAsync(client, "/login", new()
+        {
+            ["email"] = "repan@ba-dmo.example",
+            ["password"] = "correct"
+        });
+        Assert.Equal(HttpStatusCode.Redirect, login.StatusCode);
+
+        var page = await client.GetAsync("/reparacao-interna");
+        var html = await page.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("Editar contexto", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("data-toggle-override", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-toggle-ovcorrection", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("id=\"overridePanel\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("id=\"ovCorrectionPanel\"", html, StringComparison.Ordinal);
+
+        var register = await client.PostAsync(
+            "/api/reparacao-interna",
+            new StringContent(
+                "{\"line\":\"B1\",\"toolType\":\"CM\",\"numbers\":[\"1\"],\"overrideProduction\":\"P-OVERRIDE\",\"overrideReference\":\"5447T173\"}",
+                System.Text.Encoding.UTF8,
+                "application/json"));
+        Assert.Equal(HttpStatusCode.BadRequest, register.StatusCode);
+        Assert.Contains("REPINT_CONTEXT_READ_ONLY", await register.Content.ReadAsStringAsync());
+
+        var correction = await client.PostAsync(
+            $"/api/reparacao-interna/{Guid.NewGuid()}/corrigir",
+            new StringContent(
+                "{\"line\":\"B1\",\"toolType\":\"CM\",\"individualNumber\":\"1\",\"productionCode\":\"P-OVERRIDE\",\"reference\":\"5447T173\"}",
+                System.Text.Encoding.UTF8,
+                "application/json"));
+        Assert.Equal(HttpStatusCode.BadRequest, correction.StatusCode);
+        Assert.Contains("REPINT_CONTEXT_READ_ONLY", await correction.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task UserWithoutRepIntModule_IsDenied()
     {
         _fixture.Repository.User = _fixture.UserWithoutRepInt();
@@ -121,7 +190,7 @@ public class ReparacaoInternaWebApiTests : IClassFixture<ReparacaoInternaWebApiT
             ActorId: "repan-actor",
             AuthUserId: AuthUserId,
             DisplayName: "Reparador de Turno",
-            ProfileTitle: null,
+            ProfileTitle: "Operador / Controlador",
             UserActive: true,
             TemplateId: "tpl-repan",
             TemplateName: "Reparação Interna",
@@ -132,7 +201,7 @@ public class ReparacaoInternaWebApiTests : IClassFixture<ReparacaoInternaWebApiT
             ActorId: "other-actor",
             AuthUserId: AuthUserId,
             DisplayName: "Outro",
-            ProfileTitle: null,
+            ProfileTitle: "Operador / Controlador",
             UserActive: true,
             TemplateId: "tpl-other",
             TemplateName: "Outro",

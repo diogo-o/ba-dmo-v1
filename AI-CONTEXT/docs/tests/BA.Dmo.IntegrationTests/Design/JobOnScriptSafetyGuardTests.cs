@@ -18,6 +18,12 @@ public class JobOnScriptSafetyGuardTests
     private static readonly string JobOnScript = Path.Combine(
         RepoRoot, "src", "BA.Dmo.Web", "wwwroot", "scripts", "jobon.js");
 
+    private static readonly string ControloScript = Path.Combine(
+        RepoRoot, "src", "BA.Dmo.Web", "wwwroot", "scripts", "controlo.js");
+
+    private static readonly string ReparacaoInternaScript = Path.Combine(
+        RepoRoot, "src", "BA.Dmo.Web", "wwwroot", "scripts", "reparacao-interna.js");
+
     [Fact]
     public void CatalogLabel_IsEscaped_BeforeInsertAdjacentHtml()
     {
@@ -52,6 +58,39 @@ public class JobOnScriptSafetyGuardTests
         Assert.Contains("\"&\" + \"amp;\"", script); // & escapes to &amp;
         Assert.Contains(".replace(", script);
         Assert.Contains("String(value ?? \"\")", script);
+    }
+
+    [Fact]
+    public void ArticleImage_UsesFileSelection_NotPersistedBrowserDirectoryHandles()
+    {
+        var script = File.ReadAllText(JobOnScript);
+
+        Assert.Contains("file.name", script, StringComparison.Ordinal);
+        Assert.Contains("persistImageAction", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("showDirectoryPicker", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("indexedDB", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("cria uma nova revisão", script, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void JobOnCrossModuleLinks_ActivateRequestedControloSection()
+    {
+        var script = File.ReadAllText(ControloScript);
+
+        Assert.Contains("params.get('jobOn')", script, StringComparison.Ordinal);
+        Assert.Contains("params.get('section')", script, StringComparison.Ordinal);
+        Assert.Contains("selectSection", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void JobOnRepairLink_OpensHistoryFilteredByStableJobOnIdentity()
+    {
+        var script = File.ReadAllText(ReparacaoInternaScript);
+
+        Assert.Contains("query.get('jobOnId')", script, StringComparison.Ordinal);
+        Assert.Contains("query.get('line')", script, StringComparison.Ordinal);
+        Assert.Contains("query.get('view')", script, StringComparison.Ordinal);
+        Assert.Contains("q.set('jobOnId', f.jobOnId)", script, StringComparison.Ordinal);
     }
 
     private static string FindRepoRoot()

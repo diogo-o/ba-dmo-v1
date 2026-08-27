@@ -60,7 +60,18 @@
 
   // Track that a re-calculation is required after editing readings.
   let dirty = false;
-  function markDirty() { dirty = true; }
+  let comparisonMapping = null;
+  function invalidateComparisonMapping() {
+    comparisonMapping = null;
+    const context = el("comparisonPreviousContext");
+    const wrap = el("comparisonPairingWrap");
+    const table = el("comparisonPairingTable");
+    if (context) { context.hidden = true; context.innerHTML = ""; }
+    if (wrap) wrap.hidden = true;
+    if (table) table.innerHTML = "";
+    if (el("createComparison")) el("createComparison").disabled = true;
+  }
+  function markDirty() { dirty = true; invalidateComparisonMapping(); }
   function okDirty() { markDirty(); }
 
   function addReading(containerId) {
@@ -138,7 +149,7 @@
     if (tbody && Array.isArray(data.rows)) {
       tbody.innerHTML = "";
       if (data.rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty">Sem leituras válidas.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">Sem leituras válidas.</td></tr>';
       } else {
         data.rows.forEach((r) => {
           const tr = document.createElement("tr");
@@ -147,12 +158,191 @@
             "<td>" + fmt(r.pesoEmAgua) + "</td>" +
             "<td>" + fmt(r.capacidade) + "</td>" +
             "<td>—</td><td>—</td>" +
-            "<td>" + fmt(r.pesoVidro) + "</td>" +
-            "<td>—</td>";
+            "<td>" + fmt(r.pesoVidro) + "</td>";
           tbody.appendChild(tr);
         });
       }
     }
+    loadApprovedPreviousControls();
+  }
+
+  // ---- Explicit per-CM glass-weight comparison (inside Novo Controlo) ----
+  async function loadApprovedPreviousControls() {
+    const select = el("comparisonPreviousControl");
+    if (!select || select.dataset.loaded === "1") return;
+    try {
+      const res = await fetch("/api/peso/controls?status=aprovado&type=novo_controlo", {
+        headers: { "RequestVerificationToken": authHeader() }
+      });
+      const items = await res.json();
+      if (!res.ok) return;
+      const currentId = el("activeControlId")?.value || "";
+      select.innerHTML = '<option value="">Selecionar produção…</option>';
+      (items || []).filter((c) => c.controlId !== currentId).forEach((c) => {
+        const option = document.createElement("option");
+        option.value = c.controlId;
+        option.textContent = (c.reference || "—") + " · " + (c.production || "—") +
+          " · " + (c.machine || "—") + " · Lote " + (c.lote || "—") +
+          " · Rev. " + (c.revision || 1);
+        select.appendChild(option);
+      });
+      select.dataset.loaded = "1";
+    } catch { /* comparison stays unavailable */ }
+  }
+
+  async function getControlAndCalculation(controlId) {
+    const [detailResponse, calculationResponse] = await Promise.all([
+      fetch("/api/peso/control/" + controlId, { headers: { "RequestVerificationToken": authHeader() } }),
+      fetch("/api/peso/" + controlId + "/calculate", {
+        method: "POST", headers: { "RequestVerificationToken": authHeader() }
+      })
+    ]);
+    const detail = await detailResponse.json();
+    const calculation = await calculationResponse.json();
+    if (!detailResponse.ok || !calculationResponse.ok)
+      throw new Error(detail.message || calculation.message || "Falha ao obter os pesos do vidro");
+    return { detail, calculation };
+  }
+
+  function updatePairingState() {
+    if (!comparisonMapping) return;
+    const rows = [...document.querySelectorAll("#comparisonPairingTable tr[data-current-cm]")];
+    const selected = rows.map((row) => row.querySelector("select")?.value || "");
+    const complete = rows.length > 0 && selected.every(Boolean) && new Set(selected).size === selected.length;
+    if (el("createComparison")) el("createComparison").disabled = !complete || dirty;
+    if (el("submitComparison")) el("submitComparison").disabled = true;
+    comparisonMapping.comparisonId = null;
+
+    rows.forEach((row) => {
+      const previous = comparisonMapping.previousRows.get(row.querySelector("select")?.value || "");
+      row.querySelector("[data-previous-weight]").textContent = previous ? fmt(previous.pesoVidro) : "—";
+      row.querySelector("[data-difference]").textContent = "—";
+      row.querySelector("[data-percentage]").textContent = "—";
+    });
+  }
+
+  const confirmComparisonPrevious = el("confirmComparisonPrevious");
+  if (confirmComparisonPrevious) {
+    confirmComparisonPrevious.addEventListener("click", async () => {
+      const previousControlId = el("comparisonPreviousControl")?.value || "";
+      if (!previousControlId) { say("Selecione a produção anterior aprovada", false); return; }
+      try {
+        const currentControlId = await ensureControlId();
+        if (!currentControlId) return;
+        await saveControl(currentControlId);
+        const [current, previous] = await Promise.all([
+          getControlAndCalculation(currentControlId),
+          getControlAndCalculation(previousControlId)
+        ]);
+        const currentRows = new Map((current.calculation.rows || []).map((row) => [String(row.cmNumber), row]));
+        const previousRows = new Map((previous.calculation.rows || []).map((row) => [String(row.cmNumber), row]));
+        if (!currentRows.size || !previousRows.size ||
+            [...currentRows.values()].some((row) => row.pesoVidro == null) ||
+            [...previousRows.values()].some((row) => row.pesoVidro == null)) {
+          say("Calcule pesos do vidro válidos para ambas as produções", false);
+          return;
+        }
+
+        comparisonMapping = { currentControlId, previousControlId, currentRows, previousRows, comparisonId: null };
+        dirty = false;
+        const context = el("comparisonPreviousContext");
+        if (context) {
+          context.hidden = false;
+          context.innerHTML =
+            "<div><span>Produção anterior</span><strong>" + (previous.detail.productionCode || "—") + "</strong></div>" +
+            "<div><span>Job On</span><strong>" + (previous.detail.jobOnId || "—") + "</strong></div>" +
+            "<div><span>Revisão Job On</span><strong>" + (previous.detail.jobOnRevisionId || "—") + "</strong></div>" +
+            "<div><span>Linha</span><strong>" + (previous.detail.line || "—") + "</strong></div>" +
+            "<div><span>Lote</span><strong>" + (previous.detail.lote || "—") + "</strong></div>";
+        }
+
+        const table = el("comparisonPairingTable");
+        if (table) {
+          table.innerHTML = "";
+          currentRows.forEach((row, cm) => {
+            const tr = document.createElement("tr");
+            tr.setAttribute("data-current-cm", cm);
+            const options = [...previousRows.keys()].map((previousCm) =>
+              '<option value="' + previousCm + '">CM ' + previousCm + '</option>').join("");
+            tr.innerHTML =
+              "<td>" + cm + "</td>" +
+              '<td><select aria-label="CM anterior para CM ' + cm + '"><option value="">Selecionar CM…</option>' + options + "</select></td>" +
+              "<td>" + fmt(row.pesoVidro) + "</td>" +
+              "<td data-previous-weight>—</td><td data-difference>—</td><td data-percentage>—</td>";
+            table.appendChild(tr);
+          });
+          table.querySelectorAll("select").forEach((select) => select.addEventListener("change", updatePairingState));
+        }
+        if (el("comparisonPairingWrap")) el("comparisonPairingWrap").hidden = false;
+        updatePairingState();
+        say("Produção anterior confirmada; associe cada CM explicitamente");
+      } catch (err) {
+        say(err.message || "Falha ao confirmar a produção anterior", false);
+      }
+    });
+  }
+
+  const createComparison = el("createComparison");
+  if (createComparison) {
+    createComparison.addEventListener("click", async () => {
+      if (!comparisonMapping || dirty) { say("Reconfirme a produção anterior após alterar leituras", false); return; }
+      const pairs = [...document.querySelectorAll("#comparisonPairingTable tr[data-current-cm]")].map((row) => ({
+        currentCmNumber: row.getAttribute("data-current-cm"),
+        previousCmNumber: row.querySelector("select")?.value || ""
+      }));
+      try {
+        const res = await fetch("/api/peso/comparison", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "RequestVerificationToken": authHeader() },
+          body: JSON.stringify({
+            currentControlId: comparisonMapping.currentControlId,
+            previousApprovedControlId: comparisonMapping.previousControlId,
+            notas: el("notas")?.value || null,
+            pairs
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) { say(data.message || "Falha ao criar a comparação", false); return; }
+        const detailResponse = await fetch("/api/peso/control/" + data.id, {
+          headers: { "RequestVerificationToken": authHeader() }
+        });
+        const detail = await detailResponse.json();
+        if (!detailResponse.ok) throw new Error(detail.message || "Falha ao rever a comparação");
+        const snapshot = typeof detail.previousControlJson === "string"
+          ? JSON.parse(detail.previousControlJson) : detail.previousControlJson;
+        const table = el("comparisonPairingTable");
+        if (table) {
+          table.innerHTML = "";
+          (snapshot.rows || []).forEach((row) => {
+            table.innerHTML += "<tr>" +
+              "<td>" + row.currentCmNumber + "</td><td>" + row.previousCmNumber + "</td>" +
+              "<td>" + fmt(row.currentGlassWeight) + "</td><td>" + fmt(row.previousGlassWeight) + "</td>" +
+              "<td>" + fmt(row.difference) + "</td><td>" + fmt(row.differencePercent) + " %</td></tr>";
+          });
+        }
+        comparisonMapping.comparisonId = data.id;
+        createComparison.disabled = true;
+        if (el("submitComparison")) el("submitComparison").disabled = false;
+        say("Tabela criada; reveja antes de enviar");
+      } catch (err) {
+        say(err.message || "Falha ao criar a comparação", false);
+      }
+    });
+  }
+
+  const submitComparison = el("submitComparison");
+  if (submitComparison) {
+    submitComparison.addEventListener("click", async () => {
+      const comparisonId = comparisonMapping?.comparisonId;
+      if (!comparisonId) return;
+      const res = await fetch("/api/peso/" + comparisonId + "/submit", {
+        method: "POST", headers: { "RequestVerificationToken": authHeader() }
+      });
+      const data = await res.json();
+      if (!res.ok) { say(data.message || "Falha ao enviar a comparação", false); return; }
+      submitComparison.disabled = true;
+      say("Comparação enviada para aprovação");
+    });
   }
 
   // ---- Save (draft) and Submit (explicit, never automatic) ----
@@ -261,7 +451,7 @@
         art.setAttribute("data-status", c.status === "Aprovado" ? "aprovado" : (c.status === "NaoAprovado" ? "nao_aprovado" : "pendente"));
         art.innerHTML =
           "<strong>" + (c.reference || "") + " · " + (c.production || "") + "</strong>" +
-          "<small>" + (c.machine || "") + " · L" + (c.lote || "") + " · Revisão " + (c.revision || 1) + " · Peso " + (c.peso != null ? Number(c.peso).toFixed(2) : "—") + " g</small>" +
+          "<small>" + (c.machine || "") + " · Lote " + (c.lote || "") + " · Revisão " + (c.revision || 1) + " · Peso " + (c.peso != null ? Number(c.peso).toFixed(2) : "—") + " g</small>" +
           '<span class="dmo-pill pending">Pendente</span>';
         list.appendChild(art);
       });
@@ -322,7 +512,7 @@
         "<div><span>CM</span><strong>" + (c.moldNumber || "—") + "</strong></div>" +
         "<div><span>Boquilha/Neckring</span><strong>" + (c.neckringNumber || "—") + "</strong></div>" +
         "<div><span>Máquina</span><strong>" + (c.line || "—") + "</strong></div>" +
-        "<div><span>Lote</span><strong>L" + (c.lote || "—") + "</strong></div>" +
+        "<div><span>Lote</span><strong>" + (c.lote || "—") + "</strong></div>" +
         "<div><span>Processo</span><strong>" + (c.processo === "Ps" ? "PS" : "NNPB") + "</strong></div>" +
         "<div><span>Produção</span><strong>" + (c.productionCode || "—") + "</strong></div>" +
         "<div><span>Estado do molde</span><strong>" + (c.estadoMolde || "—") + "</strong></div>" +
@@ -332,7 +522,7 @@
         "<div><span>Constante usada</span><strong>" + fmt(c.constanteGlassUsada) + "</strong></div>";
     }
 
-    // Global summary
+    // Current-control summary (not a previous-production comparison)
     const summary = el("dSummary");
     if (summary) {
       summary.innerHTML =
@@ -342,7 +532,7 @@
         "<div><span>Constante (NNPB/PS)</span><strong>" + fmt(c.constanteGlassUsada) + "</strong></div>";
     }
 
-    // Nominal / new-mould comparison
+    // Nominal reference result
     const nominal = el("dNominal");
     if (nominal) {
       const dif = c.pesoMedio != null && c.pesoNominal != null && c.pesoNominal !== 0
@@ -360,14 +550,12 @@
     if (cmBody && Array.isArray(c.leituras)) {
       cmBody.innerHTML = "";
       if (c.leituras.length === 0) {
-        cmBody.innerHTML = '<tr><td colspan="7" class="empty">Sem leituras.</td></tr>';
+        cmBody.innerHTML = '<tr><td colspan="3" class="empty">Sem leituras.</td></tr>';
       } else {
         c.leituras.forEach((l) => {
-          const vidro = l.pesoVidro != null ? Number(l.pesoVidro).toFixed(2) : "—";
           cmBody.innerHTML +=
             "<tr><td>" + (l.cmNumber || "—") + "</td>" +
-            "<td>" + fmt(l.pesoVidro) + "</td><td>—</td><td>—</td>" +
-            "<td>—</td><td>—</td><td>—</td></tr>";
+            "<td>" + fmt(l.pesoEmAgua) + "</td><td>" + fmt(l.pesoVidro) + "</td></tr>";
         });
       }
     }
@@ -409,8 +597,7 @@
       const id = getSelectedId() || (currentComparison && currentComparison.controlId);
       if (!id) return;
       const decisions = [...document.querySelectorAll("#cDecisionTable tr[data-cm-decision]")].map((r) => ({
-        cmNumber: r.dataset.cm, decision: r.dataset.decision || "none",
-        pesoAtual: Number(r.dataset.pesoAtual) || null, capacidadeAtual: Number(r.dataset.capacidadeAtual) || null
+        cmNumber: r.dataset.cm, decision: r.dataset.decision || "none"
       }));
       const justification = (el("cJustification") || {}).value || "";
       const res = await fetch("/api/peso/" + id + "/compare/decide", {
@@ -456,33 +643,40 @@
   }
 
   function renderComparisonDetail(c) {
-    // Base aprovada (identity from the comparison record context)
+    const snapshot = typeof c.previousControlJson === "string"
+      ? JSON.parse(c.previousControlJson || "null") : c.previousControlJson;
+    if (!snapshot || !Array.isArray(snapshot.rows)) {
+      say("A comparação não contém um snapshot CM válido", false);
+      return;
+    }
+
+    // Explicitly confirmed previous production identity
     const base = el("cBase");
     if (base) {
       base.innerHTML =
-        "<div><span>Produção</span><strong>" + (c.productionCode || "—") + "</strong></div>" +
-        "<div><span>Lote</span><strong>L" + (c.lote || "—") + "</strong></div>" +
-        "<div><span>Processo</span><strong>" + (c.processo === "Ps" ? "PS" : "NNPB") + "</strong></div>" +
-        "<div><span>Máquina</span><strong>" + (c.line || "—") + "</strong></div>" +
-        "<div><span>Média peso (g)</span><strong>" + fmt(c.pesoMedio) + "</strong></div>" +
-        "<div><span>Média capacidade (cm³)</span><strong>" + fmt(c.capacidadeMedia) + "</strong></div>";
+        "<div><span>Produção</span><strong>" + (snapshot.previousProductionCode || "—") + "</strong></div>" +
+        "<div><span>Job On</span><strong>" + (snapshot.previousJobOnId || "—") + "</strong></div>" +
+        "<div><span>Revisão Job On</span><strong>" + (snapshot.previousJobOnRevisionId || "—") + "</strong></div>" +
+        "<div><span>Lote</span><strong>" + (snapshot.previousLote || "—") + "</strong></div>" +
+        "<div><span>Máquina</span><strong>" + (snapshot.previousLine || "—") + "</strong></div>";
     }
 
     // Per-CM decision table
     const tableBody = el("cDecisionTable");
-    if (tableBody && Array.isArray(c.leituras)) {
+    if (tableBody) {
       tableBody.innerHTML = "";
-      c.leituras.forEach((l) => {
+      snapshot.rows.forEach((row) => {
         const tr = document.createElement("tr");
         tr.setAttribute("data-cm-decision", "");
-        tr.setAttribute("data-cm", l.cmNumber || "");
+        tr.setAttribute("data-cm", row.currentCmNumber || "");
         tr.setAttribute("data-decision", "none");
-        tr.setAttribute("data-peso-atual", l.pesoVidro != null ? l.pesoVidro : "");
-        tr.setAttribute("data-capacidade-atual", "");
         tr.innerHTML =
-          "<td>" + (l.cmNumber || "—") + "</td>" +
-          "<td>" + fmt(l.pesoVidro) + "</td>" +
-          "<td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>" +
+          "<td>" + (row.currentCmNumber || "—") + "</td>" +
+          "<td>" + (row.previousCmNumber || "—") + "</td>" +
+          "<td>" + fmt(row.currentGlassWeight) + "</td>" +
+          "<td>" + fmt(row.previousGlassWeight) + "</td>" +
+          "<td>" + fmt(row.difference) + "</td>" +
+          "<td>" + fmt(row.differencePercent) + " %</td>" +
           '<td><div class="peso-cm-decision">' +
           '<button type="button" class="dmo-button" data-decision="manter">Manter</button>' +
           '<button type="button" class="dmo-button" data-decision="colocar_de_parte">Colocar de parte</button>' +
@@ -492,6 +686,100 @@
     }
     updateComparisonCounter();
     if (el("cJustification")) el("cJustification").value = "";
+  }
+
+  // ---- Operator comparison consultation (creation remains in Novo Controlo) ----
+  async function loadComparisonConsultation() {
+    const list = el("comparacaoList");
+    if (!list) return;
+    try {
+      const res = await fetch("/api/peso/controls?type=comparacao", {
+        headers: { "RequestVerificationToken": authHeader() }
+      });
+      const items = await res.json();
+      if (!res.ok || !Array.isArray(items) || items.length === 0) {
+        list.innerHTML = '<tr><td colspan="8" class="empty">Nenhuma comparação registada.</td></tr>';
+        return;
+      }
+      list.innerHTML = "";
+      items.forEach((c) => {
+        const tr = document.createElement("tr");
+        tr.setAttribute("data-dmo-row", "");
+        tr.setAttribute("data-id", c.controlId);
+        tr.innerHTML =
+          "<td>" + (c.controlDate ? new Date(c.controlDate).toLocaleDateString("pt-PT") : "—") + "</td>" +
+          "<td>" + (c.reference || "—") + "</td><td>" + (c.production || "—") + "</td>" +
+          "<td>" + (c.machine || "—") + "</td><td>" + (c.lote || "—") + "</td>" +
+          "<td>" + fmt(c.peso) + "</td><td>Produção confirmada</td>" +
+          "<td>" + (c.status === "Aprovado" ? "Aprovado" : (c.status === "NaoAprovado" ? "Não aprovado" : (c.status === "Pendente" ? "Pendente" : "Rascunho"))) + "</td>";
+        list.appendChild(tr);
+      });
+    } catch { /* leave the explicit empty state */ }
+  }
+
+  async function openComparisonConsultation(id) {
+    const detail = el("comparacaoDetail");
+    if (!detail) return;
+    try {
+      const res = await fetch("/api/peso/control/" + id, {
+        headers: { "RequestVerificationToken": authHeader() }
+      });
+      const c = await res.json();
+      if (!res.ok) { say(c.message || "Falha ao abrir a comparação", false); return; }
+      const snapshot = typeof c.previousControlJson === "string"
+        ? JSON.parse(c.previousControlJson || "null") : c.previousControlJson;
+      const decisionSnapshot = typeof c.comparisonDecisionsJson === "string"
+        ? JSON.parse(c.comparisonDecisionsJson || "null") : c.comparisonDecisionsJson;
+      if (!snapshot || !Array.isArray(snapshot.rows)) {
+        say("A comparação não contém um snapshot CM válido", false);
+        return;
+      }
+      const decisions = new Map(((decisionSnapshot && decisionSnapshot.decisions) || [])
+        .map((decision) => [String(decision.cmNumber), decision.decision]));
+      detail.hidden = false;
+      if (el("cCompRef")) el("cCompRef").textContent = (c.moldNumber || "") + (c.neckringNumber || "");
+      if (el("cCompState")) el("cCompState").textContent = c.status || "Rascunho";
+      if (el("cCompBase")) el("cCompBase").innerHTML =
+        "<div><span>Produção anterior</span><strong>" + (snapshot.previousProductionCode || "—") + "</strong></div>" +
+        "<div><span>Job On</span><strong>" + (snapshot.previousJobOnId || "—") + "</strong></div>" +
+        "<div><span>Revisão Job On</span><strong>" + (snapshot.previousJobOnRevisionId || "—") + "</strong></div>" +
+        "<div><span>Linha</span><strong>" + (snapshot.previousLine || "—") + "</strong></div>" +
+        "<div><span>Lote</span><strong>" + (snapshot.previousLote || "—") + "</strong></div>";
+      const table = el("cCompCmTable");
+      if (table) {
+        table.innerHTML = "";
+        snapshot.rows.forEach((row) => {
+          const decision = decisions.get(String(row.currentCmNumber));
+          table.innerHTML += "<tr>" +
+            "<td>" + row.currentCmNumber + "</td><td>" + row.previousCmNumber + "</td>" +
+            "<td>" + fmt(row.currentGlassWeight) + "</td><td>" + fmt(row.previousGlassWeight) + "</td>" +
+            "<td>" + fmt(row.difference) + "</td><td>" + fmt(row.differencePercent) + " %</td>" +
+            "<td>" + (decision === "Manter" || decision === 1 ? "Manter" :
+              (decision === "ColocarDeParte" || decision === 2 ? "Colocar de parte" : "Sem decisão")) + "</td></tr>";
+        });
+      }
+      const kept = [...decisions.values()].filter((decision) => decision === "Manter" || decision === 1).length;
+      const aside = [...decisions.values()].filter((decision) => decision === "ColocarDeParte" || decision === 2).length;
+      if (el("cCompCounters")) el("cCompCounters").innerHTML =
+        "<div><span>CM mantidos</span><strong>" + kept + "</strong></div>" +
+        "<div><span>CM colocados de parte</span><strong>" + aside + "</strong></div>" +
+        "<div><span>Sem decisão</span><strong>" + (snapshot.rows.length - kept - aside) + "</strong></div>";
+      if (el("cCompJustification")) {
+        el("cCompJustification").value = decisionSnapshot?.justification || "";
+        el("cCompJustification").readOnly = true;
+      }
+    } catch (err) {
+      say(err.message || "Falha ao abrir a comparação", false);
+    }
+  }
+
+  const comparisonList = el("comparacaoList");
+  if (comparisonList) {
+    comparisonList.addEventListener("dmo:list-select", (event) => openComparisonConsultation(event.detail.id));
+    comparisonList.addEventListener("dblclick", (event) => {
+      const row = event.target.closest("tr[data-id]");
+      if (row) openComparisonConsultation(row.getAttribute("data-id"));
+    });
   }
 
   // ---- History: load from server ----
@@ -589,7 +877,7 @@
           "<div><span>Referência</span><strong>" + (c.reference || (c.moldNumber + c.neckringNumber)) + "</strong></div>" +
           "<div><span>Produção</span><strong>" + (c.productionCode || "—") + "</strong></div>" +
           "<div><span>Linha</span><strong>" + (c.line || "—") + "</strong></div>" +
-          "<div><span>Lote</span><strong>L" + (c.lote || "—") + "</strong></div>" +
+          "<div><span>Lote</span><strong>" + (c.lote || "—") + "</strong></div>" +
           "<div><span>Estado</span><strong>" + (c.status === "Aprovado" ? "Aprovado" : "—") + "</strong></div>" +
           "<div><span>Revisão</span><strong>" + (c.revision || 1) + "</strong></div>";
       }
@@ -824,6 +1112,7 @@
   // ---- Init: load references + history + settings on Operador page ----
   if (el("referenceList")) loadReferences();
   if (el("historyTable")) loadHistory();
+  if (el("comparacaoList")) loadComparisonConsultation();
 
   // ---- Folha de Controlo (R010) deep-link from the production-control area ----
   // Opens the associated Folha de Controlo for the SELECTED production row using the

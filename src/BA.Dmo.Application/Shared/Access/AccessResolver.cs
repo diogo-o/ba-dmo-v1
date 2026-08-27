@@ -24,10 +24,9 @@ public enum FirstPageOutcome
 public sealed record FirstPageResolution(FirstPageOutcome Outcome, PageDefinition? Page);
 
 /// <summary>
-/// Effective access resolved from an ACTIVE template against the catalogs
-/// (Plan-V3 GLM-ACC-02/03, GLM-SHL-03/04). Pure and deterministic: no
-/// role-name branching anywhere — behavior derives only from catalog entries
-/// and template grants.
+/// Effective access resolved from assigned modules plus the user's functional
+/// profile. Templates decide WHAT is accessible; the profile decides HOW the
+/// user behaves inside confirmed profile-dependent modules.
 /// </summary>
 public sealed class EffectiveAccess
 {
@@ -98,49 +97,70 @@ public sealed class AccessResolver
     }
 
     /// <summary>
-    /// Resolves the effective access of a template. Inactive templates grant
-    /// nothing (GLM-ACC-01.6 → safe state). Job On query access (jobon.view)
-    /// is universal for every active user (UD-16, GLM-SHL-03.1/03.4) and is
-    /// added by the resolver, never by role-name branching — except that
-    /// templates holding the admin module never receive it (owner decision:
-    /// an admin's working area is Administração).
+    /// Resolves one active template for a functional profile. Capability arrays
+    /// stored in legacy template JSON are deliberately not authorization input:
+    /// only the normalized assignable module ids are used.
     /// </summary>
-    public EffectiveAccess Resolve(AccessTemplateDefinition template)
-    {
-        ArgumentNullException.ThrowIfNull(template);
+    public EffectiveAccess Resolve(
+        AccessTemplateDefinition template,
+        FunctionalProfile profile) =>
+        Resolve([template], profile);
 
-        if (!template.Active)
+    /// <summary>
+    /// Resolves the union of one-or-more associated templates. Inactive
+    /// templates contribute nothing; duplicate module grants collapse to one.
+    /// </summary>
+    public EffectiveAccess Resolve(
+        IEnumerable<AccessTemplateDefinition> templates,
+        FunctionalProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(templates);
+
+        var activeTemplates = templates.Where(template => template is not null && template.Active).ToList();
+        if (activeTemplates.Count == 0)
             return new EffectiveAccess(
                 Array.Empty<ModuleDefinition>(),
                 new HashSet<string>(StringComparer.Ordinal),
                 new HashSet<string>(StringComparer.Ordinal),
                 new Dictionary<string, IReadOnlyList<ModuleDefinition>>());
 
-        var normalized = _normalizer.Normalize(template.Grants);
-
         var modules = new HashSet<string>(StringComparer.Ordinal);
         var capabilities = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var grant in normalized.Grants)
+        foreach (var template in activeTemplates)
         {
-            modules.Add(grant.ModuleId);
-            foreach (var capability in grant.Capabilities)
-                capabilities.Add(capability);
+            var normalized = _normalizer.Normalize(template.Grants);
+            foreach (var grant in normalized.Grants)
+                modules.Add(grant.ModuleId);
         }
 
-        // UD-16 / GLM-SHL-03: Job On (consulta) is present for ALL active
-        // users via jobon.view — including users whose template has zero
-        // operational tabs.
-        // EXCEPTION (owner decision): any template holding the admin module
-        // is excluded from the universal jobon.view: an admin never receives
-        // Job On (even read-only), and the first page falls back to the first
-        // accessible module in canonical order (for the standard bootstrap
-        // admin that is /admin).
-        if (!modules.Contains(CanonicalModuleCatalog.AdminModuleId) &&
-            _catalog.ContainsModule(CanonicalModuleCatalog.JobonModuleId))
+        // Admin is a pure functional profile. Mixing it with operational
+        // modules cannot manufacture a fourth profile or widen access.
+        if (profile == FunctionalProfile.Admin)
         {
-            modules.Add(CanonicalModuleCatalog.JobonModuleId);
-            capabilities.Add(CanonicalModuleCatalog.JobonViewCapabilityId);
+            modules.RemoveWhere(id => id != CanonicalModuleCatalog.AdminModuleId);
         }
+        else
+        {
+            modules.Remove(CanonicalModuleCatalog.AdminModuleId);
+        }
+
+        // Controlo is the single grant. Peso and Pegamentos remain technical
+        // policy/page ids so existing internal routes keep working.
+        if (modules.Contains(CanonicalModuleCatalog.ControloAreaId))
+        {
+            modules.Add(CanonicalModuleCatalog.PesoModuleId);
+            modules.Add(CanonicalModuleCatalog.PegamentosModuleId);
+        }
+
+        // História is a derived transversal read surface, never an assignable
+        // module. It exists only when the profile has an operational module.
+        if (profile != FunctionalProfile.Admin && modules.Count > 0)
+            modules.Add(CanonicalModuleCatalog.HistoriaModuleId);
+
+        ProjectProfileCapabilities(profile, modules, capabilities);
+
+        // Defensive catalog intersection for derived technical ids.
+        modules.RemoveWhere(id => !_catalog.ContainsModule(id));
 
         var navigationModules = _catalog.Modules
             .Where(m => m.Kind == ModuleKind.Module && modules.Contains(m.ModuleId))
@@ -149,7 +169,7 @@ public sealed class AccessResolver
         var visibleAreaChildren = new Dictionary<string, IReadOnlyList<ModuleDefinition>>();
         foreach (var (areaId, childIds) in _areaChildren)
         {
-            if (!_catalog.TryGetModule(areaId, out _))
+            if (!modules.Contains(areaId) || !_catalog.TryGetModule(areaId, out _))
                 continue;
 
             var authorizedChildren = childIds
@@ -159,12 +179,60 @@ public sealed class AccessResolver
                 .Cast<ModuleDefinition>()
                 .ToList();
 
-            // Area without authorized children never appears (GLM-CTR-02.4).
             if (authorizedChildren.Count > 0)
                 visibleAreaChildren[areaId] = authorizedChildren;
         }
 
         return new EffectiveAccess(navigationModules, modules, capabilities, visibleAreaChildren);
+    }
+
+    private static void ProjectProfileCapabilities(
+        FunctionalProfile profile,
+        IReadOnlySet<string> modules,
+        ISet<string> capabilities)
+    {
+        if (profile == FunctionalProfile.Admin &&
+            modules.Contains(CanonicalModuleCatalog.AdminModuleId))
+        {
+            capabilities.Add(CanonicalModuleCatalog.AdminGerirCapabilityId);
+            capabilities.Add(CanonicalModuleCatalog.AuditViewCapabilityId);
+            capabilities.Add(CanonicalModuleCatalog.AuditExportCapabilityId);
+            return;
+        }
+
+        if (modules.Contains(CanonicalModuleCatalog.JobonModuleId))
+        {
+            capabilities.Add(CanonicalModuleCatalog.JobonViewCapabilityId);
+            capabilities.Add(CanonicalModuleCatalog.JobonConfirmarCapabilityId);
+            if (profile == FunctionalProfile.Responsible)
+            {
+                capabilities.Add(CanonicalModuleCatalog.JobonEditCapabilityId);
+                capabilities.Add(CanonicalModuleCatalog.JobonConfigureCapabilityId);
+            }
+        }
+
+        // Confirmed Ferramentas variant: the responsible profile owns master
+        // data edits; the operator/control profile remains operational read/use.
+        if (profile == FunctionalProfile.Responsible &&
+            modules.Contains(CanonicalModuleCatalog.FerramentasModuleId))
+        {
+            capabilities.Add(CanonicalModuleCatalog.FerramentasConfigureCapabilityId);
+        }
+
+        if (!modules.Contains(CanonicalModuleCatalog.ControloAreaId))
+            return;
+
+        capabilities.Add(CanonicalModuleCatalog.ControloViewCapabilityId);
+        if (profile == FunctionalProfile.OperatorController)
+        {
+            capabilities.Add(CanonicalModuleCatalog.ControloEditCapabilityId);
+            capabilities.Add(CanonicalModuleCatalog.ControloSubmitCapabilityId);
+        }
+        else if (profile == FunctionalProfile.Responsible)
+        {
+            capabilities.Add(CanonicalModuleCatalog.ControloReviewCapabilityId);
+            capabilities.Add(CanonicalModuleCatalog.PesoAprovarCapabilityId);
+        }
     }
 
     /// <summary>Whether a catalog page is accessible with the resolved access.</summary>

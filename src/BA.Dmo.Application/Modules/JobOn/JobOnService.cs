@@ -27,6 +27,8 @@ public sealed record SaveJobOnRevisionRequest(
     Guid JobOnId,
     string? GeneralNotes,
     string? ChangeReason,
+    // Legacy transport member retained for compatibility. Article images are
+    // reference-owned and are changed only through the dedicated image actions.
     string? ImageAssetId,
     IReadOnlyList<JobOnComponent> Components);
 
@@ -35,17 +37,17 @@ public sealed record TransitionJobOnRequest(
     Guid JobOnId,
     JobOnLifecycleState NewState);
 
-/// <summary>Attach an image to the current revision (TD-23).</summary>
+/// <summary>Associate an image with the current Article/Reference.</summary>
 public sealed record AttachImageRequest(
     Guid JobOnId,
     string ImageAssetId);
 
-/// <summary>Replace the image association on the current revision (TD-23).</summary>
+/// <summary>Replace the image associated with the current Article/Reference.</summary>
 public sealed record ReplaceImageRequest(
     Guid JobOnId,
     string ImageAssetId);
 
-/// <summary>Remove the image association from the current revision (TD-23).</summary>
+/// <summary>Remove the image associated with the current Article/Reference.</summary>
 public sealed record RemoveImageRequest(
     Guid JobOnId);
 
@@ -68,18 +70,21 @@ public sealed class JobOnService
     private readonly IJobOnRepository _repository;
     private readonly IJobOnUserContextRepository _userContextRepository;
     private readonly IClock _clock;
+    private readonly IArticleReferenceImageRepository? _articleImages;
 
     public JobOnService(
         JobOnAuthorizationGate gate,
         IJobOnRepository repository,
         IJobOnUserContextRepository userContextRepository,
-        IClock clock)
+        IClock clock,
+        IArticleReferenceImageRepository? articleImages = null)
     {
         _gate = gate ?? throw new ArgumentNullException(nameof(gate));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _userContextRepository = userContextRepository
             ?? throw new ArgumentNullException(nameof(userContextRepository));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _articleImages = articleImages;
     }
 
     /// <summary>Create a new Job On in rascunho (modules/05 §6.1).</summary>
@@ -206,7 +211,9 @@ public sealed class JobOnService
             Sections = currentRevision?.Sections ?? "{}",
             DropCount = currentRevision?.DropCount,
             GeneralNotes = request.GeneralNotes,
-            ImageAssetId = request.ImageAssetId,
+            // The legacy revision column remains dormant for historical
+            // compatibility. The active image association is master-reference owned.
+            ImageAssetId = null,
             ChangeReason = request.ChangeReason,
             SavedBy = gate.Value.ActorId,
             SavedAtUtc = _clock.UtcNow.DateTime,
@@ -285,132 +292,141 @@ public sealed class JobOnService
     }
 
     /// <summary>
-    /// Attach an image to the exact current revision (TD-23, modules/05 §5.7).
-    /// Creates a new revision with the image_asset_id set. Requires jobon.edit.
-    /// Records audit event with before/after image_asset_id.
-    /// Uses atomic InsertImageMutationAsync for transactional safety.
+    /// Associates an image with the current Article/Reference. Requires jobon.edit.
+    /// The association write and audit fact are atomic; no Job On revision is created.
     /// </summary>
-    public async Task<Result<Guid, DomainError>> AttachImageAsync(
+    public async Task<Result<ArticleReferenceImage, DomainError>> AttachImageAsync(
         AttachImageRequest request, CancellationToken cancellationToken = default)
     {
-        var gate = _gate.Require(JobonModuleCatalog.JobonEditCapabilityId);
-        if (gate.IsFailure)
-            return Result<Guid, DomainError>.Failure(gate.Error);
-
-        if (string.IsNullOrWhiteSpace(request.ImageAssetId))
-            return Result<Guid, DomainError>.Failure(DomainError.Validation(
-                "JOBON_IMAGE_INVALID",
-                "O identificador da imagem é obrigatório."));
-
-        var jobOn = await _repository.GetByIdAsync(request.JobOnId, cancellationToken);
-        if (jobOn is null)
-            return Result<Guid, DomainError>.Failure(DomainError.NotFound(
-                "JOBON_NOT_FOUND", "Job On não encontrado."));
-
-        var currentRevision = jobOn.CurrentRevision;
-        if (currentRevision is null)
-            return Result<Guid, DomainError>.Failure(DomainError.Validation(
-                "JOBON_NO_REVISION",
-                "O Job On não tem uma revisão atual para associar a imagem."));
-
-        var beforeImageAssetId = currentRevision.ImageAssetId;
-
-        var newRevision = currentRevision.CloneWithChanges(
-            imageAssetId: request.ImageAssetId);
-
-        await _repository.InsertImageMutationAsync(
-            newRevision, jobOn.Id, "jobon.imagem.anexar",
-            beforeImageAssetId, request.ImageAssetId, gate.Value.ActorId, cancellationToken);
-
-        return Result<Guid, DomainError>.Success(newRevision.JobOnRevisionId);
+        return await SetArticleImageAsync(
+            request.JobOnId,
+            request.ImageAssetId,
+            "jobon.referencia.imagem.anexar",
+            cancellationToken);
     }
 
     /// <summary>
-    /// Replace the image association on the current revision (TD-23, modules/05 §5.7).
-    /// Creates a new revision with the new image_asset_id. Requires jobon.edit.
-    /// Records audit event with before/after image_asset_id.
-    /// Uses atomic InsertImageMutationAsync for transactional safety.
+    /// Replaces the image associated with the current Article/Reference.
+    /// The association write and audit fact are atomic; no Job On revision is created.
     /// </summary>
-    public async Task<Result<Guid, DomainError>> ReplaceImageAsync(
+    public async Task<Result<ArticleReferenceImage, DomainError>> ReplaceImageAsync(
         ReplaceImageRequest request, CancellationToken cancellationToken = default)
     {
-        var gate = _gate.Require(JobonModuleCatalog.JobonEditCapabilityId);
-        if (gate.IsFailure)
-            return Result<Guid, DomainError>.Failure(gate.Error);
-
-        if (string.IsNullOrWhiteSpace(request.ImageAssetId))
-            return Result<Guid, DomainError>.Failure(DomainError.Validation(
-                "JOBON_IMAGE_INVALID",
-                "O identificador da imagem é obrigatório."));
-
-        var jobOn = await _repository.GetByIdAsync(request.JobOnId, cancellationToken);
-        if (jobOn is null)
-            return Result<Guid, DomainError>.Failure(DomainError.NotFound(
-                "JOBON_NOT_FOUND", "Job On não encontrado."));
-
-        var currentRevision = jobOn.CurrentRevision;
-        if (currentRevision is null)
-            return Result<Guid, DomainError>.Failure(DomainError.Validation(
-                "JOBON_NO_REVISION",
-                "O Job On não tem uma revisão atual para substituir a imagem."));
-
-        if (string.IsNullOrWhiteSpace(currentRevision.ImageAssetId))
-            return Result<Guid, DomainError>.Failure(DomainError.Validation(
-                "JOBON_NO_IMAGE",
-                "Não existe imagem associada para substituir. Use anexar para adicionar uma nova imagem."));
-
-        var beforeImageAssetId = currentRevision.ImageAssetId;
-
-        var newRevision = currentRevision.CloneWithChanges(
-            imageAssetId: request.ImageAssetId);
-
-        await _repository.InsertImageMutationAsync(
-            newRevision, jobOn.Id, "jobon.imagem.substituir",
-            beforeImageAssetId, request.ImageAssetId, gate.Value.ActorId, cancellationToken);
-
-        return Result<Guid, DomainError>.Success(newRevision.JobOnRevisionId);
+        return await SetArticleImageAsync(
+            request.JobOnId,
+            request.ImageAssetId,
+            "jobon.referencia.imagem.substituir",
+            cancellationToken);
     }
 
     /// <summary>
-    /// Remove the image association from the current revision (TD-23, modules/05 §5.7).
-    /// Creates a new revision with image_asset_id set to null. Requires jobon.edit.
-    /// Records audit event with before/after image_asset_id.
-    /// Uses CreateImageRemovalRevision to unambiguously clear the image association.
+    /// Removes the image associated with the current Article/Reference.
+    /// The association delete and audit fact are atomic; no Job On revision is created.
     /// Uses atomic InsertImageMutationAsync for transactional safety.
     /// </summary>
-    public async Task<Result<Guid, DomainError>> RemoveImageAsync(
+    public async Task<Result<ArticleReferenceImage, DomainError>> RemoveImageAsync(
         RemoveImageRequest request, CancellationToken cancellationToken = default)
     {
         var gate = _gate.Require(JobonModuleCatalog.JobonEditCapabilityId);
         if (gate.IsFailure)
-            return Result<Guid, DomainError>.Failure(gate.Error);
+            return Result<ArticleReferenceImage, DomainError>.Failure(gate.Error);
+
+        if (_articleImages is null)
+            return Result<ArticleReferenceImage, DomainError>.Failure(DomainError.DomainConflict(
+                "JOBON_IMAGE_STORE_UNAVAILABLE",
+                "O repositório de imagens por Referência não está disponível."));
 
         var jobOn = await _repository.GetByIdAsync(request.JobOnId, cancellationToken);
         if (jobOn is null)
-            return Result<Guid, DomainError>.Failure(DomainError.NotFound(
+            return Result<ArticleReferenceImage, DomainError>.Failure(DomainError.NotFound(
                 "JOBON_NOT_FOUND", "Job On não encontrado."));
 
         var currentRevision = jobOn.CurrentRevision;
         if (currentRevision is null)
-            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+            return Result<ArticleReferenceImage, DomainError>.Failure(DomainError.Validation(
                 "JOBON_NO_REVISION",
-                "O Job On não tem uma revisão atual para remover a imagem."));
+                "O Job On não tem uma revisão atual com Referência."));
 
-        if (string.IsNullOrWhiteSpace(currentRevision.ImageAssetId))
-            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+        var referenceCode = ArticleReferenceImageRules.ExtractReferenceCode(currentRevision.ReferenceSnapshot);
+        if (string.IsNullOrWhiteSpace(referenceCode))
+            return Result<ArticleReferenceImage, DomainError>.Failure(DomainError.Validation(
+                "JOBON_REFERENCE_MISSING",
+                "O Job On não tem uma Referência legível para associar a imagem."));
+
+        var existing = await _articleImages.GetAsync(referenceCode, cancellationToken);
+        if (existing is null)
+            return Result<ArticleReferenceImage, DomainError>.Failure(DomainError.Validation(
                 "JOBON_NO_IMAGE",
-                "Não existe imagem associada para remover."));
+                "Não existe imagem associada à Referência para remover."));
 
-        var beforeImageAssetId = currentRevision.ImageAssetId;
+        await _articleImages.RemoveAsync(
+            referenceCode,
+            jobOn.Id,
+            currentRevision.JobOnRevisionId,
+            "jobon.referencia.imagem.remover",
+            existing.ImageAssetId,
+            gate.Value.ActorId,
+            _clock.UtcNow,
+            cancellationToken);
 
-        var newRevision = currentRevision.CreateImageRemovalRevision(
-            gate.Value.ActorId, _clock.UtcNow.DateTime);
+        return Result<ArticleReferenceImage, DomainError>.Success(existing);
+    }
 
-        await _repository.InsertImageMutationAsync(
-            newRevision, jobOn.Id, "jobon.imagem.remover",
-            beforeImageAssetId, null, gate.Value.ActorId, cancellationToken);
+    private async Task<Result<ArticleReferenceImage, DomainError>> SetArticleImageAsync(
+        Guid jobOnId,
+        string imageAssetId,
+        string eventType,
+        CancellationToken cancellationToken)
+    {
+        var gate = _gate.Require(JobonModuleCatalog.JobonEditCapabilityId);
+        if (gate.IsFailure)
+            return Result<ArticleReferenceImage, DomainError>.Failure(gate.Error);
 
-        return Result<Guid, DomainError>.Success(newRevision.JobOnRevisionId);
+        if (_articleImages is null)
+            return Result<ArticleReferenceImage, DomainError>.Failure(DomainError.DomainConflict(
+                "JOBON_IMAGE_STORE_UNAVAILABLE",
+                "O repositório de imagens por Referência não está disponível."));
+
+        if (!ArticleReferenceImageRules.TryNormalizeImageAssetId(imageAssetId, out var normalizedAssetId))
+            return Result<ArticleReferenceImage, DomainError>.Failure(DomainError.Validation(
+                "JOBON_IMAGE_INVALID",
+                "Selecione um ficheiro de imagem válido no diretório de imagens da empresa."));
+
+        var jobOn = await _repository.GetByIdAsync(jobOnId, cancellationToken);
+        if (jobOn is null)
+            return Result<ArticleReferenceImage, DomainError>.Failure(DomainError.NotFound(
+                "JOBON_NOT_FOUND", "Job On não encontrado."));
+
+        var currentRevision = jobOn.CurrentRevision;
+        if (currentRevision is null)
+            return Result<ArticleReferenceImage, DomainError>.Failure(DomainError.Validation(
+                "JOBON_NO_REVISION",
+                "O Job On não tem uma revisão atual com Referência."));
+
+        var referenceCode = ArticleReferenceImageRules.ExtractReferenceCode(currentRevision.ReferenceSnapshot);
+        if (string.IsNullOrWhiteSpace(referenceCode))
+            return Result<ArticleReferenceImage, DomainError>.Failure(DomainError.Validation(
+                "JOBON_REFERENCE_MISSING",
+                "O Job On não tem uma Referência legível para associar a imagem."));
+
+        var before = await _articleImages.GetAsync(referenceCode, cancellationToken);
+        var association = new ArticleReferenceImage(
+            referenceCode,
+            normalizedAssetId,
+            gate.Value.ActorId,
+            _clock.UtcNow);
+
+        await _articleImages.SetAsync(
+            association,
+            jobOn.Id,
+            currentRevision.JobOnRevisionId,
+            eventType,
+            before?.ImageAssetId,
+            gate.Value.ActorId,
+            _clock.UtcNow,
+            cancellationToken);
+
+        return Result<ArticleReferenceImage, DomainError>.Success(association);
     }
 
     /// <summary>
@@ -433,7 +449,8 @@ public sealed class JobOnService
                 "JOBON_NOT_FOUND", "Job On não encontrado."));
 
         var currentRevision = jobOn.CurrentRevision;
-        var reference = ExtractReadableReference(currentRevision?.ReferenceSnapshot);
+        var reference = ArticleReferenceImageRules.ExtractReferenceCode(
+            currentRevision?.ReferenceSnapshot);
 
         await _userContextRepository.SetCurrentAsync(
             gate.Value.ActorId,
@@ -465,40 +482,6 @@ public sealed class JobOnService
                 "JOBON_CURRENT_NOT_FOUND", "Nenhum Job On aberto pelo utilizador."));
 
         return Result<JobOnUserCurrent, DomainError>.Success(current);
-    }
-
-    /// <summary>
-    /// Reads a readable reference string from a <c>reference_snapshot</c> jsonb value.
-    /// The snapshot is either a plain string or <c>{ "reference": "..." }</c> (owner D2
-    /// shape). Defaults to an empty string when nothing readable is present.
-    /// </summary>
-    private static string ExtractReadableReference(object? snapshot)
-    {
-        if (snapshot is null || snapshot is DBNull)
-            return string.Empty;
-
-        var raw = snapshot switch { string s => s, _ => snapshot.ToString() };
-        if (string.IsNullOrWhiteSpace(raw))
-            return string.Empty;
-
-        try
-        {
-            using var doc = JsonDocument.Parse(raw);
-            if (doc.RootElement.ValueKind == JsonValueKind.String)
-                return doc.RootElement.GetString() ?? string.Empty;
-
-            if (doc.RootElement.ValueKind == JsonValueKind.Object
-                && doc.RootElement.TryGetProperty("reference", out var refProp)
-                && refProp.ValueKind == JsonValueKind.String)
-                return refProp.GetString() ?? string.Empty;
-        }
-        catch (JsonException)
-        {
-            // Not JSON — treat the raw text as the readable reference.
-            return raw.Trim();
-        }
-
-        return string.Empty;
     }
 
     private static (JobOnRevision Revision, IReadOnlyList<JobOnComponent> Components) CopyRevisionForDuplication(
@@ -560,7 +543,9 @@ public sealed class JobOnService
             WeightSnapshot = source.WeightSnapshot,
             ProcessSnapshot = source.ProcessSnapshot,
             GeneralNotes = source.GeneralNotes,
-            ImageAssetId = source.ImageAssetId,
+            // Article images are reference-owned. Legacy revision metadata is
+            // intentionally not copied into a new production revision.
+            ImageAssetId = null,
             SavedBy = actorId,
             SavedAtUtc = now,
             Components = components

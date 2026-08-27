@@ -43,11 +43,17 @@
   const stateLabel = (s) => ({ rascunho: 'Rascunho', submetido: 'Submetido', aprovado: 'Aprovado', rejeitado: 'Rejeitado' }[s] || s);
 
   // ---- Tabs -----------------------------------------------------------------
+  function selectSection(section) {
+    const tabs = $$('.controlo-tabs .tab');
+    const target = tabs.find((tab) => tab.dataset.tab === section) ?? tabs[0];
+    if (!target) return;
+    tabs.forEach((tab) => tab.classList.toggle('active', tab === target));
+    $$('.controlo-tab-view').forEach((view) =>
+      view.classList.toggle('active', view.id === 'view-' + target.dataset.tab));
+  }
+
   $$('.controlo-tabs .tab').forEach((tab) => {
-    tab.addEventListener('click', () => {
-      $$('.controlo-tabs .tab').forEach((t) => t.classList.toggle('active', t === tab));
-      $$('.controlo-tab-view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + tab.dataset.tab));
-    });
+    tab.addEventListener('click', () => selectSection(tab.dataset.tab));
   });
 
   // ---- Carregar Job On atual (R011 current-open context) ---------------------
@@ -261,6 +267,7 @@
   (async function init() {
     const params = new URLSearchParams(location.search);
     const jobOn = params.get('jobOn');
+    selectSection(params.get('section') || 'resumo');
     if (jobOn) {
       // Backcompat: resolve a stable context for a directly-supplied job_on.
       try { await activateFromJobOnId(jobOn); } catch (e) { showEmpty('Nenhum Job On selecionado.'); }

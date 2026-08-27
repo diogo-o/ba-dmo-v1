@@ -294,6 +294,89 @@ VALUES
         }, ct);
     }
 
+    public async Task CorrectLocationAsync(
+        Guid? currentStockId,
+        WarehouseStock? correctedStock,
+        WarehouseMovement? outMovement,
+        WarehouseMovement? inMovement,
+        CancellationToken ct = default)
+    {
+        if (currentStockId is null && correctedStock is null)
+            throw new ArgumentException("A location correction must release or occupy stock.");
+        if ((currentStockId is null) != (outMovement is null))
+            throw new ArgumentException("The correction out movement must match the released stock.");
+        if ((correctedStock is null) != (inMovement is null))
+            throw new ArgumentException("The correction in movement must match the corrected stock.");
+
+        await DapperUnitOfWork.RunAsync(_connectionFactory, async (conn, tx, _) =>
+        {
+            if (correctedStock is not null)
+            {
+                const string lockLocationSql = @"
+SELECT warehouse_location_id
+FROM warehouse_locations
+WHERE warehouse_location_id = @LocationId
+FOR UPDATE;";
+                await Db.QuerySingleOrDefaultAsync<dynamic>(
+                    conn, lockLocationSql,
+                    new { LocationId = correctedStock.WarehouseLocationId }, tx, ct);
+
+                const string activeAtTargetSql = @"
+SELECT warehouse_stock_id, tool_lote_id
+FROM warehouse_stock
+WHERE warehouse_location_id = @LocationId AND released_at_utc IS NULL
+ORDER BY occupied_since_utc ASC
+FOR UPDATE;";
+                dynamic? activeAtTarget = await Db.QuerySingleOrDefaultAsync<dynamic>(
+                    conn, activeAtTargetSql,
+                    new { LocationId = correctedStock.WarehouseLocationId }, tx, ct);
+                if (activeAtTarget is not null)
+                    throw new ArmazemLocationOccupiedException(
+                        "A posição encontrada já está ocupada por outra ferramenta.");
+            }
+
+            if (currentStockId is not null)
+            {
+                const string releaseSql = @"
+UPDATE warehouse_stock
+SET released_at_utc = @ReleasedAtUtc, released_by = @ReleasedBy
+WHERE warehouse_stock_id = @Id AND released_at_utc IS NULL;";
+                var affected = await Db.ExecuteAsync(conn, releaseSql, new
+                {
+                    Id = currentStockId.Value,
+                    ReleasedAtUtc = outMovement!.OccurredAtUtc,
+                    ReleasedBy = (object?)outMovement.ActorId ?? DBNull.Value
+                }, tx, ct);
+                ConcurrencyGuard.EnsureSingleRowUpdated(
+                    affected, "warehouse_stock (correção de localização)");
+                await InsertMovementAsync(
+                    conn, tx, ToMovementWithStock(outMovement, currentStockId.Value), ct);
+            }
+
+            if (correctedStock is not null)
+            {
+                const string insertSql = @"
+INSERT INTO warehouse_stock
+    (warehouse_stock_id, warehouse_location_id, tool_lote_id,
+     occupied_since_utc, occupied_by)
+VALUES
+    (@Id, @LocationId, @ToolId, @OccupiedSinceUtc, @OccupiedBy);";
+                await Db.ExecuteAsync(conn, insertSql, new
+                {
+                    Id = correctedStock.WarehouseStockId,
+                    LocationId = correctedStock.WarehouseLocationId,
+                    ToolId = correctedStock.ToolId,
+                    OccupiedSinceUtc = correctedStock.OccupiedSinceUtc,
+                    OccupiedBy = (object?)correctedStock.OccupiedBy ?? DBNull.Value
+                }, tx, ct);
+                await InsertMovementAsync(
+                    conn, tx, ToMovementWithStock(inMovement!, correctedStock.WarehouseStockId), ct);
+            }
+
+            return true;
+        }, ct);
+    }
+
     // ---- History -----------------------------------------------------------
 
     public async Task<IReadOnlyList<WarehouseMovement>> GetMovementHistoryAsync(Guid toolId, CancellationToken ct = default)
@@ -310,6 +393,37 @@ ORDER BY m.occurred_at_utc ASC;";
         {
             var rows = await Db.QueryAsync<dynamic>(conn, sql, new { ToolId = toolId }, cancellationToken: ct);
             return rows.Select<dynamic, WarehouseMovement>(MapMovement).ToList().AsReadOnly();
+        }
+        finally { await DisposeAsync(conn); }
+    }
+
+    public async Task<IReadOnlyList<WarehouseMovementFact>> ListMovementFactsAsync(
+        DateTimeOffset? fromUtc,
+        DateTimeOffset? toUtc,
+        int limit,
+        CancellationToken ct = default)
+    {
+        const string sql = @"
+SELECT s.tool_lote_id, l.code AS position_code,
+       m.warehouse_movement_id, m.warehouse_stock_id, m.direction, m.qty,
+       m.destination, m.actor_id, m.occurred_at_utc
+FROM warehouse_movements m
+JOIN warehouse_stock s ON s.warehouse_stock_id = m.warehouse_stock_id
+LEFT JOIN warehouse_locations l ON l.warehouse_location_id = s.warehouse_location_id
+WHERE (@FromUtc IS NULL OR m.occurred_at_utc >= @FromUtc)
+  AND (@ToUtc IS NULL OR m.occurred_at_utc < @ToUtc)
+ORDER BY m.occurred_at_utc DESC, m.warehouse_movement_id DESC
+LIMIT @Limit;";
+        var conn = await Open(_connectionFactory, ct);
+        try
+        {
+            var rows = await Db.QueryAsync<dynamic>(conn, sql, new
+            {
+                FromUtc = fromUtc,
+                ToUtc = toUtc,
+                Limit = limit
+            }, cancellationToken: ct);
+            return rows.Select<dynamic, WarehouseMovementFact>(MapMovementFact).ToList().AsReadOnly();
         }
         finally { await DisposeAsync(conn); }
     }
@@ -398,7 +512,12 @@ VALUES
         Direction = WarehouseMovementDirectionCodec.FromStorage(row.direction),
         Qty = row.qty as decimal?,
         Destination = row.destination as string,
-        ActorId = row.actor_id as string,
+        ActorId = row.actor_id is null ? null : row.actor_id.ToString(),
         OccurredAtUtc = row.occurred_at_utc
     };
+
+    private static WarehouseMovementFact MapMovementFact(dynamic row) => new(
+        ToolId: row.tool_lote_id,
+        PositionCode: row.position_code as string,
+        Movement: MapMovement(row));
 }

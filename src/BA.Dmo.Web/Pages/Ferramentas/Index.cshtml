@@ -4,11 +4,11 @@
 @{
     ViewData["Title"] = "Ferramentas";
 }
-<link rel="stylesheet" href="~/styles/modules/ferramentas-layout.css" />
+<link rel="stylesheet" href="~/styles/modules/ferramentas-layout.css" asp-append-version="true" />
 
-<nav class="ferramentas-tabs" aria-label="Navegação Ferramentas">
-    <button class="tab active" data-view="cm" type="button">Contra moldes (CM)</button>
-    <button class="tab" data-view="mf" type="button">Moldes finais (MF)</button>
+<nav class="dmo-module-tabs ferramentas-tabs" aria-label="Navegação Ferramentas">
+    <button class="dmo-module-tab tab active" data-view="cm" type="button">Contra moldes (CM)</button>
+    <button class="dmo-module-tab tab" data-view="mf" type="button">Moldes finais (MF)</button>
 </nav>
 
 <main data-testid="page-ferramentas" class="ferramentas-page">

@@ -8,9 +8,9 @@ namespace BA.Dmo.Application.Shared.Access;
 /// the DB mirror (module_catalog_mirror, U-02) serves Admin ordering/display
 /// only and never grants access (GLM-ACC-03).
 ///
-/// Entries reproduce modules/00 exactly: 12 entries, canonical order, initial
-/// routes and declared capabilities. Nothing is invented: no extra modules,
-/// capabilities, orders or routes.
+/// The technical entries preserve stable routes/policies while assignability
+/// follows the final functional model: Controlo is one top-level grant;
+/// Peso/Pegamentos are internal; História is transversal and nonassignable.
 /// </summary>
 public static class CanonicalModuleCatalog
 {
@@ -51,9 +51,8 @@ public static class CanonicalModuleCatalog
     public static ModuleCatalog Instance { get; } = Build();
 
     /// <summary>
-    /// Functional-area children (GLM-CAT-02 rule 1 / GLM-CTR-02): Controlo is
-    /// visible when at least one child is authorized; children are assignable
-    /// separately and never fused.
+    /// Technical children of the single assignable Controlo module. These ids
+    /// keep existing internal routes/policies stable but are never assignable.
     /// </summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> AreaChildren { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
@@ -97,7 +96,7 @@ public static class CanonicalModuleCatalog
             }),
         new ModuleDefinition(BoquilhasModuleId, "Boquilhas", ModuleKind.Module, 10, "/boquilhas"),
         new ModuleDefinition(
-            ControloAreaId, "Controlo", ModuleKind.FunctionalArea, 20, "/controlo",
+            ControloAreaId, "Controlo", ModuleKind.Module, 20, "/controlo",
             new[]
             {
                 new Capability(ControloViewCapabilityId),
@@ -107,8 +106,10 @@ public static class CanonicalModuleCatalog
             }),
         new ModuleDefinition(
             PesoModuleId, "Peso", ModuleKind.Module, 21, "/peso",
-            new[] { new Capability(PesoAprovarCapabilityId) }),
-        new ModuleDefinition(PegamentosModuleId, "Pegamentos", ModuleKind.Module, 22, "/pegamentos"),
+            new[] { new Capability(PesoAprovarCapabilityId) }, isAssignable: false),
+        new ModuleDefinition(
+            PegamentosModuleId, "Pegamentos", ModuleKind.Module, 22, "/pegamentos",
+            isAssignable: false),
         new ModuleDefinition(
             FerramentasModuleId, "Ferramentas", ModuleKind.Module, 40, "/ferramentas",
             new[] { new Capability(FerramentasConfigureCapabilityId) }),
@@ -119,7 +120,9 @@ public static class CanonicalModuleCatalog
         new ModuleDefinition(
             ReparacaoExternaModuleId, "Reparação Externa", ModuleKind.Module, 70, "/reparacao-externa"),
         new ModuleDefinition(TampoesModuleId, "Tampões", ModuleKind.Module, 80, "/tampoes"),
-        new ModuleDefinition(HistoriaModuleId, "História", ModuleKind.Module, 90, "/historia"),
+        new ModuleDefinition(
+            HistoriaModuleId, "História", ModuleKind.Module, 90, "/historia",
+            isAssignable: false),
         new ModuleDefinition(
             AdminModuleId, "Administração", ModuleKind.Module, 99, "/admin",
             new[]

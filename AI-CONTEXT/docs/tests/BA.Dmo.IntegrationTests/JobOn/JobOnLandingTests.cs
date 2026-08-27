@@ -161,7 +161,7 @@ public class JobOnLandingTests : IClassFixture<JobOnLandingTests.LandingFixture>
         {
             public Task<InternalUserRecord?> FindByAuthUserIdAsync(Guid authUserId, CancellationToken cancellationToken = default) =>
                 Task.FromResult<InternalUserRecord?>(new InternalUserRecord(
-                    "actor-landing", AuthUserId, "Utilizador Landing", "TÃ­tulo Visual",
+                    "actor-landing", AuthUserId, "Utilizador Landing", "Operador / Controlador",
                     UserActive: true, TemplateId: "tpl-landing", TemplateName: "Landing",
                     TemplateActive: true,
                     ModulesJson: "[{\"moduleId\":\"jobon\",\"capabilities\":[\"jobon.view\"]}]"));

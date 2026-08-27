@@ -198,6 +198,105 @@ public class ArmazemServiceTests
         Assert.Contains(_repository.Movements, m => m.Direction == WarehouseMovementDirection.Out && m.Destination == null);
     }
 
+    // ---- Correção de localização -----------------------------------------
+
+    [Fact]
+    public async Task CorrigirLocalizacao_MovesToolWithAppendOnlyOutAndInFacts()
+    {
+        var toolId = SeedToolAt("2421");
+
+        var result = await _service.CorrigirLocalizacaoAsync(
+            new CorrigirLocalizacaoRequest(toolId, "5126", "diferença física"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("2421", result.Value.RegisteredPositionCode);
+        Assert.Equal("5126", result.Value.FoundPositionCode);
+        Assert.False(_repository.Stocks.Single(s => s.WarehouseLocationId ==
+            _repository.Locations.Single(l => l.Value.Code == "2421").Key).IsActive);
+        var corrected = Assert.Single(_repository.Stocks.Where(s => s.IsActive));
+        Assert.Equal(toolId, corrected.ToolId);
+        Assert.Equal("5126", _repository.Locations[corrected.WarehouseLocationId].Code);
+        Assert.Equal(2, _repository.Movements.Count(m => m.Destination == "correcao_localizacao"));
+        Assert.Contains(_repository.AuditEvents, a =>
+            a.eventType == "armazem.corrigir_localizacao" &&
+            a.before!.Contains("position=2421", StringComparison.Ordinal) &&
+            a.after!.Contains("position=5126", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CorrigirLocalizacao_RegisteredButPhysicallyAbsent_ReleasesOnly()
+    {
+        var toolId = SeedToolAt("2421");
+
+        var result = await _service.CorrigirLocalizacaoAsync(
+            new CorrigirLocalizacaoRequest(toolId, null, null));
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(_repository.Stocks.Where(s => s.IsActive));
+        var movement = Assert.Single(_repository.Movements);
+        Assert.Equal(WarehouseMovementDirection.Out, movement.Direction);
+        Assert.Equal("correcao_localizacao", movement.Destination);
+    }
+
+    [Fact]
+    public async Task CorrigirLocalizacao_UnregisteredButFound_OccupiesOnly()
+    {
+        var toolId = SeedTool();
+
+        var result = await _service.CorrigirLocalizacaoAsync(
+            new CorrigirLocalizacaoRequest(toolId, "5126", null));
+
+        Assert.True(result.IsSuccess);
+        var stock = Assert.Single(_repository.Stocks.Where(s => s.IsActive));
+        Assert.Equal(toolId, stock.ToolId);
+        var movement = Assert.Single(_repository.Movements);
+        Assert.Equal(WarehouseMovementDirection.In, movement.Direction);
+        Assert.Equal("correcao_localizacao", movement.Destination);
+    }
+
+    [Fact]
+    public async Task CorrigirLocalizacao_TargetOccupied_IsBlockedAndKeepsCurrentLocation()
+    {
+        var toolId = SeedToolAt("2421", "CM-100", "1");
+        SeedToolAt("5126", "CM-200", "2");
+
+        var result = await _service.CorrigirLocalizacaoAsync(
+            new CorrigirLocalizacaoRequest(toolId, "5126", null));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("ARMZ_POSITION_OCCUPIED", result.Error.Code);
+        Assert.Equal(2, _repository.Stocks.Count(s => s.IsActive));
+        Assert.Empty(_repository.Movements);
+    }
+
+    [Fact]
+    public async Task CorrigirLocalizacao_WithoutDifference_IsRejected()
+    {
+        var toolId = SeedToolAt("2421");
+
+        var result = await _service.CorrigirLocalizacaoAsync(
+            new CorrigirLocalizacaoRequest(toolId, "2421", null));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("ARMZ_LOCATION_NO_CHANGE", result.Error.Code);
+        Assert.Empty(_repository.Movements);
+    }
+
+    [Fact]
+    public async Task CorrigirLocalizacao_AtomicFailure_KeepsRegisteredLocation()
+    {
+        var toolId = SeedToolAt("2421");
+        _repository.FailAtomicWrite = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.CorrigirLocalizacaoAsync(
+                new CorrigirLocalizacaoRequest(toolId, "5126", null)));
+
+        var active = Assert.Single(_repository.Stocks.Where(s => s.IsActive));
+        Assert.Equal("2421", _repository.Locations[active.WarehouseLocationId].Code);
+        Assert.Empty(_repository.Movements);
+    }
+
     // ---- Substituir (atomic) ----------------------------------------------
 
     [Fact]
@@ -273,6 +372,81 @@ public class ArmazemServiceTests
         Assert.True(result.IsSuccess);
         Assert.Equal(2, result.Value.Count);
         Assert.All(result.Value, row => Assert.True(row.HasReferenceConflict));
+    }
+
+    [Fact]
+    public async Task Consulta_WithoutFilters_ListsAllSupportedWarehouseTypes()
+    {
+        SeedTool("CM-100", "4");
+        _resolver.Identities.Add(new WarehouseToolIdentity(
+            Guid.NewGuid(), WarehouseToolDomain.Ferramentas, "MF", "MF-200", "7", "Molde"));
+        _resolver.Identities.Add(new WarehouseToolIdentity(
+            Guid.NewGuid(), WarehouseToolDomain.Ferramentas, "BQ", "BQ-300", "9", "Boquilha"));
+
+        var result = await _service.ConsultarAsync(new ConsultarRequest(null, null, null, null));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(new[] { "CM", "MF", "BQ" }, result.Value.Select(row => row.Type));
+        Assert.Equal(new[] { "4", "7", "9" }, result.Value.Select(row => row.Lot));
+    }
+
+    [Fact]
+    public async Task Consulta_ReferenceWithoutType_SearchesAcrossSupportedTypes()
+    {
+        _resolver.Identities.Add(new WarehouseToolIdentity(
+            Guid.NewGuid(), WarehouseToolDomain.Ferramentas, "BQ", "T173", "24/33", "Boquilha"));
+
+        var result = await _service.ConsultarAsync(new ConsultarRequest(null, "T173", null, null));
+
+        Assert.True(result.IsSuccess);
+        var row = Assert.Single(result.Value);
+        Assert.Equal("BQ", row.Type);
+        Assert.Equal("24/33", row.Lot);
+    }
+
+    // ---- Recent/history movement projection -------------------------------
+
+    [Fact]
+    public async Task ListMovimentos_UsesWarehouseFactsAndOwnerIdentity_InNewestFirstOrder()
+    {
+        var toolId = SeedToolAt("2421", "CM-100", "4");
+        var stockId = _repository.Stocks.Single(s => s.ToolId == toolId).WarehouseStockId;
+        _repository.Movements.Add(new WarehouseMovement
+        {
+            WarehouseMovementId = Guid.NewGuid(),
+            WarehouseStockId = stockId,
+            Direction = WarehouseMovementDirection.In,
+            ActorId = "arm-actor",
+            OccurredAtUtc = Now.AddHours(-2)
+        });
+        _repository.Movements.Add(new WarehouseMovement
+        {
+            WarehouseMovementId = Guid.NewGuid(),
+            WarehouseStockId = stockId,
+            Direction = WarehouseMovementDirection.Out,
+            Destination = "reparacao",
+            ActorId = "arm-actor",
+            OccurredAtUtc = Now.AddHours(-1)
+        });
+
+        var result = await _service.ListMovimentosAsync(null, null, 20);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, result.Value.Count);
+        Assert.Equal("out", result.Value[0].Direction);
+        Assert.Equal("2421", result.Value[0].PositionCode);
+        Assert.Equal("CM-100", result.Value[0].Reference);
+        Assert.Equal("4", result.Value[0].Lot);
+        Assert.Equal("in", result.Value[1].Direction);
+    }
+
+    [Fact]
+    public async Task ListMovimentos_InvalidRange_IsRejectedBeforeRepositoryRead()
+    {
+        var result = await _service.ListMovimentosAsync(Now, Now, 20);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("ARMZ_HISTORY_RANGE", result.Error.Code);
     }
 
     // ---- Repor (re-occupation) --------------------------------------------

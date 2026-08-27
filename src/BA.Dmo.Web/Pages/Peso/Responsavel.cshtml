@@ -13,11 +13,11 @@
    in comparisons; reject requires a note; approved control remains
    immutable. "Comparações" é tipo de registo, nunca um estado.
    ============================================================ *@
-<link rel="stylesheet" href="~/styles/modules/peso-layout.css" />
+<link rel="stylesheet" href="~/styles/modules/peso-layout.css" asp-append-version="true" />
 
-<nav class="peso-tabs" aria-label="Navegação Peso">
-    <button class="tab active" data-view="approvals" type="button">Aprovações</button>
-    <button class="tab settings" data-view="settings" type="button">Definições</button>
+<nav class="dmo-module-tabs peso-tabs" aria-label="Navegação Peso">
+    <button class="dmo-module-tab tab active" data-view="approvals" type="button">Aprovações</button>
+    <button class="dmo-module-tab tab settings" data-view="settings" type="button">Definições</button>
 </nav>
 
 <main data-testid="page-peso-responsavel" class="peso-page">
@@ -65,7 +65,7 @@
                             <article class="peso-queue-item" data-dmo-row data-id="@c.ControlId"
                                      data-kind="@PesoRecordTypeCodecDisplay(c.Type)" data-status="@PesoControlStateCodecDisplay(c.Status)">
                                 <strong>@c.Reference · @c.Production</strong>
-                                <small>@c.Machine · L@c.Lote · Revisão @c.Revision · Peso @(c.Peso?.ToString("0.##") ?? "—") g</small>
+                                <small>@c.Machine · Lote @c.Lote · Revisão @c.Revision · Peso @(c.Peso?.ToString("0.##") ?? "—") g</small>
                                 <span class="dmo-pill pending">@PesoControlStateCodecDisplay(c.Status)</span>
                             </article>
                         }
@@ -85,14 +85,14 @@
                 <h3 class="peso-section-title">Identificação da produção</h3>
                 <div class="peso-identity" id="dIdentity"></div>
 
-                <h3 class="peso-section-title">Comparação global de peso</h3>
+                <h3 class="peso-section-title">Resultados atuais</h3>
                 <div class="peso-summary-4col" id="dSummary"></div>
 
-                <h3 class="peso-section-title">Comparação com novo molde (nominal)</h3>
+                <h3 class="peso-section-title">Referência nominal</h3>
                 <div class="peso-summary-4col" id="dNominal"></div>
 
-                <h3 class="peso-section-title">Comparação por CM — peso do vidro e volume</h3>
-                <div class="dmo-table-wrap"><table class="dmo-table"><thead><tr><th>CM</th><th>Peso atual</th><th>Peso anterior</th><th>Diferença</th><th>Volume atual</th><th>Volume anterior</th><th>Diferença volume</th></tr></thead><tbody id="dCmTable"></tbody></table></div>
+                <h3 class="peso-section-title">Resultados por CM</h3>
+                <div class="dmo-table-wrap"><table class="dmo-table"><thead><tr><th>CM</th><th>Peso em água</th><th>Peso do vidro</th></tr></thead><tbody id="dCmTable"></tbody></table></div>
 
                 <h3 class="peso-section-title">Referências e observações</h3>
                 <div class="dmo-field"><label>Observações do operador</label><div id="dObservacoes" class="dmo-card">—</div></div>
@@ -115,14 +115,14 @@
 
             <section class="dmo-card" id="comparisonDetail" hidden>
                 <div class="peso-section-head">
-                    <div><h3>Comparação · <span id="cRef"></span></h3><p id="cSub">CM em produção comparados com o controlo aprovado usado como base.</p></div>
+                    <div><h3>Comparação · <span id="cRef"></span></h3><p id="cSub">Associação explícita entre CM atuais e CM da produção anterior confirmada.</p></div>
                     <span class="dmo-pill pending">Pendente</span>
                 </div>
                 <div class="dmo-card peso-hint"><strong>Registo complementar</strong><div>Esta decisão não altera o controlo aprovado usado como base. Cria um registo adicional ligado à revisão aprovada.</div></div>
-                <h3 class="peso-section-title">Base aprovada</h3>
+                <h3 class="peso-section-title">Produção anterior confirmada</h3>
                 <div class="peso-identity" id="cBase"></div>
                 <h3 class="peso-section-title">Decisão individual por CM</h3>
-                <div class="dmo-table-wrap"><table class="dmo-table"><thead><tr><th>CM</th><th>Peso atual</th><th>Capacidade atual</th><th>Peso aprovado</th><th>Capacidade aprovada</th><th>Diferença peso</th><th>Diferença capacidade</th><th>Decisão</th></tr></thead><tbody id="cDecisionTable"></tbody></table></div>
+                <div class="dmo-table-wrap"><table class="dmo-table"><thead><tr><th>CM atual</th><th>CM anterior</th><th>Peso atual</th><th>Peso anterior</th><th>Diferença</th><th>Variação</th><th>Decisão</th></tr></thead><tbody id="cDecisionTable"></tbody></table></div>
                 <div class="peso-summary-3col" id="cCounters"></div>
                 <div class="dmo-field"><label>Justificação</label><textarea id="cJustification" rows="2" placeholder="Obrigatória quando pelo menos um CM é colocado de parte."></textarea></div>
                 <div class="peso-actions"><button class="dmo-button" id="confirmComparison" disabled type="button">Confirmar decisões</button></div>

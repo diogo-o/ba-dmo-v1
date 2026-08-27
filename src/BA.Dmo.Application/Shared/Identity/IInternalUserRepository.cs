@@ -16,7 +16,15 @@ public sealed record InternalUserRecord(
     string TemplateName,
     bool TemplateActive,
     string ModulesJson,
-    string? ModulesOverrideJson = null);
+    string? ModulesOverrideJson = null,
+    IReadOnlyList<InternalUserAccessTemplateRecord>? AccessTemplates = null);
+
+/// <summary>One template associated with an internal user through N27.</summary>
+public sealed record InternalUserAccessTemplateRecord(
+    string TemplateId,
+    string TemplateName,
+    bool TemplateActive,
+    string ModulesJson);
 
 /// <summary>
 /// Persistence contract of the identity foundation (U-05). Parameterized SQL

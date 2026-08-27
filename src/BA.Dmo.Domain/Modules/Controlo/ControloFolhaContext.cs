@@ -14,7 +14,7 @@ public sealed record ControloFolhaProductionContext(
     string MachineCode,
     IReadOnlyList<ControloFolhaComponent> Components);
 
-/// <summary>A snapshot component of the Job On revision (MP_CM/MF/BQ).</summary>
+/// <summary>A Resumo snapshot component of the Job On revision (MP_CM/MF/BQ/PU/CS).</summary>
 public sealed record ControloFolhaComponent(
     string Family,
     Guid? SourceToolId,

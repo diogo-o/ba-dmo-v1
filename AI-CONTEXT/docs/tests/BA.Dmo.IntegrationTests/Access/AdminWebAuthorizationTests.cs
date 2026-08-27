@@ -131,17 +131,16 @@ public class AdminWebAuthorizationTests : IClassFixture<AdminWebAuthorizationTes
     }
 
     [Fact]
-    public async Task AuditPage_RequiresAuditView()
+    public async Task AdminProfile_DerivesAuditAccess_FromAdminModule()
     {
-        // admin.gerir without audit.view → denied on the Auditoria tab
-        // (scenario 17; distinct capabilities).
+        // Legacy capability arrays no longer decide behavior; the Admin
+        // functional profile derives the confirmed audit capabilities.
         _fixture.IdentityMode = AdminFixture.Mode.AdminWithoutAudit;
         var client = _fixture.CreateTestClient();
         await LoginAsync(client, "admin@ba-dmo.example");
 
-        var denied = await client.GetAsync("/admin/audit");
-        Assert.Equal(HttpStatusCode.Redirect, denied.StatusCode);
-        Assert.StartsWith("/access-denied", denied.Headers.Location!.PathAndQuery);
+        var derived = await client.GetAsync("/admin/audit");
+        Assert.Equal(HttpStatusCode.OK, derived.StatusCode);
 
         _fixture.IdentityMode = AdminFixture.Mode.Admin;
         var allowed = await client.GetAsync("/admin/audit");
@@ -259,14 +258,14 @@ public class AdminWebAuthorizationTests : IClassFixture<AdminWebAuthorizationTes
                         ? "[{\"moduleId\":\"admin\",\"capabilities\":[\"admin.gerir\"]}]"
                         : "[{\"moduleId\":\"admin\",\"capabilities\":[\"admin.gerir\",\"audit.view\",\"audit.export\"]}]";
                     return Task.FromResult<InternalUserRecord?>(new InternalUserRecord(
-                        "admin-actor", AdminAuthUserId, "Administrador", null,
+                        "admin-actor", AdminAuthUserId, "Administrador", "Admin",
                         UserActive: true, TemplateId: "tpl-admin", TemplateName: "Admin",
                         TemplateActive: true, ModulesJson: capabilities));
                 }
 
                 if (authUserId == OperatorAuthUserId)
                     return Task.FromResult<InternalUserRecord?>(new InternalUserRecord(
-                        "operator-actor", OperatorAuthUserId, "Operador", null,
+                        "operator-actor", OperatorAuthUserId, "Operador", "Operador / Controlador",
                         UserActive: true, TemplateId: "tpl-op", TemplateName: "Operador",
                         TemplateActive: true,
                         ModulesJson: "[{\"moduleId\":\"boquilhas\",\"capabilities\":[]}]"));
@@ -334,8 +333,14 @@ public class AdminWebAuthorizationTests : IClassFixture<AdminWebAuthorizationTes
         public Task<bool> ChangeUserTemplateAsync(
             string actorId, string templateId, DateTimeOffset expectedUpdatedAt,
             DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default)
+            => ReplaceUserAccessTemplatesAsync(
+                actorId, [templateId], expectedUpdatedAt, updatedAtUtc, cancellationToken);
+
+        public Task<bool> ReplaceUserAccessTemplatesAsync(
+            string actorId, IReadOnlyList<string> templateIds, DateTimeOffset expectedUpdatedAt,
+            DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default)
         {
-            Writes.Add("change_template");
+            Writes.Add("change_templates");
             return Task.FromResult(true);
         }
 

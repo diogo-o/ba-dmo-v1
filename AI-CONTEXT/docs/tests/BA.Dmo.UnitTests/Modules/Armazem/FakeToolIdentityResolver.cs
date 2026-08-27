@@ -5,8 +5,7 @@ namespace BA.Dmo.UnitTests.Modules.Armazem;
 
 /// <summary>
 /// U-14 — In-memory fake of the Armazém tool identity resolver (confined to
-/// tests/*). Returns preset identities; exposes whether any query attempted an
-/// unsupported domain (used to prove Armazém never reaches Ferramentas BQ).
+/// tests/*). Returns preset CM/MF/BQ identities and records query count.
 /// </summary>
 public sealed class FakeToolIdentityResolver : IToolIdentityResolver
 {

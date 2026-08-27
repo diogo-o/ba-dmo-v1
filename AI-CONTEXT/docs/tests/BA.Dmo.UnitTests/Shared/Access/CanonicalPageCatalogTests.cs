@@ -15,7 +15,7 @@ public class CanonicalPageCatalogTests
 
         Assert.Equal(
             [
-                "jobon.folha", "boquilhas.registo", "peso.operador", "peso.responsavel",
+                "jobon.folha", "boquilhas.registo", "controlo.resumo", "peso.operador", "peso.responsavel",
                 "pegamentos.folha", "ferramentas.lista", "armazem.mapa",
                 "reparacao_interna.registo", "reparacao_externa.listas",
                 "tampoes.quantidades", "historia.consulta", "admin.gestao"
@@ -107,6 +107,9 @@ public class CanonicalPageCatalogTests
 
         Assert.True(pages.TryGetById("peso.responsavel", out var responsavel));
         Assert.Equal("peso.aprovar", responsavel.RequiredCapabilityId);
+
+        Assert.True(pages.TryGetById("controlo.resumo", out var controlo));
+        Assert.Equal("controlo.view", controlo.RequiredCapabilityId);
 
         Assert.True(pages.TryGetById("admin.gestao", out var admin));
         Assert.Equal("admin.gerir", admin.RequiredCapabilityId);

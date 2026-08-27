@@ -22,6 +22,7 @@ public interface IPdfRenderer
 /// </summary>
 public sealed record PesoFolhaPdf
 {
+    public bool IsComparison { get; init; }
     public string MoldNumber { get; init; } = string.Empty;
     public string NeckringNumber { get; init; } = string.Empty;
     public string ProductionCode { get; init; } = string.Empty;
@@ -37,13 +38,7 @@ public sealed record PesoFolhaPdf
     public string? ApprovedBy { get; init; }
     public DateTimeOffset? ApprovedAtUtc { get; init; }
 
-    // Previous production comparison
-    public decimal? PreviousPesoMedio { get; init; }
-    public decimal? PreviousCapacidadeMedia { get; init; }
-    public decimal? DeltaPeso { get; init; }
-    public decimal? DeltaPesoPct { get; init; }
-    public decimal? DeltaCapacidade { get; init; }
-    public decimal? DeltaCapacidadePct { get; init; }
+    // Explicitly confirmed previous-production identity (comparison records only)
     public string? PreviousProductionCode { get; init; }
 
     // Per-CM comparison
@@ -64,11 +59,10 @@ public sealed record PesoFolhaPdf
 /// <summary>One per-CM comparison row for the PDF.</summary>
 public sealed record PesoCmComparisonRow
 {
-    public string CmNumber { get; init; } = string.Empty;
+    public string CurrentCmNumber { get; init; } = string.Empty;
+    public string? PreviousCmNumber { get; init; }
     public decimal? PesoAtual { get; init; }
     public decimal? PesoAnterior { get; init; }
     public decimal? DeltaPeso { get; init; }
-    public decimal? CapacidadeAtual { get; init; }
-    public decimal? CapacidadeAnterior { get; init; }
-    public decimal? DeltaCapacidade { get; init; }
+    public decimal? DeltaPesoPct { get; init; }
 }

@@ -28,6 +28,7 @@ using BA.Dmo.Web.Cli;
 using BA.Dmo.Web.Identity;
 using BA.Dmo.Web.Shell;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 
 // BA DMO — single composition root (Plan-V3 GLM-ARCH-07).
 //
@@ -48,6 +49,11 @@ switch (mode)
 }
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Integration hosts must not depend on machine/user-profile key stores.
+// Production keeps the framework's normal persistent data-protection behavior.
+if (builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
 
 // Persistence foundation (U-03): snake_case ↔ PascalCase mapping conventions
 // for Dapper. CLI verbs exit above and never reach this point.
@@ -167,6 +173,7 @@ builder.Services.AddSingleton<IAdminRepository, DapperAdminRepository>();
 builder.Services.AddSingleton<IModuleCatalogMirrorRepository, DapperModuleCatalogMirrorRepository>();
 builder.Services.AddScoped<IJobOnRepository, DapperJobOnRepository>();
 builder.Services.AddScoped<IJobOnUserContextRepository, DapperJobOnUserContextRepository>();
+builder.Services.AddScoped<IArticleReferenceImageRepository, DapperArticleReferenceImageRepository>();
 builder.Services.AddScoped<JobOnAuthorizationGate>();
 builder.Services.AddScoped<JobOnService>();
 // Job On PDF generation (U-13): renderer + service + image provider abstraction.
@@ -208,9 +215,8 @@ builder.Services.AddScoped<FerramentasAuthorizationGate>();
 builder.Services.AddScoped<FerramentasService>();
 
 // Armazém module (U-14): physical position/stock ownership. Tool identity is
-// resolved only through Armazém's own IToolIdentityResolver (CM/MF adapter
-// over Ferramentas' read-only lookup); a future Boquilhas resolver can be added
-// without redesigning warehouse ownership.
+// resolved only through Armazém's own IToolIdentityResolver (CM/MF/BQ adapter
+// over Ferramentas' read-only canonical master lookup).
 builder.Services.AddScoped<IArmazemRepository, DapperArmazemRepository>();
 builder.Services.AddScoped<IToolIdentityResolver, FerramentasArmazemToolIdentityResolver>();
 builder.Services.AddScoped<ArmazemAuthorizationGate>();
@@ -278,11 +284,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapRazorPages();
 
-// Job On image API endpoints (TD-23, U-13): attach/replace/remove image
-// association on the current revision. All endpoints require jobon.edit
-// (checked server-side by JobOnService). The image binary stays on the
-// user's filesystem via File System Access API; only stable metadata is
-// persisted.
+// Job On image API endpoints: attach/replace/remove the master association
+// owned by the current Article/Reference. These actions never create or change
+// a Job On revision. The binary remains in the configured company image
+// directory; only the validated file name is persisted.
 app.MapPost("/api/jobon/{jobOnId:guid}/image/attach", async (
     Guid jobOnId,
     AttachImageRequest request,
@@ -292,7 +297,7 @@ app.MapPost("/api/jobon/{jobOnId:guid}/image/attach", async (
     var result = await service.AttachImageAsync(
         request with { JobOnId = jobOnId }, cancellationToken);
     return result.IsSuccess
-        ? Results.Ok(new { revisionId = result.Value })
+        ? Results.Ok(new { reference = result.Value.ReferenceCode, imageAssetId = result.Value.ImageAssetId })
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(CapabilityPolicies.JobonEdit);
 
@@ -305,7 +310,7 @@ app.MapPost("/api/jobon/{jobOnId:guid}/image/replace", async (
     var result = await service.ReplaceImageAsync(
         request with { JobOnId = jobOnId }, cancellationToken);
     return result.IsSuccess
-        ? Results.Ok(new { revisionId = result.Value })
+        ? Results.Ok(new { reference = result.Value.ReferenceCode, imageAssetId = result.Value.ImageAssetId })
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(CapabilityPolicies.JobonEdit);
 
@@ -317,9 +322,20 @@ app.MapPost("/api/jobon/{jobOnId:guid}/image/remove", async (
     var result = await service.RemoveImageAsync(
         new RemoveImageRequest(jobOnId), cancellationToken);
     return result.IsSuccess
-        ? Results.Ok(new { revisionId = result.Value })
+        ? Results.Ok(new { reference = result.Value.ReferenceCode, removedImageAssetId = result.Value.ImageAssetId })
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(CapabilityPolicies.JobonEdit);
+
+app.MapGet("/api/jobon/{jobOnId:guid}/image", async (
+    Guid jobOnId,
+    IJobOnImageProvider provider,
+    CancellationToken cancellationToken) =>
+{
+    var image = await provider.ResolveAsync(jobOnId, cancellationToken);
+    return image is null
+        ? Results.NotFound()
+        : Results.File(image.Bytes, image.MimeType);
+}).RequireAuthorization(CapabilityPolicies.JobonView);
 
 // R011 — Universal Landing: record/read the Job On context THIS user explicitly
 // opened. Requires only jobon.view (viewing planning is enough to open a folha).
@@ -828,12 +844,21 @@ app.MapGet("/api/ferramentas/lotes/{loteId:guid}/rules/active", async (
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(ModulePolicies.Ferramentas);
 
-// Armazém (U-14): search / Entrada / Saída / Substituir / história.
+// Armazém (U-14): search / Entrada / Saída / história.
 app.MapGet("/api/armazem/consulta", async (
     string? type, string? reference, string? lot, string? position,
     ArmazemService service, CancellationToken ct) =>
 {
     var result = await service.ConsultarAsync(new ConsultarRequest(type, reference, lot, position), ct);
+    return result.IsSuccess ? Results.Ok(result.Value)
+        : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+}).RequireAuthorization(ModulePolicies.Armazem);
+
+app.MapGet("/api/armazem/movimentos", async (
+    DateTimeOffset? from, DateTimeOffset? to, int? limit,
+    ArmazemService service, CancellationToken ct) =>
+{
+    var result = await service.ListMovimentosAsync(from, to, limit ?? 200, ct);
     return result.IsSuccess ? Results.Ok(result.Value)
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(ModulePolicies.Armazem);
@@ -854,11 +879,11 @@ app.MapPost("/api/armazem/saida", async (
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(ModulePolicies.Armazem);
 
-app.MapPost("/api/armazem/substituir", async (
-    SubstituirRequest request, ArmazemService service, CancellationToken ct) =>
+app.MapPost("/api/armazem/corrigir-localizacao", async (
+    CorrigirLocalizacaoRequest request, ArmazemService service, CancellationToken ct) =>
 {
-    var result = await service.SubstituirAsync(request, ct);
-    return result.IsSuccess ? Results.Ok(new { ok = true })
+    var result = await service.CorrigirLocalizacaoAsync(request, ct);
+    return result.IsSuccess ? Results.Ok(result.Value)
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(ModulePolicies.Armazem);
 
@@ -1084,6 +1109,14 @@ app.MapGet("/api/reparacao-interna/context", async (
 app.MapPost("/api/reparacao-interna", async (
     RegisterReparacaoRequest request, ReparacaoInternaService service, CancellationToken ct) =>
 {
+    if (!string.IsNullOrWhiteSpace(request.OverrideProduction)
+        || !string.IsNullOrWhiteSpace(request.OverrideReference))
+        return Results.BadRequest(new
+        {
+            code = "REPINT_CONTEXT_READ_ONLY",
+            message = "O contexto de Produção/Referência é resolvido automaticamente e não é editável."
+        });
+
     var result = await service.RegistrarReparacoesAsync(request, ct);
     return result.IsSuccess ? Results.Ok(new { recordIds = result.Value, count = result.Value.Count })
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
@@ -1116,6 +1149,17 @@ app.MapGet("/api/reparacao-interna/{recordId:guid}", async (
 app.MapPost("/api/reparacao-interna/{recordId:guid}/corrigir", async (
     Guid recordId, CorrigirReparacaoRequest request, ReparacaoInternaService service, CancellationToken ct) =>
 {
+    if (request.JobOnId is not null
+        || request.JobOnRevisionId is not null
+        || !string.IsNullOrWhiteSpace(request.ProductionCode)
+        || !string.IsNullOrWhiteSpace(request.Reference)
+        || request.LotId is not null)
+        return Results.BadRequest(new
+        {
+            code = "REPINT_CONTEXT_READ_ONLY",
+            message = "O contexto original é read-only; ao mudar de Linha, o contexto é recalculado automaticamente."
+        });
+
     var result = await service.CorrigirReparacaoAsync(
         new CorrigirReparacaoRequest(recordId, request.Line, request.ToolType, request.IndividualNumber,
             request.JobOnId, request.JobOnRevisionId, request.ProductionCode, request.Reference,
@@ -1127,7 +1171,7 @@ app.MapPost("/api/reparacao-interna/{recordId:guid}/corrigir", async (
 // ============================================================================
 // Folha de Controlo (R010) API endpoints.
 // Production-level control summary sheet INSIDE the Controlo area. The surface
-// rides the Peso production-control area (ModulePolicies.Peso); operations are
+// uses the single Controlo top-level grant; operations are
 // gated internally by the controlo.* capabilities (view/edit/submit/review).
 // ============================================================================
 
@@ -1138,7 +1182,7 @@ app.MapGet("/api/controlo/production", async (
     var result = await service.GetForProductionAsync(jobOnId, ct);
     return result.IsSuccess ? Results.Ok(result.Value)
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
-}).RequireAuthorization(ModulePolicies.Peso);
+}).RequireAuthorization(ModulePolicies.Controlo);
 
 // History list (free-mode consultation) of Folha de Controlo summaries.
 app.MapGet("/api/controlo/list", async (
@@ -1148,7 +1192,7 @@ app.MapGet("/api/controlo/list", async (
     var result = await service.ListSheetsAsync(from, to, machine, jobOn, status, ct);
     return result.IsSuccess ? Results.Ok(result.Value)
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
-}).RequireAuthorization(ModulePolicies.Peso);
+}).RequireAuthorization(ModulePolicies.Controlo);
 
 // Create-or-load by production code + machine (the context a selected Peso production row
 // carries) — the user never re-searches the production.
@@ -1158,7 +1202,7 @@ app.MapGet("/api/controlo/by-production", async (
     var result = await service.GetForProductionByContextAsync(production, machine, ct);
     return result.IsSuccess ? Results.Ok(result.Value)
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
-}).RequireAuthorization(ModulePolicies.Peso);
+}).RequireAuthorization(ModulePolicies.Controlo);
 
 // Create a new draft Folha de Controlo for a production.
 app.MapPost("/api/controlo", async (
@@ -1167,7 +1211,7 @@ app.MapPost("/api/controlo", async (
     var result = await service.CreateAsync(request, ct);
     return result.IsSuccess ? Results.Ok(new { sheetId = result.Value })
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
-}).RequireAuthorization(ModulePolicies.Peso);
+}).RequireAuthorization(ModulePolicies.Controlo);
 
 // Folha de Controlo detail (current items + full event history).
 app.MapGet("/api/controlo/{sheetId:guid}", async (
@@ -1176,7 +1220,7 @@ app.MapGet("/api/controlo/{sheetId:guid}", async (
     var result = await service.GetDetailAsync(sheetId, ct);
     return result.IsSuccess ? Results.Ok(result.Value)
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
-}).RequireAuthorization(ModulePolicies.Peso);
+}).RequireAuthorization(ModulePolicies.Controlo);
 
 // Apply item controls (OK/NOK + observation + MCaliper link).
 app.MapPost("/api/controlo/{sheetId:guid}/items", async (
@@ -1186,7 +1230,7 @@ app.MapPost("/api/controlo/{sheetId:guid}/items", async (
         sheetId, request.Edits ?? Array.Empty<ControloFolhaItemControlEdit>()), ct);
     return result.IsSuccess ? Results.Ok()
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
-}).RequireAuthorization(ModulePolicies.Peso);
+}).RequireAuthorization(ModulePolicies.Controlo);
 
 // Submit/deliver the sheet.
 app.MapPost("/api/controlo/{sheetId:guid}/submit", async (
@@ -1195,7 +1239,7 @@ app.MapPost("/api/controlo/{sheetId:guid}/submit", async (
     var result = await service.SubmitAsync(new SubmitControloSheetRequest(sheetId, request.Note), ct);
     return result.IsSuccess ? Results.Ok()
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
-}).RequireAuthorization(ModulePolicies.Peso);
+}).RequireAuthorization(ModulePolicies.Controlo);
 
 // Reopen a submitted/decided sheet for editing (audit traced).
 app.MapPost("/api/controlo/{sheetId:guid}/reopen", async (
@@ -1204,7 +1248,7 @@ app.MapPost("/api/controlo/{sheetId:guid}/reopen", async (
     var result = await service.ReopenAsync(new ReopenControloSheetRequest(sheetId), ct);
     return result.IsSuccess ? Results.Ok()
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
-}).RequireAuthorization(ModulePolicies.Peso);
+}).RequireAuthorization(ModulePolicies.Controlo);
 
 // Responsible/chief review decision (aprovado/rejeitado).
 app.MapPost("/api/controlo/{sheetId:guid}/decide", async (
@@ -1213,7 +1257,7 @@ app.MapPost("/api/controlo/{sheetId:guid}/decide", async (
     var result = await service.DecideAsync(new DecideControloSheetRequest(sheetId, request.Decision, request.Note), ct);
     return result.IsSuccess ? Results.Ok()
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
-}).RequireAuthorization(ModulePolicies.Peso);
+}).RequireAuthorization(ModulePolicies.Controlo);
 
 // ============================================================================
 // Tampões module (U-17) API endpoints.
@@ -1222,14 +1266,6 @@ app.MapPost("/api/controlo/{sheetId:guid}/decide", async (
 // (GLM-TP-02). The atomic state/configuração transforms update both saldos +
 // movement + audit in ONE transaction server-side.
 // ============================================================================
-
-static BA.Dmo.Domain.Modules.Tampoes.TampaoBalanceKind? ParseTampaoBalance(string? value) =>
-    value?.Trim() switch
-    {
-        "Enchidos" => BA.Dmo.Domain.Modules.Tampoes.TampaoBalanceKind.Enchidos,
-        "PorEncher" => BA.Dmo.Domain.Modules.Tampoes.TampaoBalanceKind.PorEncher,
-        _ => null
-    };
 
 static BA.Dmo.Domain.Modules.Tampoes.TampaoMovementType? ParseTampaoMovementType(string? value) =>
     value?.Trim().ToLowerInvariant() switch
@@ -1319,32 +1355,6 @@ app.MapPost("/api/tampoes/configuracao/alterar", async (
 {
     var result = await service.AlterarConfiguracaoAsync(request, ct);
     return result.IsSuccess ? Results.Ok(new { movementId = result.Value })
-        : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
-}).RequireAuthorization(ModulePolicies.Tampoes);
-
-// Planeamento.
-app.MapGet("/api/tampoes/planos", async (
-    Guid? configurationId, DateOnly? from, DateOnly? to, bool includeCanceled,
-    TampaoService service, CancellationToken ct) =>
-{
-    var result = await service.ListPlanosAsync(new PlanoFilter(configurationId, from, to, includeCanceled), ct);
-    return result.IsSuccess ? Results.Ok(result.Value)
-        : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
-}).RequireAuthorization(ModulePolicies.Tampoes);
-
-app.MapPost("/api/tampoes/planear", async (
-    PlanearRequest request, TampaoService service, CancellationToken ct) =>
-{
-    var result = await service.PlanearAsync(request, ct);
-    return result.IsSuccess ? Results.Ok(new { planoId = result.Value })
-        : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
-}).RequireAuthorization(ModulePolicies.Tampoes);
-
-app.MapPost("/api/tampoes/planos/{planoId:guid}/cancelar", async (
-    Guid planoId, TampaoService service, CancellationToken ct) =>
-{
-    var result = await service.CancelarPlanoAsync(new CancelarPlanoRequest(planoId), ct);
-    return result.IsSuccess ? Results.Ok(new { ok = true })
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(ModulePolicies.Tampoes);
 
@@ -1459,22 +1469,31 @@ app.MapPost("/api/boquilhas/lotes", async (
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(ModulePolicies.Boquilhas);
 
-// List lots (Registo / Boquilhas tabs).
+// List operational/closed-trace lots (Registo / Boquilhas tabs). Generic BQ
+// scrap lifecycle is obsolete; historical rows stay stored but are not an
+// active Boquilhas surface.
 app.MapGet("/api/boquilhas/lotes", async (
     string? search, bool? onlyAvailable, string? lifecycle, int page, int pageSize,
     BoquilhasService service, CancellationToken ct) =>
 {
+    if (lifecycle is not null and not ("available" or "archived"))
+        return Results.BadRequest(new
+        {
+            code = "BQ_LIFECYCLE_FILTER_INVALID",
+            message = "O estado pedido não pertence ao fluxo ativo de Boquilhas."
+        });
+
     BqLifecycleState? state = lifecycle switch
     {
         null => null,
         "available" => BqLifecycleState.Available,
         "archived" => BqLifecycleState.Archived,
-        "scrapped" => BqLifecycleState.Scrapped,
         _ => null
     };
     var result = await service.ListLotesAsync(new BqLoteFilter(
         search, onlyAvailable, state, page < 1 ? 1 : page, pageSize is > 0 ? pageSize : 20), ct);
-    return result.IsSuccess ? Results.Ok(result.Value)
+    return result.IsSuccess ? Results.Ok(result.Value
+            .Where(lote => lote.LifecycleState != BqLifecycleState.Scrapped))
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(ModulePolicies.Boquilhas);
 
@@ -1527,24 +1546,6 @@ app.MapPost("/api/boquilhas/traces/{traceId:guid}/reopen", async (
     Guid traceId, ReopenBqTraceRequest request, BoquilhasService service, CancellationToken ct) =>
 {
     var result = await service.ReopenTraceAsync(request with { BqTraceId = traceId }, ct);
-    return result.IsSuccess ? Results.Ok(new { ok = true })
-        : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
-}).RequireAuthorization(ModulePolicies.Boquilhas);
-
-// Edit editable lot fields (reference/batch_code/allowed_lines).
-app.MapPut("/api/boquilhas/lotes/{lotId:guid}", async (
-    Guid lotId, EditBqLoteRequest request, BoquilhasService service, CancellationToken ct) =>
-{
-    var result = await service.EditLoteAsync(request with { BqLoteId = lotId }, ct);
-    return result.IsSuccess ? Results.Ok(new { ok = true })
-        : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
-}).RequireAuthorization(ModulePolicies.Boquilhas);
-
-// Lifecycle (archive/scrap/restore).
-app.MapPost("/api/boquilhas/lotes/{lotId:guid}/lifecycle", async (
-    Guid lotId, BqLifecycleRequest request, BoquilhasService service, CancellationToken ct) =>
-{
-    var result = await service.ApplyLifecycleAsync(request with { BqLoteId = lotId }, ct);
     return result.IsSuccess ? Results.Ok(new { ok = true })
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(ModulePolicies.Boquilhas);

@@ -54,7 +54,7 @@ public class BoquilhasWebAuthorizationTests :
     [Fact]
     public async Task WithoutBoquilhasModule_IsDenied()
     {
-        _fixture.Modules = "peso";
+        _fixture.Modules = "controlo";
         var client = _fixture.CreateTestClient();
         await LoginAsync(client);
         var page = await client.GetAsync("/boquilhas");
@@ -65,13 +65,43 @@ public class BoquilhasWebAuthorizationTests :
     [Fact]
     public async Task WithModule_PageRenders()
     {
-        _fixture.Modules = "boquilhas,peso";
+        _fixture.Modules = "boquilhas,controlo";
         var client = _fixture.CreateTestClient();
         await LoginAsync(client);
         var page = await client.GetAsync("/boquilhas");
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
         var html = await page.Content.ReadAsStringAsync();
         Assert.Contains("Boquilhas", html);
+        Assert.DoesNotContain("value=\"scrapped\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain(">Sucata<", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GenericMasterAndLifecycleSurfaces_AreNotCallable()
+    {
+        _fixture.Modules = "boquilhas";
+        var client = _fixture.CreateTestClient();
+        await LoginAsync(client);
+        var lotId = Guid.NewGuid();
+
+        var edit = await client.PutAsJsonAsync($"/api/boquilhas/lotes/{lotId}", new
+        {
+            reference = "T194",
+            batchCode = "12",
+            allowedLines = new[] { "B1" }
+        });
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, edit.StatusCode);
+
+        var lifecycle = await client.PostAsJsonAsync($"/api/boquilhas/lotes/{lotId}/lifecycle", new
+        {
+            kind = "scrapped",
+            reason = "obsolete surface"
+        });
+        Assert.Equal(HttpStatusCode.NotFound, lifecycle.StatusCode);
+
+        var obsoleteFilter = await client.GetAsync(
+            "/api/boquilhas/lotes?lifecycle=scrapped&page=1&pageSize=20");
+        Assert.Equal(HttpStatusCode.BadRequest, obsoleteFilter.StatusCode);
     }
 
     [Fact]
@@ -201,7 +231,7 @@ public class BoquilhasWebAuthorizationTests :
 
         public void Reset()
         {
-            Modules = "boquilhas,peso";
+            Modules = "boquilhas,controlo";
             Repository.Reset();
         }
 
@@ -256,7 +286,7 @@ public class BoquilhasWebAuthorizationTests :
                 var grants = string.Join(",", moduleIds.Select(m =>
                     $"{{\"moduleId\":\"{m}\",\"capabilities\":[]}}"));
                 return Task.FromResult<InternalUserRecord?>(new InternalUserRecord(
-                    "boquilhas-actor", AuthUserId, "Operador Boquilhas", null,
+                    "boquilhas-actor", AuthUserId, "Operador Boquilhas", "Operador / Controlador",
                     UserActive: true, TemplateId: "tpl-bq", TemplateName: "Boquilhas",
                     TemplateActive: true, ModulesJson: $"[{grants}]"));
             }

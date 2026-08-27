@@ -152,8 +152,9 @@ public class CatalogValidatorTests
     public void AreaWithUnknownChild_Fails()
     {
         var modules = ModuleCatalogOf(
-            new ModuleDefinition("controlo", "Controlo", ModuleKind.FunctionalArea, 20, "/controlo"),
-            new ModuleDefinition("peso", "Peso", ModuleKind.Module, 21, "/peso"));
+            new ModuleDefinition("controlo", "Controlo", ModuleKind.Module, 20, "/controlo"),
+            new ModuleDefinition(
+                "peso", "Peso", ModuleKind.Module, 21, "/peso", isAssignable: false));
         var pages = PageCatalogOf(
             new PageDefinition("peso.pagina", "peso", "/peso", null, 21, isLanding: true));
         var areas = new Dictionary<string, IReadOnlyList<string>>
@@ -168,10 +169,11 @@ public class CatalogValidatorTests
     }
 
     [Fact]
-    public void AreaPointingAtNonFunctionalArea_Fails()
+    public void AreaParentThatIsNotAssignableModule_Fails()
     {
         var modules = ModuleCatalogOf(
-            new ModuleDefinition("peso", "Peso", ModuleKind.Module, 21, "/peso"));
+            new ModuleDefinition(
+                "peso", "Peso", ModuleKind.Module, 21, "/peso", isAssignable: false));
         var pages = PageCatalogOf(
             new PageDefinition("peso.pagina", "peso", "/peso", null, 21, isLanding: true));
         var areas = new Dictionary<string, IReadOnlyList<string>>
@@ -182,7 +184,29 @@ public class CatalogValidatorTests
         var ex = Assert.Throws<CatalogValidationException>(
             () => CatalogValidator.Validate(modules, pages, areas));
 
-        Assert.Contains(ex.Violations, v => v.Contains("not a functional area", StringComparison.Ordinal));
+        Assert.Contains(ex.Violations,
+            v => v.Contains("not an assignable module", StringComparison.Ordinal));
+
+    }
+
+    [Fact]
+    public void InternalChildThatIsIndependentlyAssignable_Fails()
+    {
+        var modules = ModuleCatalogOf(
+            new ModuleDefinition("controlo", "Controlo", ModuleKind.Module, 20, "/controlo"),
+            new ModuleDefinition("peso", "Peso", ModuleKind.Module, 21, "/peso"));
+        var pages = PageCatalogOf(
+            new PageDefinition("peso.pagina", "peso", "/peso", null, 21, isLanding: true));
+        var areas = new Dictionary<string, IReadOnlyList<string>>
+        {
+            ["controlo"] = new[] { "peso" }
+        };
+
+        var ex = Assert.Throws<CatalogValidationException>(
+            () => CatalogValidator.Validate(modules, pages, areas));
+
+        Assert.Contains(ex.Violations,
+            v => v.Contains("must not be independently assignable", StringComparison.Ordinal));
     }
 
     [Fact]

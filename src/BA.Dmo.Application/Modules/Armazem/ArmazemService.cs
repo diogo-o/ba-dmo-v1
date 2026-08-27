@@ -190,17 +190,13 @@ public sealed class ArmazemService
             return await ConsultarPorPosicaoAsync(
                 WarehouseLocation.NormalizePositionCode(request.PositionCode), ct);
 
-        if (string.IsNullOrWhiteSpace(request.ToolType) &&
-            string.IsNullOrWhiteSpace(request.Reference) &&
-            string.IsNullOrWhiteSpace(request.Lot))
-        {
-            return Result<IReadOnlyList<ArmazemConsultationRow>, DomainError>.Failure(
-                DomainError.Validation("ARMZ_SEARCH_REQUIRED",
-                    "Indique um tipo, referência, lote ou posição para pesquisar."));
-        }
-
-        var searchType = request.ToolType ?? "CM";
-        var identities = await _toolResolver.SearchAsync(searchType, request.Reference, request.Lot, ct);
+        var searchTypes = string.IsNullOrWhiteSpace(request.ToolType)
+            ? new[] { "CM", "MF", "BQ" }
+            : new[] { request.ToolType.Trim().ToUpperInvariant() };
+        var identities = new List<WarehouseToolIdentity>();
+        foreach (var searchType in searchTypes)
+            identities.AddRange(await _toolResolver.SearchAsync(
+                searchType, request.Reference, request.Lot, ct));
 
         var rows = new List<ArmazemConsultationRow>();
         foreach (var identity in identities.Where(i => i.Reference is not null))
@@ -222,6 +218,101 @@ public sealed class ArmazemService
                 identity.Lot, position, context, HasReferenceConflict: false));
         }
         return Result<IReadOnlyList<ArmazemConsultationRow>, DomainError>.Success(rows.AsReadOnly());
+    }
+
+    /// <summary>
+    /// Corrects a physical-location discrepancy without rewriting history. The
+    /// old occupation is released and/or a new occupation is created atomically;
+    /// the corresponding in/out facts are tagged as a location correction.
+    /// </summary>
+    public async Task<Result<CorrigirLocalizacaoResult, DomainError>> CorrigirLocalizacaoAsync(
+        CorrigirLocalizacaoRequest request, CancellationToken ct = default)
+    {
+        var gate = _gate.Require();
+        if (gate.IsFailure)
+            return Result<CorrigirLocalizacaoResult, DomainError>.Failure(gate.Error);
+
+        if (request.ToolId == Guid.Empty)
+            return Result<CorrigirLocalizacaoResult, DomainError>.Failure(DomainError.Validation(
+                "ARMZ_TOOL_REQUIRED", "Selecione a ferramenta cuja localização pretende corrigir."));
+
+        var tool = await _toolResolver.ResolveAsync(request.ToolId, ct);
+        if (tool is null || tool.Type is not ("CM" or "MF" or "BQ"))
+            return Result<CorrigirLocalizacaoResult, DomainError>.Failure(DomainError.NotFound(
+                "ARMZ_TOOL_NOT_FOUND", "Ferramenta não encontrada. Atualize a consulta e tente novamente."));
+
+        string? foundPosition = string.IsNullOrWhiteSpace(request.FoundPositionCode)
+            ? null
+            : WarehouseLocation.NormalizePositionCode(request.FoundPositionCode);
+        if (foundPosition is not null && !WarehouseLocation.IsValidPositionCode(foundPosition))
+            return Result<CorrigirLocalizacaoResult, DomainError>.Failure(DomainError.Validation(
+                "ARMZ_LOCATION_CODE", "A posição encontrada deve ter exatamente 4 dígitos."));
+
+        var currentStock = await _repository.GetActiveStockByToolIdAsync(request.ToolId, ct);
+        var registeredPosition = currentStock is null
+            ? null
+            : await GetLocationCodeAsync(currentStock.WarehouseLocationId, ct);
+
+        if (string.Equals(registeredPosition, foundPosition, StringComparison.Ordinal))
+            return Result<CorrigirLocalizacaoResult, DomainError>.Failure(DomainError.Validation(
+                "ARMZ_LOCATION_NO_CHANGE", "A localização encontrada é igual à localização registada."));
+
+        Guid? foundLocationId = null;
+        if (foundPosition is not null)
+        {
+            foundLocationId = await _repository.GetOrCreateLocationAsync(foundPosition, "tool", ct);
+            var occupant = await _repository.GetActiveStockByLocationAsync(foundLocationId.Value, ct);
+            if (occupant is { IsActive: true } && occupant.ToolId != request.ToolId)
+                return Result<CorrigirLocalizacaoResult, DomainError>.Failure(DomainError.DomainConflict(
+                    "ARMZ_POSITION_OCCUPIED", "A posição encontrada já está ocupada por outra ferramenta."));
+        }
+
+        var now = _clock.UtcNow;
+        WarehouseStock? correctedStock = foundLocationId is null ? null : new WarehouseStock
+        {
+            WarehouseLocationId = foundLocationId.Value,
+            ToolId = request.ToolId,
+            OccupiedSinceUtc = now,
+            OccupiedBy = gate.Value.ActorId
+        };
+        WarehouseMovement? outMovement = currentStock is null ? null : new WarehouseMovement
+        {
+            WarehouseStockId = currentStock.WarehouseStockId,
+            Direction = WarehouseMovementDirection.Out,
+            Destination = "correcao_localizacao",
+            ActorId = gate.Value.ActorId,
+            OccurredAtUtc = now
+        };
+        WarehouseMovement? inMovement = correctedStock is null ? null : new WarehouseMovement
+        {
+            WarehouseStockId = correctedStock.WarehouseStockId,
+            Direction = WarehouseMovementDirection.In,
+            Destination = "correcao_localizacao",
+            ActorId = gate.Value.ActorId,
+            OccurredAtUtc = now
+        };
+
+        try
+        {
+            await _repository.CorrectLocationAsync(
+                currentStock?.WarehouseStockId, correctedStock, outMovement, inMovement, ct);
+        }
+        catch (ArmazemLocationOccupiedException)
+        {
+            return Result<CorrigirLocalizacaoResult, DomainError>.Failure(DomainError.DomainConflict(
+                "ARMZ_POSITION_OCCUPIED", "A posição encontrada já está ocupada por outra ferramenta."));
+        }
+
+        var before = $"{tool.Type}|{tool.Reference}|{tool.Lot}|position={registeredPosition ?? "fora"}";
+        var after = $"{tool.Type}|{tool.Reference}|{tool.Lot}|position={foundPosition ?? "fora"}";
+        if (!string.IsNullOrWhiteSpace(request.Observations))
+            after += $"|observations={request.Observations.Trim()}";
+        await _repository.InsertAuditEventAsync(
+            correctedStock?.WarehouseStockId ?? currentStock?.WarehouseStockId,
+            "armazem.corrigir_localizacao", before, after, gate.Value.ActorId, ct);
+
+        return Result<CorrigirLocalizacaoResult, DomainError>.Success(
+            new CorrigirLocalizacaoResult(registeredPosition, foundPosition));
     }
 
     private async Task<Result<IReadOnlyList<ArmazemConsultationRow>, DomainError>> ConsultarPorPosicaoAsync(
@@ -255,6 +346,58 @@ public sealed class ArmazemService
                 identity.Lot, location.Code, "armazem", conflict));
         }
         return Result<IReadOnlyList<ArmazemConsultationRow>, DomainError>.Success(rows.AsReadOnly());
+    }
+
+    /// <summary>
+    /// Lists movement facts for the recent-register and history surfaces. The
+    /// repository reads only warehouse-owned facts; canonical tool identity is
+    /// resolved through the owner port before anything is returned to the UI.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<ArmazemMovementRow>, DomainError>> ListMovimentosAsync(
+        DateTimeOffset? fromUtc,
+        DateTimeOffset? toUtc,
+        int limit,
+        CancellationToken ct = default)
+    {
+        var gate = _gate.Require();
+        if (gate.IsFailure)
+            return Result<IReadOnlyList<ArmazemMovementRow>, DomainError>.Failure(gate.Error);
+
+        if (fromUtc.HasValue && toUtc.HasValue && fromUtc.Value >= toUtc.Value)
+            return Result<IReadOnlyList<ArmazemMovementRow>, DomainError>.Failure(
+                DomainError.Validation("ARMZ_HISTORY_RANGE", "O início deve ser anterior ao fim do período."));
+
+        var safeLimit = Math.Clamp(limit, 1, 500);
+        var facts = await _repository.ListMovementFactsAsync(fromUtc, toUtc, safeLimit, ct);
+        var identities = new Dictionary<Guid, WarehouseToolIdentity?>();
+        var rows = new List<ArmazemMovementRow>(facts.Count);
+
+        foreach (var fact in facts)
+        {
+            if (!identities.TryGetValue(fact.ToolId, out var identity))
+            {
+                identity = await _toolResolver.ResolveAsync(fact.ToolId, ct);
+                identities[fact.ToolId] = identity;
+            }
+
+            if (identity is null || identity.Type is not ("CM" or "MF" or "BQ"))
+                continue;
+
+            var movement = fact.Movement;
+            rows.Add(new ArmazemMovementRow(
+                movement.WarehouseMovementId,
+                fact.ToolId,
+                identity.Type,
+                identity.Reference,
+                identity.Lot,
+                WarehouseMovementDirectionCodec.ToStorage(movement.Direction),
+                fact.PositionCode,
+                movement.Destination,
+                movement.ActorId,
+                movement.OccurredAtUtc));
+        }
+
+        return Result<IReadOnlyList<ArmazemMovementRow>, DomainError>.Success(rows.AsReadOnly());
     }
 
     /// <summary>Histórico de localização/movimentos de um lote (só localização).</summary>

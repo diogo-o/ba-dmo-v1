@@ -131,20 +131,18 @@ public class FerramentasWebApiTests : IClassFixture<FerramentasWebApiTests.FerrF
             ActorId: "ferr-actor",
             AuthUserId: AuthUserId,
             DisplayName: "Utilizador Ferramentas",
-            ProfileTitle: null,
+            ProfileTitle: canConfigure ? "Responsável" : "Operador / Controlador",
             UserActive: true,
             TemplateId: "tpl-ferr",
             TemplateName: "Ferramentas",
             TemplateActive: true,
-            ModulesJson: canConfigure
-                ? "[{\"moduleId\":\"ferramentas\",\"capabilities\":[\"ferramentas.configure\"]},{\"moduleId\":\"ferramentas\"}]"
-                : "[{\"moduleId\":\"ferramentas\",\"capabilities\":[]}]");
+            ModulesJson: "[{\"moduleId\":\"ferramentas\",\"capabilities\":[]}]");
 
         public InternalUserRecord UserWithoutFerramentas() => new(
             ActorId: "other-actor",
             AuthUserId: AuthUserId,
             DisplayName: "Outro",
-            ProfileTitle: null,
+            ProfileTitle: "Operador / Controlador",
             UserActive: true,
             TemplateId: "tpl-other",
             TemplateName: "Outro",

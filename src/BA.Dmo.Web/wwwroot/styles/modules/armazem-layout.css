@@ -57,7 +57,7 @@
 .armazem-action-row {
   display: flex;
   gap: var(--dmo-space-2);
-  margin-bottom: var(--dmo-space-4);
+  flex-wrap: wrap;
 }
 .armazem-action-row > .dmo-button {
   min-height: var(--dmo-control-height);
@@ -69,6 +69,89 @@
   max-width: 720px;
 }
 
+#entradaForm,
+#saidaForm,
+#novoForm,
+#correctionForm {
+  max-width: none;
+}
+
+.armazem-check-label {
+  display: inline-flex !important;
+  align-items: center;
+  gap: var(--dmo-space-2);
+  min-height: var(--dmo-control-height);
+  margin: 0 !important;
+  color: var(--dmo-text) !important;
+  font-size: var(--dmo-font-size-sm) !important;
+}
+.armazem-check-label input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 0;
+}
+
+.armazem-empty {
+  margin-bottom: var(--dmo-space-4);
+  border: 1px dashed var(--dmo-brand-200);
+  border-radius: 10px;
+}
+
+.armazem-recent {
+  max-width: none;
+  padding: 18px;
+}
+
+.armazem-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dmo-space-3);
+  margin-bottom: 14px;
+}
+.armazem-panel-head h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.armazem-panel-head p {
+  margin: 4px 0 0;
+  color: var(--dmo-muted);
+}
+
+.armazem-recent-filters {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) 150px 100px;
+  gap: 10px;
+  align-items: end;
+}
+
+.armazem-recent-table {
+  margin-top: 14px;
+}
+
+.armazem-list-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dmo-space-3);
+  padding: 11px 2px 0;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-sm);
+}
+
+.armazem-pager-controls {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.armazem-pager-controls .dmo-button {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 6px 9px;
+}
+
 .armazem-grid {
   display: grid;
   grid-template-columns: minmax(110px, 1fr) minmax(150px, 1.2fr) minmax(140px, 1fr) 150px minmax(180px, 1.4fr);
@@ -77,6 +160,26 @@
 }
 .armazem-card .armazem-grid {
   grid-template-columns: minmax(110px, 1fr) minmax(170px, 1.3fr) minmax(140px, 1fr) 160px minmax(200px, 1.4fr);
+}
+
+#novoLines {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  gap: var(--dmo-space-2) var(--dmo-space-3);
+  min-height: var(--dmo-control-height);
+  align-content: center;
+}
+#novoLines label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dmo-space-1);
+  margin: 0;
+}
+#novoLines input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 0;
 }
 
 .armazem-actions {
@@ -99,6 +202,131 @@
   margin-bottom: var(--dmo-space-4);
 }
 
+.armazem-consultation-panel {
+  padding: 18px;
+  margin-bottom: var(--dmo-space-4);
+}
+
+.armazem-consultation-filters {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) 120px 150px 140px 100px auto;
+  gap: 10px;
+  align-items: end;
+  padding: 13px;
+  border: 1px solid var(--dmo-border);
+  border-radius: 10px;
+  background: var(--dmo-subtle);
+}
+
+.armazem-consultation-filters > .dmo-button {
+  min-height: var(--dmo-control-height);
+}
+
+.armazem-helper {
+  margin: var(--dmo-space-2) 0 14px;
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-sm);
+}
+
+.armazem-consultation-panel .table-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--dmo-space-2);
+  padding-top: var(--dmo-space-3);
+}
+
+.armazem-calendar-layout {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: var(--dmo-space-4);
+}
+
+.armazem-calendar,
+.armazem-history-panel {
+  padding: 18px;
+}
+
+.armazem-calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dmo-space-2);
+}
+.armazem-calendar-head .dmo-button {
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+}
+
+.armazem-calendar-week,
+.armazem-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+.armazem-calendar-week {
+  margin-top: var(--dmo-space-3);
+  color: var(--dmo-muted);
+  font-size: var(--dmo-font-size-xs);
+  font-weight: 800;
+  text-align: center;
+}
+.armazem-calendar-grid {
+  margin-top: 7px;
+}
+.armazem-calendar-day {
+  position: relative;
+  min-height: 38px;
+  border: 1px solid var(--dmo-border);
+  border-radius: 7px;
+  background: var(--dmo-card);
+  color: var(--dmo-text);
+  font-weight: 700;
+  cursor: pointer;
+}
+.armazem-calendar-day:hover,
+.armazem-calendar-day:focus-visible {
+  border-color: var(--dmo-brand-600);
+  background: var(--dmo-page);
+  outline: none;
+}
+.armazem-calendar-day.has-record::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--dmo-warning);
+}
+.armazem-calendar-day.selected {
+  border-color: var(--dmo-brand-600);
+  background: var(--dmo-brand-600);
+  color: #fff;
+}
+.armazem-calendar-day.placeholder {
+  visibility: hidden;
+}
+
+.armazem-history-filters {
+  display: grid;
+  grid-template-columns: minmax(190px, 2fr) 100px 130px minmax(125px, 1fr) 90px auto;
+  gap: 10px;
+  align-items: end;
+  padding: 13px;
+  border: 1px solid var(--dmo-border);
+  border-radius: 10px;
+  background: var(--dmo-subtle);
+}
+.armazem-history-filters > .dmo-button {
+  min-height: var(--dmo-control-height);
+}
+.armazem-history-table {
+  margin-top: 14px;
+}
+
 @media (max-width: 900px) {
   .armazem-grid,
   .armazem-card .armazem-grid,
@@ -111,6 +339,21 @@
   .armazem-tabs {
     overflow-x: auto;
     padding: 0 var(--dmo-page-gutter-tablet);
+  }
+  .armazem-consultation-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .armazem-calendar-layout {
+    grid-template-columns: 1fr;
+  }
+  .armazem-history-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .armazem-history-filters > .dmo-button {
+    width: max-content;
+  }
+  .armazem-consultation-filters > .dmo-button {
+    width: max-content;
   }
 }
 
@@ -127,7 +370,116 @@
     grid-template-columns: 1fr;
   }
   .armazem-action-row {
+    width: 100%;
+  }
+  .armazem-action-row > .dmo-button {
+    flex: 1;
+  }
+  .armazem-recent-filters {
+    grid-template-columns: 1fr;
+  }
+  .armazem-consultation-filters {
+    grid-template-columns: 1fr;
+  }
+  .armazem-history-filters {
+    grid-template-columns: 1fr;
+  }
+  .armazem-list-footer {
+    align-items: flex-start;
     flex-direction: column;
+  }
+  .armazem-pager-controls {
+    align-self: flex-end;
+  }
+}
+
+@media (max-width: 375px) {
+  .armazem-page .dmo-page-head {
     align-items: stretch;
+    flex-direction: column;
+  }
+  .armazem-action-row > .dmo-button {
+    min-width: 0;
+    padding-inline: var(--dmo-space-2);
+  }
+  .armazem-calendar,
+  .armazem-history-panel,
+  .armazem-consultation-panel,
+  .armazem-recent {
+    padding: var(--dmo-space-3);
+  }
+  .armazem-calendar-day {
+    min-height: 34px;
+  }
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  .app-header,
+  .app-nav,
+  .armazem-tabs,
+  .armazem-action-row,
+  .armazem-empty,
+  #entradaForm,
+  #saidaForm,
+  #novoForm,
+  #correctionForm,
+  .armazem-consultation-filters,
+  .armazem-history-filters,
+  .armazem-helper,
+  .table-actions,
+  .armazem-pager-controls,
+  .dmo-toast,
+  button {
+    display: none !important;
+  }
+
+  .armazem-page {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .armazem-view {
+    display: none !important;
+  }
+  .armazem-view.active {
+    display: block !important;
+  }
+
+  .armazem-card,
+  .armazem-consultation-panel,
+  .armazem-history-panel,
+  .armazem-calendar {
+    border-color: #cbd5df;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  .dmo-table-wrap {
+    overflow: visible;
+  }
+  .dmo-table {
+    min-width: 0 !important;
+    white-space: normal;
+    font-size: 9pt;
+  }
+  .dmo-table thead {
+    display: table-header-group;
+  }
+
+  .armazem-calendar-layout {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+  .armazem-list-footer {
+    padding-top: 6px;
   }
 }

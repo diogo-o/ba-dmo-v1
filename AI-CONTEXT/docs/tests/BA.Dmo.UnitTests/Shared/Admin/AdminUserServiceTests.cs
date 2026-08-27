@@ -38,7 +38,7 @@ public class AdminUserServiceTests
 
         _repository.Users["user-1"] = new AdminUserRow(
             "user-1", Guid.Parse("11111111-2222-3333-4444-555555555555"),
-            "Utilizador Um", "Metrologia", "tpl-active", Active: true,
+            "Utilizador Um", FunctionalProfileNames.OperatorController, "tpl-active", Active: true,
             new DateTimeOffset(2026, 2, 1, 0, 0, 0, TimeSpan.Zero));
 
         _identity.GrantAdmin();
@@ -80,7 +80,7 @@ public class AdminUserServiceTests
     {
         var result = await _service.CreateUserAsync(new CreateAdminUserRequest(
             "novo@ba-dmo.example", "secret-password-value", "Novo Utilizador",
-            "Metrologia", "tpl-active"));
+            FunctionalProfileNames.OperatorController, "tpl-active"));
 
         Assert.True(result.IsSuccess);
         Assert.Equal("create", Assert.Single(_repository.Audits).ActionCode);
@@ -97,7 +97,8 @@ public class AdminUserServiceTests
     public async Task CreateUser_InactiveTemplate_IsRejected_BeforeProvisioning()
     {
         var result = await _service.CreateUserAsync(new CreateAdminUserRequest(
-            "novo@ba-dmo.example", "password", "Novo", null, "tpl-inactive"));
+            "novo@ba-dmo.example", "password", "Novo",
+            FunctionalProfileNames.OperatorController, "tpl-inactive"));
 
         Assert.True(result.IsFailure);
         Assert.Equal("ADMIN_TEMPLATE_INVALID", result.Error.Code);
@@ -138,7 +139,8 @@ public class AdminUserServiceTests
             "AUTH_PROVIDER_UNAVAILABLE", "Provider down.");
 
         var result = await _service.CreateUserAsync(new CreateAdminUserRequest(
-            "novo@ba-dmo.example", "password", "Novo", null, "tpl-active"));
+            "novo@ba-dmo.example", "password", "Novo",
+            FunctionalProfileNames.OperatorController, "tpl-active"));
 
         Assert.True(result.IsFailure);
         Assert.Equal("AUTH_PROVIDER_UNAVAILABLE", result.Error.Code);
@@ -152,7 +154,8 @@ public class AdminUserServiceTests
         _provisioning.ProvisionedAuthUserId = _repository.Users["user-1"].AuthUserId.GetValueOrDefault();
 
         var result = await _service.CreateUserAsync(new CreateAdminUserRequest(
-            "existente@ba-dmo.example", "password", "Duplicado", null, "tpl-active"));
+            "existente@ba-dmo.example", "password", "Duplicado",
+            FunctionalProfileNames.OperatorController, "tpl-active"));
 
         Assert.True(result.IsFailure);
         Assert.Equal("ADMIN_USER_ALREADY_REGISTERED", result.Error.Code);
@@ -170,7 +173,7 @@ public class AdminUserServiceTests
     {
         var request = new CreateAdminUserRequest(
             "novo@ba-dmo.example", "secret-password-value", "Novo Utilizador",
-            "Metrologia", "tpl-active");
+            FunctionalProfileNames.OperatorController, "tpl-active");
 
         // First attempt: Auth provisioned (one provisioning call), internal insert throws.
         _repository.FailCreateInternalOnce = true;
@@ -195,7 +198,7 @@ public class AdminUserServiceTests
     public async Task UpdateUser_PersistsAndAudits()
     {
         var result = await _service.UpdateUserAsync(new UpdateAdminUserRequest(
-            "user-1", "Nome Novo", "Chefe", Version("user-1")));
+            "user-1", "Nome Novo", FunctionalProfileNames.Responsible, Version("user-1")));
 
         Assert.True(result.IsSuccess);
         Assert.Equal("Nome Novo", _repository.Users["user-1"].DisplayName);
@@ -208,11 +211,22 @@ public class AdminUserServiceTests
         _repository.ConcurrencyNextWrite = true;
 
         var result = await _service.UpdateUserAsync(new UpdateAdminUserRequest(
-            "user-1", "Nome Novo", null, Version("user-1")));
+            "user-1", "Nome Novo", FunctionalProfileNames.OperatorController, Version("user-1")));
 
         Assert.True(result.IsFailure);
         Assert.Equal(ErrorCategory.ConcurrencyConflict, result.Error.Category);
         Assert.Contains("Recarregue", result.Error.Message, StringComparison.Ordinal);
+        Assert.Empty(_repository.Audits);
+    }
+
+    [Fact]
+    public async Task UpdateUser_InvalidFunctionalProfile_IsRejected()
+    {
+        var result = await _service.UpdateUserAsync(new UpdateAdminUserRequest(
+            "user-1", "Nome Novo", "Metrologia", Version("user-1")));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("ADMIN_USER_PROFILE_INVALID", result.Error.Code);
         Assert.Empty(_repository.Audits);
     }
 
@@ -248,168 +262,11 @@ public class AdminUserServiceTests
         _repository.LockoutNextWrite = true;
 
         var result = await _service.ChangeTemplateAsync(
-            new ChangeUserTemplateRequest("user-1", "tpl-inactive", Version("user-1")));
+            new ChangeUserTemplateRequest("user-1", "tpl-active", Version("user-1")));
 
         Assert.True(result.IsFailure);
         Assert.Equal("ADMIN_SELF_LOCKOUT", result.Error.Code);
         Assert.Equal("tpl-active", _repository.Users["user-1"].TemplateId);
-    }
-
-    // ---- per-user module overrides (contract §6) ---------------------------
-
-    [Fact]
-    public async Task SaveUserModules_ValidOverride_WritesAndAuditsWithoutTouchingTemplates()
-    {
-        var result = await _service.SaveUserModulesAsync(
-            "user-1",
-            new[] { new TemplateGrantInput("peso", new[] { "peso.aprovar" }) },
-            Version("user-1"));
-
-        Assert.True(result.IsSuccess);
-        // The write only records modules_override; the shared template row is untouched.
-        Assert.NotNull(_repository.Users["user-1"].ModulesOverrideJson);
-        Assert.Equal("tpl-active", _repository.Users["user-1"].TemplateId);
-        var audit = Assert.Single(_repository.Audits);
-        Assert.Equal("change_modules", audit.ActionCode);
-        Assert.Equal("user-1", audit.EntityId);
-        Assert.Equal("succeeded", audit.Result);
-    }
-
-    [Fact]
-    public async Task SaveUserModules_JobOnWithAdminPath_IsRejected()
-    {
-        // Posting admin + jobon for a non-admin user trips the owner guard:
-        // a user with an admin path can never receive jobon (ADMIN_USER_JOON_DENIED).
-        var result = await _service.SaveUserModulesAsync(
-            "user-1",
-            new[]
-            {
-                new TemplateGrantInput("admin", new[] { "admin.gerir" }),
-                new TemplateGrantInput("jobon", new[] { "jobon.view" })
-            },
-            Version("user-1"));
-
-        Assert.True(result.IsFailure);
-        Assert.Equal("ADMIN_USER_JOON_DENIED", result.Error.Code);
-        Assert.Null(_repository.Users["user-1"].ModulesOverrideJson); // not written
-    }
-
-    [Fact]
-    public async Task SaveUserModules_UnknownModule_IsRejected()
-    {
-        var result = await _service.SaveUserModulesAsync(
-            "user-1",
-            new[] { new TemplateGrantInput("modulo-inexistente", new[] { "x.y" }) },
-            Version("user-1"));
-
-        Assert.True(result.IsFailure);
-        Assert.Equal("ACCESS_TEMPLATE_GRANTS_INVALID", result.Error.Code);
-        Assert.Null(_repository.Users["user-1"].ModulesOverrideJson);
-    }
-
-    [Fact]
-    public async Task SaveUserModules_WithoutCapability_IsDenied_AndWritesNothing()
-    {
-        _identity.GrantNone();
-
-        var result = await _service.SaveUserModulesAsync(
-            "user-1",
-            new[] { new TemplateGrantInput("peso", new[] { "peso.aprovar" }) },
-            Version("user-1"));
-
-        Assert.True(result.IsFailure);
-        Assert.Equal(ErrorCategory.Forbidden, result.Error.Category);
-        Assert.Empty(_repository.Writes);
-        Assert.Empty(_repository.Audits);
-    }
-
-    [Fact]
-    public async Task SaveUserModules_OverridingOneUser_LeavesAnotherUserUntouched()
-    {
-        _repository.Users["user-2"] = new AdminUserRow(
-            "user-2", Guid.Parse("22222222-2222-2222-2222-222222222222"),
-            "Utilizador Dois", null, "tpl-active", Active: true,
-            new DateTimeOffset(2026, 2, 2, 0, 0, 0, TimeSpan.Zero));
-
-        var result = await _service.SaveUserModulesAsync(
-            "user-1",
-            new[] { new TemplateGrantInput("peso", new[] { "peso.aprovar" }) },
-            Version("user-1"));
-
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(_repository.Users["user-1"].ModulesOverrideJson);
-        // user-2 still resolves through its template with no override.
-        Assert.Null(_repository.Users["user-2"].ModulesOverrideJson);
-        Assert.Equal("tpl-active", _repository.Users["user-2"].TemplateId);
-    }
-
-    [Fact]
-    public async Task SaveUserModules_ConcurrencyConflict_IsMapped()
-    {
-        _repository.ConcurrencyNextWrite = true;
-
-        var result = await _service.SaveUserModulesAsync(
-            "user-1",
-            new[] { new TemplateGrantInput("peso", new[] { "peso.aprovar" }) },
-            Version("user-1"));
-
-        Assert.True(result.IsFailure);
-        Assert.Equal("ADMIN_CONCURRENCY_CONFLICT", result.Error.Code);
-    }
-
-    // ---- self-lockout on the module override path (GLM-ACC-10) -------------
-
-    [Fact]
-    public async Task SaveUserModules_ActingAdminRemovesOwnAdminNoOtherRemains_IsRejectedAsSelfLockout()
-    {
-        var adminId = "aaaaaaaa-0000-0000-0000-000000000001"; // GrantAdmin() actor
-        _repository.Templates["tpl-admin"] = new AdminTemplateRow(
-            "tpl-admin", "Admin completo",
-            "[{\"moduleId\":\"admin\",\"capabilities\":[\"admin.gerir\"]}]",
-            Active: true, new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
-        _repository.Users[adminId] = new AdminUserRow(
-            adminId, Guid.Parse("aaaaaaaa-0000-0000-0000-000000000003"),
-            "Admin Atual", null, "tpl-admin", Active: true,
-            new DateTimeOffset(2026, 2, 1, 0, 0, 0, TimeSpan.Zero));
-        // Fake returns ActiveAdminCount directly as the number of OTHER active
-        // admins (CountActiveAdminsAsync(excludeActorId)); 0 = only the target remains.
-        _repository.ActiveAdminCount = 0;
-
-        // The new override drops the admin module (only peso granted).
-        var result = await _service.SaveUserModulesAsync(
-            adminId,
-            new[] { new TemplateGrantInput("peso", new[] { "peso.aprovar" }) },
-            Version(adminId));
-
-        Assert.True(result.IsFailure);
-        Assert.Equal("ADMIN_SELF_LOCKOUT", result.Error.Code);
-        Assert.True(_repository.Users[adminId].Active); // unchanged
-        Assert.Null(_repository.Users[adminId].ModulesOverrideJson); // not written
-    }
-
-    [Fact]
-    public async Task SaveUserModules_ActingAdminRemovesOwnAdminButAnotherAdminRemains_IsAllowed()
-    {
-        var adminId = "aaaaaaaa-0000-0000-0000-000000000001"; // GrantAdmin() actor
-        _repository.Templates["tpl-admin"] = new AdminTemplateRow(
-            "tpl-admin", "Admin completo",
-            "[{\"moduleId\":\"admin\",\"capabilities\":[\"admin.gerir\"]}]",
-            Active: true, new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
-        _repository.Users[adminId] = new AdminUserRow(
-            adminId, Guid.Parse("aaaaaaaa-0000-0000-0000-000000000003"),
-            "Admin Atual", null, "tpl-admin", Active: true,
-            new DateTimeOffset(2026, 2, 1, 0, 0, 0, TimeSpan.Zero));
-        _repository.ActiveAdminCount = 2; // another active admin remains
-
-        var result = await _service.SaveUserModulesAsync(
-            adminId,
-            new[] { new TemplateGrantInput("peso", new[] { "peso.aprovar" }) },
-            Version(adminId));
-
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(_repository.Users[adminId].ModulesOverrideJson);
-        var audit = Assert.Single(_repository.Audits);
-        Assert.Equal("change_modules", audit.ActionCode);
     }
 
     // ---- schema migration guard (N26 missing, GLM-DSN/owner decision) -------

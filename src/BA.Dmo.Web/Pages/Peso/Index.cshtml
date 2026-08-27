@@ -13,14 +13,14 @@
    lote são herdados (sem segunda seleção). Cálculos são C#-only
    (peso.js não duplica fórmulas; constantes injetadas no server).
    ============================================================ *@
-<link rel="stylesheet" href="~/styles/modules/peso-layout.css" />
+<link rel="stylesheet" href="~/styles/modules/peso-layout.css" asp-append-version="true" />
 
-<nav class="peso-tabs" aria-label="Navegação Peso">
-    <button class="tab active" data-view="new" type="button">Novo controlo</button>
-    <button class="tab" data-view="refs" type="button">Referências</button>
-    <button class="tab" data-view="comparacao" type="button">Comparação</button>
-    <button class="tab" data-view="history" type="button">Histórico</button>
-    <button class="tab settings" data-view="settings" type="button">Definições</button>
+<nav class="dmo-module-tabs peso-tabs" aria-label="Navegação Peso">
+    <button class="dmo-module-tab tab active" data-view="new" type="button">Novo controlo</button>
+    <button class="dmo-module-tab tab" data-view="refs" type="button">Referências</button>
+    <button class="dmo-module-tab tab" data-view="comparacao" type="button">Comparação</button>
+    <button class="dmo-module-tab tab" data-view="history" type="button">Histórico</button>
+    <button class="dmo-module-tab tab settings" data-view="settings" type="button">Definições</button>
 </nav>
 
 <main data-testid="page-peso-operador" class="peso-page">
@@ -46,12 +46,6 @@
                 <div class="dmo-field">
                     <label>Procurar referência</label>
                     <input placeholder="Ex.: 9121T173">
-                </div>
-                <div class="dmo-field">
-                    <label>Medições anteriores aprovadas</label>
-                    <select>
-                        <option>Selecionar produção…</option>
-                    </select>
                 </div>
             </div>
         </div>
@@ -104,7 +98,6 @@
                 <div><span>Leituras válidas</span><strong id="readingCount">1</strong></div>
                 <div><span>Média em água</span><strong id="mediaAgua">—</strong></div>
                 <div><span>Peso estimado em vidro</span><strong id="pesoVidro">—</strong></div>
-                <div><span>Diferença anterior</span><strong id="diferencaAnterior">—</strong></div>
             </div>
 
             <hr class="peso-hr">
@@ -130,10 +123,42 @@
             </div>
             <div class="dmo-table-wrap">
                 <table class="dmo-table">
-                    <thead><tr><th>CM</th><th>Peso em água</th><th>Capacidade</th><th>Desvio cm³</th><th>Desvio %</th><th>Peso estimado</th><th>Diferença anterior</th></tr></thead>
-                    <tbody id="resultTable"><tr><td colspan="7" class="empty">Calcule para ver os resultados.</td></tr></tbody>
+                    <thead><tr><th>CM</th><th>Peso em água</th><th>Capacidade</th><th>Desvio cm³</th><th>Desvio %</th><th>Peso do vidro</th></tr></thead>
+                    <tbody id="resultTable"><tr><td colspan="6" class="empty">Calcule para ver os resultados.</td></tr></tbody>
                 </table>
             </div>
+
+            <hr class="peso-hr">
+            <section id="comparisonBuilder" aria-labelledby="comparisonBuilderTitle">
+                <div class="peso-section-head">
+                    <div>
+                        <h3 id="comparisonBuilderTitle">Comparação com produção anterior</h3>
+                        <p class="peso-hint">Confirme uma produção aprovada e associe explicitamente cada CM atual a um CM anterior.</p>
+                    </div>
+                </div>
+                <div class="peso-grid3">
+                    <div class="dmo-field">
+                        <label for="comparisonPreviousControl">Produção anterior aprovada</label>
+                        <select id="comparisonPreviousControl">
+                            <option value="">Selecionar produção…</option>
+                        </select>
+                    </div>
+                    <div class="peso-actions">
+                        <button class="dmo-button" id="confirmComparisonPrevious" type="button">Confirmar produção anterior</button>
+                    </div>
+                </div>
+                <div class="peso-context-grid" id="comparisonPreviousContext" hidden></div>
+                <div class="dmo-table-wrap" id="comparisonPairingWrap" hidden>
+                    <table class="dmo-table">
+                        <thead><tr><th>CM atual</th><th>CM anterior</th><th>Peso atual</th><th>Peso anterior</th><th>Diferença</th><th>Variação</th></tr></thead>
+                        <tbody id="comparisonPairingTable"></tbody>
+                    </table>
+                </div>
+                <div class="peso-actions">
+                    <button class="dmo-button" id="createComparison" type="button" disabled>Criar tabela de comparação</button>
+                    <button class="dmo-button success" id="submitComparison" type="button" disabled>Enviar comparação para aprovação</button>
+                </div>
+            </section>
             <div class="peso-actions">
                 <button class="dmo-button" id="calculate" type="button">Calcular</button>
                 <button class="dmo-button success" id="sendApproval" type="button">Enviar para aprovação</button>
@@ -258,7 +283,7 @@
             <h3 class="peso-section-title">Base aprovada</h3>
             <div class="peso-context-grid" id="cCompBase"></div>
             <h3 class="peso-section-title">Decisões por CM</h3>
-            <div class="dmo-table-wrap"><table class="dmo-table"><thead><tr><th>CM</th><th>Peso atual</th><th>Decisão</th></tr></thead><tbody id="cCompCmTable"></tbody></table></div>
+            <div class="dmo-table-wrap"><table class="dmo-table"><thead><tr><th>CM atual</th><th>CM anterior</th><th>Peso atual</th><th>Peso anterior</th><th>Diferença</th><th>Variação</th><th>Decisão</th></tr></thead><tbody id="cCompCmTable"></tbody></table></div>
             <div class="peso-summary-3col" id="cCompCounters"></div>
             <div class="dmo-field"><label>Justificação</label><textarea id="cCompJustification" rows="2" placeholder="Obrigatória quando pelo menos um CM é colocado de parte."></textarea></div>
             <div class="peso-actions"><button class="dmo-button" id="confirmComparacao" disabled type="button">Confirmar decisões</button></div>

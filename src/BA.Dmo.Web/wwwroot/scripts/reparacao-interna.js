@@ -16,16 +16,20 @@
   let selectedRecordId = null;    // history row selected (click)
   let historyRows = [];
   let pageState = { from: 0, pageSize: 20 };
-  let openCorrection = false;
+  let linkedJobOnId = null;
 
   // ---- Tabs ----------------------------------------------------------------
   const tabs = $$('.reparacao-interna-tabs .tab');
+  function selectView(view) {
+    const target = tabs.find((tab) => tab.dataset.view === view) ?? tabs[0];
+    if (!target) return;
+    tabs.forEach((tab) => tab.classList.toggle('active', tab === target));
+    $$('.reparacao-interna-view').forEach((section) =>
+      section.classList.toggle('active', section.id === target.dataset.view));
+  }
+
   tabs.forEach((tab) => {
-    tab.addEventListener('click', () => {
-      tabs.forEach((t) => t.classList.toggle('active', t === tab));
-      $$('.reparacao-interna-view').forEach((v) =>
-        v.classList.toggle('active', v.id === tab.dataset.view));
-    });
+    tab.addEventListener('click', () => selectView(tab.dataset.view));
   });
 
   // ---- Helpers ---------------------------------------------------------------
@@ -116,13 +120,13 @@
         activeContext = null;
         contextDetail.hidden = false;
         note.hidden = false;
-        note.textContent = 'Existem vários contextos ativos. O contexto automático fica por escolher; pode registar ou usar Editar contexto.';
+        note.textContent = 'Existem vários contextos ativos. O contexto automático fica por escolher; o registo continua permitido.';
       } else {
         // None: no auto-context. Non-blocking.
         activeContext = null;
         contextDetail.hidden = false;
         note.hidden = false;
-        note.textContent = 'Sem produção/Job On ativo para esta Linha e data — contexto automático indisponível. Pode registar o facto ou usar Editar contexto.';
+        note.textContent = 'Sem produção/Job On ativo para esta Linha e data — contexto automático indisponível. Pode registar o facto.';
       }
     } catch (err) {
       showToast(err.message, true);
@@ -133,16 +137,21 @@
   $$('#contextDetail [data-type]').forEach((b) =>
     b.addEventListener('click', () => {
       currentType = b.dataset.type;
-      $$('#contextDetail [data-type]').forEach((x) =>
-        x.classList.toggle('active', x === b));
+      $$('#contextDetail [data-type]').forEach((x) => {
+        const selected = x === b;
+        x.classList.toggle('active', selected);
+        x.setAttribute('aria-pressed', String(selected));
+      });
       $('#individualNumbers').focus();
     }));
 
   function resetRegistoForm() {
     $('#individualNumbers').value = '';
     currentType = null;
-    $$('#contextDetail [data-type]').forEach((x) => x.classList.remove('active'));
-    $('#overridePanel').hidden = true;
+    $$('#contextDetail [data-type]').forEach((x) => {
+      x.classList.remove('active');
+      x.setAttribute('aria-pressed', 'false');
+    });
     $('#contextNote').hidden = true;
     $('#registerSummaryCard').hidden = true;
   }
@@ -160,18 +169,9 @@
 
   $('[data-registrar]').addEventListener('click', openRegisterSummary);
 
-  $('[data-toggle-override]').addEventListener('click', () => {
-    const p = $('#overridePanel');
-    p.hidden = !p.hidden;
-    if (!p.hidden) {
-      $('#ovProduction').value = activeContext && activeContext.productionCode ? activeContext.productionCode : '';
-      $('#ovReference').value = activeContext && activeContext.reference ? activeContext.reference : '';
-    }
-  });
-
   function openRegisterSummary() {
     if (!selectedLine) return showToast('Escolha uma Linha primeiro.', true);
-    if (!currentType) return showToast('Escolha o tipo CM, MF ou BQ.', true);
+    if (!currentType) return showToast('Escolha o tipo CM ou MF.', true);
     const numbers = parseNumbers($('#individualNumbers').value);
     if (!numbers.length) return showToast('Introduza pelo menos um número reparado.', true);
 
@@ -188,14 +188,10 @@
   $('[data-confirm-register]').addEventListener('click', async () => {
     try {
       const numbers = parseNumbers($('#individualNumbers').value);
-      const overrideProduction = $('#overridePanel').hidden ? null : $('#ovProduction').value.trim() || null;
-      const overrideReference = $('#overridePanel').hidden ? null : $('#ovReference').value.trim() || null;
       const result = await jsonPost('/api/reparacao-interna', {
         line: selectedLine,
         toolType: currentType,
-        numbers: numbers,
-        overrideProduction: overrideProduction,
-        overrideReference: overrideReference
+        numbers: numbers
       });
       showToast(`Reparação registada (${result.count ?? numbers.length} ocorrência(s)).`);
       $('#registerSummaryCard').hidden = true;
@@ -219,6 +215,7 @@
       from: $('#fFrom').value ? new Date($('#fFrom').value + 'T00:00:00Z').toISOString() : null,
       to: $('#fTo').value ? new Date($('#fTo').value + 'T23:59:59Z').toISOString() : null,
       line: $('#fLine').value || null,
+      jobOnId: linkedJobOnId,
       type: type || null,
       number: $('#fNumber').value.trim() || null,
       operatorId: $('#fOperator').value.trim() || null,
@@ -232,6 +229,7 @@
     if (f.from) q.set('from', f.from);
     if (f.to) q.set('to', f.to);
     if (f.line) q.set('line', f.line);
+    if (f.jobOnId) q.set('jobOnId', f.jobOnId);
     if (f.type) q.set('type', f.type);
     if (f.number) q.set('number', f.number);
     if (f.operatorId) q.set('operatorId', f.operatorId);
@@ -314,11 +312,14 @@
   $('[data-close-detail]').addEventListener('click', () => { $('#detailCard').hidden = true; });
 
   // ---- Correction ----------------------------------------------------------------
-  $('[data-corrigir]').addEventListener('click', () => {
-    const recordId = selectedRecordId;
-    if (!recordId) return showToast('Selecione uma linha para corrigir.', true);
-    openCorrection(recordId);
-  });
+  const correctionTrigger = $('[data-corrigir]');
+  if (correctionTrigger) {
+    correctionTrigger.addEventListener('click', () => {
+      const recordId = selectedRecordId;
+      if (!recordId) return showToast('Selecione uma linha para corrigir.', true);
+      openCorrection(recordId);
+    });
+  }
 
   async function openCorrection(recordId) {
     try {
@@ -335,15 +336,6 @@
 
   $('[data-cancel-correction]').addEventListener('click', () => { $('#correctionCard').hidden = true; });
 
-  $('[data-toggle-ovcorrection]').addEventListener('click', () => {
-    const p = $('#ovCorrectionPanel');
-    p.hidden = !p.hidden;
-    if (!p.hidden) {
-      $('#cProduction').value = '';
-      $('#cReference').value = '';
-    }
-  });
-
   $('[data-confirm-correction]').addEventListener('click', async () => {
     if (!selectedRecordId) return showToast('Selecione um registo para corrigir.', true);
     try {
@@ -354,8 +346,8 @@
         individualNumber: $('#cNumber').value.trim(),
         jobOnId: null,
         jobOnRevisionId: null,
-        productionCode: $('#ovCorrectionPanel').hidden ? null : ($('#cProduction').value.trim() || null),
-        reference: $('#ovCorrectionPanel').hidden ? null : ($('#cReference').value.trim() || null),
+        productionCode: null,
+        reference: null,
         lotId: null,
         reason: $('#cReason').value.trim() || null
       });
@@ -374,6 +366,12 @@
   }
 
   // ---- Init ---------------------------------------------------------------------
+  const query = new URLSearchParams(location.search);
+  linkedJobOnId = query.get('jobOnId');
+  const linkedLine = query.get('line');
+  if (linkedLine && Array.from($('#fLine').options).some((option) => option.value === linkedLine))
+    $('#fLine').value = linkedLine;
+  selectView(query.get('view') || 'registo');
   loadLineCards();
   applyFilter();
 })();

@@ -1,38 +1,20 @@
 @inject BA.Dmo.Application.Shared.Shell.IShellService Shell
 @{
     // Module navigation (GLM-SHL-03): tabs DERIVED from the resolved grants
-    // ∩ canonical catalog, canonical order; Controlo groups ONLY authorized
-    // children (UD-05/UD-14); Administração right-aligned. Tabs never
-    // execute commands and unauthorized entries simply do not exist here.
+    // ∩ canonical catalog, canonical order. Controlo is one top-level entry;
+    // Peso/Pegamentos remain internal. Unauthorized entries do not exist.
     var shell = Shell.Current;
 }
 @if (shell is not null &&
      (shell.Navigation.LeftItems.Count > 0 || shell.Navigation.AdminEntry is not null))
 {
-    <nav class="app-nav" aria-label="Navegação de módulos" data-testid="shell-nav">
+    <nav class="app-nav primary-nav dmo-primary-nav" aria-label="Navegação de módulos" data-testid="shell-nav">
         <ul class="app-nav-left">
             @foreach (var item in shell.Navigation.LeftItems)
             {
-                @if (item is NavigationArea area)
-                {
-                    <li class="@(area.IsActive ? "nav-area nav-active" : "nav-area")" data-testid="nav-item-@area.Id">
-                        <a href="@area.Route">@area.Label</a>
-                        <ul>
-                            @foreach (var child in area.Children)
-                            {
-                                <li class="@(child.IsActive ? "nav-tab nav-active" : "nav-tab")" data-testid="nav-item-@child.Id">
-                                    <a href="@child.Route">@child.Label</a>
-                                </li>
-                            }
-                        </ul>
-                    </li>
-                }
-                else
-                {
-                    <li class="@(item.IsActive ? "nav-tab nav-active" : "nav-tab")" data-testid="nav-item-@item.Id">
-                        <a href="@item.Route">@item.Label</a>
-                    </li>
-                }
+                <li class="@(item.IsActive ? "nav-tab nav-active" : "nav-tab")" data-testid="nav-item-@item.Id">
+                    <a href="@item.Route" aria-current="@(item.IsActive ? "page" : null)">@item.Label</a>
+                </li>
             }
         </ul>
         @if (shell.Navigation.AdminEntry is NavigationTab admin)

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BA.Dmo.IntegrationTests\BA.Dmo.IntegrationTests.csproj" />
+    <ProjectReference Include="..\..\..\..\src\BA.Dmo.Web\BA.Dmo.Web.csproj" />
+  </ItemGroup>
+</Project>

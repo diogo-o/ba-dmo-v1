@@ -8,7 +8,7 @@
 <div class="dmo-page-head">
     <div>
         <h2>@(Model.IsNew ? "Criar template" : "Editar template")</h2>
-        <p>Apenas entradas do catálogo canónico; capabilities fora do módulo dono são rejeitadas.</p>
+        <p>Os templates atribuem módulos. O perfil do utilizador determina o comportamento dentro de cada módulo.</p>
     </div>
     <a class="dmo-button" href="/admin/templates">Voltar à lista</a>
 </div>
@@ -46,7 +46,7 @@
                 </div>
             </div>
             <div class="dmo-table-title">
-                <h3>Módulos e capabilities</h3>
+                <h3>Módulos</h3>
             </div>
             <div class="dmo-table-wrap">
                 <table class="dmo-table">
@@ -54,7 +54,6 @@
                         <tr>
                             <th>Módulo</th>
                             <th>Conceder</th>
-                            <th>Capabilities (separadas por vírgula)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -67,7 +66,6 @@
                                     <input type="hidden" name="lines[@i].DisplayName" value="@Model.Lines[i].DisplayName" />
                                 </td>
                                 <td><input type="checkbox" name="lines[@i].Granted" value="true" checked="@Model.Lines[i].Granted" /></td>
-                                <td><div class="dmo-field"><input type="text" name="lines[@i].Capabilities" value="@Model.Lines[i].Capabilities" placeholder="Ex.: jobon.view, jobon.edit" /></div></td>
                             </tr>
                         }
                     </tbody>

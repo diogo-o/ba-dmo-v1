@@ -60,7 +60,7 @@ public sealed class PesoSingleFilePdfRenderer : IPdfRenderer
 
         // Subtitle
         Txt(st, 8, false, Dark.R, Dark.G, Dark.B,
-            $"Documento final para Produ\u00E7\u00E3o \u00B7 Refer\u00EAncia {d.MoldNumber}{d.NeckringNumber} \u00B7 Linha {d.Line} \u00B7 Lote L{d.Lote}",
+            $"Documento final para Produ\u00E7\u00E3o \u00B7 Refer\u00EAncia {d.MoldNumber}{d.NeckringNumber} \u00B7 Linha {d.Line} \u00B7 Lote {d.Lote}",
             MgnL + 4, y);
         y -= 12;
 
@@ -84,7 +84,7 @@ public sealed class PesoSingleFilePdfRenderer : IPdfRenderer
             ("Contra molde", d.MoldNumber),
             ("Boquiha / Neckring", d.NeckringNumber),
             ("Linha", d.Line),
-            ("Lote", $"L{d.Lote}")
+            ("Lote", d.Lote)
         };
         var cx = MgnL + 6;
         foreach (var (lb, val) in chips)
@@ -103,57 +103,43 @@ public sealed class PesoSingleFilePdfRenderer : IPdfRenderer
         SecHeader(st, ref y, "IDENTIFICAÇÃO DA PRODUÇÃO");
 
         // Two-column table
-        IdRow(st, ref y, "Produ\u00E7\u00E3o", d.ProductionCode, "Linha", d.Line, "Lote", $"L{d.Lote}", false);
+        IdRow(st, ref y, "Produ\u00E7\u00E3o", d.ProductionCode, "Linha", d.Line, "Lote", d.Lote, false);
         IdRow(st, ref y, "Estado do molde", d.EstadoMolde ?? "\u2014", "Tipo", d.Processo ?? "\u2014", "Data",
              d.ApprovedAtUtc?.ToString("dd/MM/yyyy") ?? "\u2014", true);
         y -= 6;
 
         // ====================================================================
-        // SECTION: COMPARAÇÃO COM A ÚLTIMA PRODUÇÃO
+        // SECTION: CURRENT CONTROL RESULTS (not a production comparison)
         // ====================================================================
-        SecHeader(st, ref y, "COMPARAÇÃO COM A ÚLTIMA PRODUÇÃO");
+        SecHeader(st, ref y, "RESULTADOS DO CONTROLO");
+        RefRow(st, ref y, "Peso m\u00E9dio do vidro", Fmt(d.PesoMedio), "Capacidade m\u00E9dia", Fmt(d.CapacidadeMedia), "Peso nominal", Fmt(d.PesoNominal));
+        y -= 6;
 
-        CompHeaderRow(st, ref y);
-        CompDataRow(st, ref y, "Peso calculado", Fmt(d.PesoMedio), Fmt(d.PreviousPesoMedio), FmtDelta(d.DeltaPeso), FmtPct(d.DeltaPesoPct), false);
-        CompDataRow(st, ref y, "Capacidade m\u00E9dia", Fmt(d.CapacidadeMedia), Fmt(d.PreviousCapacidadeMedia), FmtDelta(d.DeltaCapacidade), FmtPct(d.DeltaCapacidadePct), true);
-
-        y -= 4;
-        if (!string.IsNullOrEmpty(d.PreviousProductionCode))
+        if (d.IsComparison && !string.IsNullOrEmpty(d.PreviousProductionCode))
         {
-            RowSep(st, ref y);
-            MutedTxt(st, 8, "\u00DAltima produ\u00E7\u00E3o usada:", MgnL + 4, y);
-            y -= 12;
+            SecHeader(st, ref y, "PRODU\u00C7\u00C3O ANTERIOR CONFIRMADA");
             Txt(st, 9, false, Dark.R, Dark.G, Dark.B, d.PreviousProductionCode, MgnL + 4, y);
             y -= 16;
         }
-        y -= 6;
 
         // ====================================================================
-        // SECTION: COMPARAÇÃO POR CONTRA MOLDE (SINGLE COMBINED TABLE)
+        // SECTION: PER-CM GLASS-WEIGHT SNAPSHOT
         // ====================================================================
-        SecHeader(st, ref y, "COMPARAÇÃO POR CONTRA MOLDE");
+        SecHeader(st, ref y, d.IsComparison
+            ? "COMPARA\u00C7\u00C3O POR CM \u2014 PESO DO VIDRO"
+            : "PESO DO VIDRO POR CM");
 
-        CmTableHeader(st, ref y);
+        CmTableHeader(st, ref y, d.IsComparison);
 
         if (d.CmRows?.Count > 0)
         {
             for (var i = 0; i < d.CmRows.Count; i++)
             {
                 var r = d.CmRows[i];
-                CmTableRow(st, ref y, r.CmNumber,
-                    Fmt(r.PesoAtual), Fmt(r.PesoAnterior), FmtDelta(r.DeltaPeso),
-                    Fmt(r.CapacidadeAtual), Fmt(r.CapacidadeAnterior), FmtDelta(r.DeltaCapacidade),
-                    i % 2 == 1);
+                CmTableRow(st, ref y, r.CurrentCmNumber, r.PreviousCmNumber,
+                    Fmt(r.PesoAtual), Fmt(r.PesoAnterior), FmtDelta(r.DeltaPeso), FmtPct(r.DeltaPesoPct),
+                    d.IsComparison, i % 2 == 1);
             }
-            // Capacity summary row
-            y += 2;
-            RowSep(st, ref y);
-            y += 12;
-            Txt(st, 8, true, Dark.R, Dark.G, Dark.B, "Capacidade média", MgnL + 4, y);
-            Txt(st, 8, true, Dark.R, Dark.G, Dark.B, Fmt(d.CapacidadeMedia), 320, y);
-            Txt(st, 8, true, Dark.R, Dark.G, Dark.B, Fmt(d.PreviousCapacidadeMedia), 400, y);
-            Txt(st, 8, true, Dark.R, Dark.G, Dark.B, FmtDelta(d.DeltaCapacidade), 470, y);
-            y += 16;
         }
         else
         {
@@ -251,59 +237,38 @@ public sealed class PesoSingleFilePdfRenderer : IPdfRenderer
         RowSep(s, ref y);
     }
 
-    /// <summary>Comparison section header row.</summary>
-    private static void CompHeaderRow(StringBuilder s, ref int y)
+    /// <summary>Per-CM glass-weight table header.</summary>
+    private static void CmTableHeader(StringBuilder s, ref int y, bool comparison)
     {
         Rect(s, Blue.R, Blue.G, Blue.B, MgnL, y - 12, MgnR - MgnL, 14);
-        Txt(s, 8, true, 255, 255, 255, "Parâmetro", MgnL + 4, y - 1);
-        Txt(s, 8, true, 255, 255, 255, "Produção atual", MgnL + 150, y - 1);
-        Txt(s, 8, true, 255, 255, 255, "\u00DAltima produção", MgnL + 270, y - 1);
-        Txt(s, 8, true, 255, 255, 255, "Diferença", MgnL + 390, y - 1);
-        Txt(s, 8, true, 255, 255, 255, "Variação", MgnL + 470, y - 1);
-        y -= 14;
-        RowSep(s, ref y);
-    }
-
-    /// <summary>Comparison data row.</summary>
-    private static void CompDataRow(StringBuilder s, ref int y, string label, string cur, string prev, string diff, string pct, bool alt)
-    {
-        if (alt) Rect(s, Paler.R, Paler.G, Paler.B, MgnL, y - 12, MgnR - MgnL, 14);
-        Txt(s, 9, false, Dark.R, Dark.G, Dark.B, label, MgnL + 4, y - 1);
-        Txt(s, 9, false, Dark.R, Dark.G, Dark.B, cur, MgnL + 150, y - 1);
-        Txt(s, 9, false, Dark.R, Dark.G, Dark.B, prev, MgnL + 270, y - 1);
-        Txt(s, 9, true, Dark.R, Dark.G, Dark.B, diff, MgnL + 390, y - 1);
-        Txt(s, 9, true, Dark.R, Dark.G, Dark.B, pct, MgnL + 470, y - 1);
-        y -= 14;
-        RowSep(s, ref y);
-    }
-
-    /// <summary>CM comparison combined table header.</summary>
-    private static void CmTableHeader(StringBuilder s, ref int y)
-    {
-        Rect(s, Blue.R, Blue.G, Blue.B, MgnL, y - 12, MgnR - MgnL, 14);
-        Txt(s, 7, true, 255, 255, 255, "Contra Molde", MgnL + 4, y - 1);
-        Txt(s, 7, true, 255, 255, 255, "Peso atual (g)", MgnL + 130, y - 1);
-        Txt(s, 7, true, 255, 255, 255, "Peso ant. (g)", MgnL + 210, y - 1);
-        Txt(s, 7, true, 255, 255, 255, "Δ (g)", MgnL + 285, y - 1);
-        Txt(s, 7, true, 255, 255, 255, "Cap. atual (cm³)", MgnL + 330, y - 1);
-        Txt(s, 7, true, 255, 255, 255, "Cap. ant. (cm³)", MgnL + 410, y - 1);
-        Txt(s, 7, true, 255, 255, 255, "Δ (cm³)", MgnL + 480, y - 1);
+        Txt(s, 7, true, 255, 255, 255, "CM atual", MgnL + 4, y - 1);
+        Txt(s, 7, true, 255, 255, 255, "CM anterior", MgnL + 105, y - 1);
+        Txt(s, 7, true, 255, 255, 255, "Peso atual (g)", MgnL + 205, y - 1);
+        if (comparison)
+        {
+            Txt(s, 7, true, 255, 255, 255, "Peso anterior (g)", MgnL + 300, y - 1);
+            Txt(s, 7, true, 255, 255, 255, "Diferença (g)", MgnL + 410, y - 1);
+            Txt(s, 7, true, 255, 255, 255, "Variação", MgnL + 490, y - 1);
+        }
         y -= 14;
         RowSep(s, ref y);
     }
 
     /// <summary>One CM data row.</summary>
-    private static void CmTableRow(StringBuilder s, ref int y, string cm, string pCur, string pPrev, string pDiff,
-        string cCur, string cPrev, string cDiff, bool alt)
+    private static void CmTableRow(StringBuilder s, ref int y, string currentCm, string? previousCm,
+        string currentWeight, string previousWeight, string difference, string percentage,
+        bool comparison, bool alt)
     {
         if (alt) Rect(s, Paler.R, Paler.G, Paler.B, MgnL, y - 12, MgnR - MgnL, 14);
-        Txt(s, 8, false, Dark.R, Dark.G, Dark.B, cm, MgnL + 4, y - 1);
-        Txt(s, 8, false, Dark.R, Dark.G, Dark.B, pCur, MgnL + 130, y - 1);
-        Txt(s, 8, false, Dark.R, Dark.G, Dark.B, pPrev, MgnL + 210, y - 1);
-        Txt(s, 8, true, Dark.R, Dark.G, Dark.B, pDiff, MgnL + 285, y - 1);
-        Txt(s, 8, false, Dark.R, Dark.G, Dark.B, cCur, MgnL + 330, y - 1);
-        Txt(s, 8, false, Dark.R, Dark.G, Dark.B, cPrev, MgnL + 410, y - 1);
-        Txt(s, 8, true, Dark.R, Dark.G, Dark.B, cDiff, MgnL + 480, y - 1);
+        Txt(s, 8, false, Dark.R, Dark.G, Dark.B, currentCm, MgnL + 4, y - 1);
+        Txt(s, 8, false, Dark.R, Dark.G, Dark.B, previousCm ?? "—", MgnL + 105, y - 1);
+        Txt(s, 8, false, Dark.R, Dark.G, Dark.B, currentWeight, MgnL + 205, y - 1);
+        if (comparison)
+        {
+            Txt(s, 8, false, Dark.R, Dark.G, Dark.B, previousWeight, MgnL + 300, y - 1);
+            Txt(s, 8, true, Dark.R, Dark.G, Dark.B, difference, MgnL + 410, y - 1);
+            Txt(s, 8, true, Dark.R, Dark.G, Dark.B, percentage, MgnL + 490, y - 1);
+        }
         y -= 14;
         RowSep(s, ref y);
     }

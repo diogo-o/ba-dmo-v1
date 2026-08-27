@@ -1,6 +1,6 @@
 @page "/controlo"
 @model BA.Dmo.Web.Pages.Controlo.IndexModel
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.ModulePolicies.Peso)]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = BA.Dmo.Web.Authorization.ModulePolicies.Controlo)]
 @{
     ViewData["Title"] = "Controlo";
 }
@@ -37,12 +37,12 @@
     <div class="dmo-empty-state" id="controloError" hidden></div>
 
     @* ===== Workspace tabs (shared active context) ===== *@
-    <nav class="controlo-tabs" aria-label="Navegação Controlo" id="workTabs" hidden>
-        <button class="tab active" data-tab="resumo" type="button">Resumo</button>
-        <button class="tab" data-tab="peso" type="button">Peso</button>
-        <button class="tab" data-tab="comparacao" type="button">Comparação</button>
-        <button class="tab" data-tab="pegamentos" type="button">Pegamentos</button>
-        <button class="tab" data-tab="historico" type="button">Histórico</button>
+    <nav class="dmo-module-tabs controlo-tabs" aria-label="Navegação Controlo" id="workTabs" hidden>
+        <button class="dmo-module-tab tab active" data-tab="resumo" type="button">Resumo</button>
+        <button class="dmo-module-tab tab" data-tab="peso" type="button">Peso</button>
+        <button class="dmo-module-tab tab" data-tab="comparacao" type="button">Comparação</button>
+        <button class="dmo-module-tab tab" data-tab="pegamentos" type="button">Pegamentos</button>
+        <button class="dmo-module-tab tab" data-tab="historico" type="button">Histórico</button>
     </nav>
 
     @* ===== Resumo tab ===== *@

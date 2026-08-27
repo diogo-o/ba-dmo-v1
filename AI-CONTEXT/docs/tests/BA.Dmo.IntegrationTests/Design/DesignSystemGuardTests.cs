@@ -214,6 +214,123 @@ public class DesignSystemGuardTests : IClassFixture<DesignSystemGuardTests.Desig
     }
 
     [Fact]
+    public void Buttons_UseCanonicalTypographyAndCenteredLabels()
+    {
+        var components = ReadStyles("dmo-components.css");
+        var baseRule = ExtractRule(components, ".dmo-button {");
+
+        Assert.Contains("align-items: center", baseRule);
+        Assert.Contains("justify-content: center", baseRule);
+        Assert.Contains("font-family: var(--dmo-font-family)", baseRule);
+        Assert.Contains("font-size: var(--dmo-font-size-md)", baseRule);
+        Assert.Contains("line-height: var(--dmo-line-height-normal)", baseRule);
+        Assert.Contains("text-align: center", baseRule);
+    }
+
+    [Fact]
+    public void Boquilhas_UsesCanonicalContextualSidebar()
+    {
+        var markup = File.ReadAllText(Path.Combine(
+            RepoRoot, "src", "BA.Dmo.Web", "Pages", "Boquilhas", "Index.cshtml"));
+        var behavior = File.ReadAllText(Path.Combine(
+            RepoRoot, "src", "BA.Dmo.Web", "wwwroot", "scripts", "boquilhas.js"));
+
+        Assert.Contains("dmo-work-split boquilhas-layout", markup);
+        Assert.Contains("dmo-sidebar boquilhas-side", markup);
+        Assert.Contains("dmo-sidebar__head", markup);
+        Assert.Contains("dmo-sidebar__cards boquilhas-lines", markup);
+        Assert.Contains("dmo-sidebar__card boquilhas-line", behavior);
+    }
+
+    [Fact]
+    public void ReparacaoInterna_TypeChoice_PersistsAccessibleSelectedState()
+    {
+        var markup = File.ReadAllText(Path.Combine(
+            RepoRoot, "src", "BA.Dmo.Web", "Pages", "ReparacaoInterna", "Index.cshtml"));
+        var behavior = File.ReadAllText(Path.Combine(
+            RepoRoot, "src", "BA.Dmo.Web", "wwwroot", "scripts", "reparacao-interna.js"));
+        var css = File.ReadAllText(Path.Combine(
+            RepoRoot, "src", "BA.Dmo.Web", "wwwroot", "styles", "modules",
+            "reparacao-interna-layout.css"));
+
+        Assert.Contains("aria-label=\"Tipo de ferramenta\"", markup);
+        Assert.Contains("class=\"reparacao-interna-type-choice\"", markup);
+        Assert.Equal(2, Regex.Matches(markup, "data-type=\\\"(?:CM|MF)\\\" aria-pressed=\\\"false\\\"").Count);
+        Assert.Contains("setAttribute('aria-pressed', String(selected))", behavior);
+        Assert.Contains("setAttribute('aria-pressed', 'false')", behavior);
+        Assert.DoesNotContain("let openCorrection", behavior);
+        Assert.Single(Regex.Matches(behavior, "function openCorrection\\(").Cast<Match>());
+        Assert.Contains("if (correctionTrigger)", behavior);
+        Assert.Contains("[data-type][aria-pressed=\"true\"]", css);
+        Assert.Contains("var(--dmo-brand-800)", css);
+        Assert.Contains("background: var(--dmo-card)", css);
+    }
+
+    [Fact]
+    public void Logout_UsesTheCanonicalButtonAndStylesheets()
+    {
+        var markup = File.ReadAllText(Path.Combine(
+            RepoRoot, "src", "BA.Dmo.Web", "Pages", "Auth", "Logout.cshtml"));
+
+        Assert.Contains("styles/dmo-components.css", markup);
+        Assert.Contains("class=\"logout-body\"", markup);
+        Assert.Contains("class=\"dmo-button\" type=\"submit\"", markup);
+    }
+
+    [Fact]
+    public void ModuleTabs_UseOneSharedTypographyAndSizingContract()
+    {
+        var components = ReadStyles("dmo-components.css");
+        Assert.Contains(".dmo-module-tabs.dmo-module-tabs {", components);
+        Assert.Contains("min-height: var(--dmo-tabs-height)", components);
+        Assert.Contains(".dmo-module-tab {", components);
+        Assert.Contains("font-family: var(--dmo-font-family)", components);
+        Assert.Contains("font-size: var(--dmo-font-size-md)", components);
+        Assert.Contains("font-weight: 650", components);
+        Assert.Contains("text-align: center", components);
+
+        string[] pages =
+        {
+            "Armazem/Index.cshtml",
+            "Boquilhas/Index.cshtml",
+            "Controlo/Index.cshtml",
+            "Ferramentas/Index.cshtml",
+            "JobOn/Index.cshtml",
+            "Pegamentos/Index.cshtml",
+            "Peso/Index.cshtml",
+            "Peso/Responsavel.cshtml",
+            "ReparacaoExterna/Index.cshtml",
+            "ReparacaoInterna/Index.cshtml",
+            "Tampoes/Index.cshtml"
+        };
+
+        foreach (var page in pages)
+        {
+            var markup = File.ReadAllText(Path.Combine(
+                RepoRoot, "src", "BA.Dmo.Web", "Pages",
+                page.Replace('/', Path.DirectorySeparatorChar)));
+            Assert.Contains("dmo-module-tabs", markup);
+            Assert.Contains("dmo-module-tab", markup);
+        }
+    }
+
+    [Fact]
+    public void StylesheetLinks_AreFingerprintVersioned()
+    {
+        foreach (var cshtml in Directory.EnumerateFiles(
+            Path.Combine(RepoRoot, "src", "BA.Dmo.Web", "Pages"),
+            "*.cshtml", SearchOption.AllDirectories))
+        {
+            var markup = File.ReadAllText(cshtml);
+            foreach (Match link in Regex.Matches(
+                markup, "<link\\s+rel=\\\"stylesheet\\\"\\s+href=\\\"~/styles/[^\\\"]+\\\"[^>]*>"))
+            {
+                Assert.Contains("asp-append-version=\"true\"", link.Value);
+            }
+        }
+    }
+
+    [Fact]
     public void Pages_ContainNoLocalDesignCss()
     {
         // GLM-DSN-09 / contract §21: no <style> and no design inline styles.
@@ -334,12 +451,12 @@ public class DesignSystemGuardTests : IClassFixture<DesignSystemGuardTests.Desig
             ActorId: "design-actor",
             AuthUserId: AuthUserId,
             DisplayName: "Utilizador Design",
-            ProfileTitle: "Metrologia",
+            ProfileTitle: "Operador / Controlador",
             UserActive: true,
             TemplateId: "tpl-design",
             TemplateName: "Design",
             TemplateActive: true,
-            ModulesJson: "[{\"moduleId\":\"boquilhas\",\"capabilities\":[]}]");
+            ModulesJson: "[{\"moduleId\":\"jobon\",\"capabilities\":[]},{\"moduleId\":\"boquilhas\",\"capabilities\":[]}]");
 
         public HttpClient CreateTestClient() => CreateClient(new WebApplicationFactoryClientOptions
         {

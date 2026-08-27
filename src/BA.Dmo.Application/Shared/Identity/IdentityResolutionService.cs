@@ -22,9 +22,10 @@ public sealed record ResolvedIdentity(
 /// authenticated Supabase auth_user_id → internal_users → access template →
 /// normalized grants → U-04 AccessResolver → CurrentUser/effective access.
 /// Fail-closed: missing/inactive internal user → INTERNAL_USER_INACTIVE;
-/// missing/inactive template → ACCESS_TEMPLATE_INACTIVE; both produce the
+/// missing/inactive template → ACCESS_TEMPLATE_INACTIVE; invalid profile →
+/// FUNCTIONAL_PROFILE_INVALID; all produce the
 /// safe "session without access" state — never an Admin fallback, never a
-/// silent grant (GLM-ARCH-18). No role-name branching anywhere.
+/// silent grant (GLM-ARCH-18).
 /// The service is request-scoped: results are memoized for the lifetime of
 /// ONE request only, so concurrent consumers of the same request (page
 /// guard, shell, authorship) resolve once; every subsequent request
@@ -98,38 +99,50 @@ public sealed class IdentityResolutionService
                     "INTERNAL_USER_INACTIVE",
                     "The internal user is not registered or is inactive."));
 
-        if (!record.TemplateActive)
+        var associatedTemplates = record.AccessTemplates is { Count: > 0 }
+            ? record.AccessTemplates
+            :
+            [
+                new InternalUserAccessTemplateRecord(
+                    record.TemplateId,
+                    record.TemplateName,
+                    record.TemplateActive,
+                    record.ModulesJson)
+            ];
+
+        var activeTemplates = associatedTemplates.Where(template => template.TemplateActive).ToList();
+        if (activeTemplates.Count == 0)
             return Result<ResolvedIdentity, DomainError>.Failure(
                 DomainError.Unauthorized(
                     "ACCESS_TEMPLATE_INACTIVE",
                     "The access template is missing or inactive."));
 
-        // Per-user module override (N26 / contract §6.6): when internal_users.
-        // modules_override is non-null it REPLACES the template grants as the
-        // effective grant surface, reusing the SAME canonical parser and funnel
-        // (AccessTemplateGrantsParser → AccessResolver). Otherwise, and always
-        // for the fallback, the template path is unchanged. Fail-closed: a
-        // non-null override whose JSON fails to parse is treated EXACTLY like a
-        // failing template parse below — resolution is denied (never a silent
-        // widen nor a silent degrade to the template's grants).
-        var effectiveModulesJson = string.IsNullOrWhiteSpace(record.ModulesOverrideJson)
-            ? record.ModulesJson
-            : record.ModulesOverrideJson;
-
-        var parsed = AccessTemplateGrantsParser.Parse(effectiveModulesJson);
-        if (parsed.IsFailure)
+        if (!FunctionalProfileNames.TryParse(record.ProfileTitle, out var profile))
             return Result<ResolvedIdentity, DomainError>.Failure(
                 DomainError.Unauthorized(
-                    "ACCESS_TEMPLATE_INACTIVE",
-                    "The access grants cannot grant access."));
+                    "FUNCTIONAL_PROFILE_INVALID",
+                    "The internal user has no valid functional profile."));
 
-        var template = new AccessTemplateDefinition(
-            record.TemplateId,
-            record.TemplateName,
-            active: true,
-            parsed.Value);
+        // modules_override is retained as dormant legacy data. Every active
+        // associated template passes through the same parser and resolver.
+        var templates = new List<AccessTemplateDefinition>();
+        foreach (var associated in activeTemplates)
+        {
+            var parsed = AccessTemplateGrantsParser.Parse(associated.ModulesJson);
+            if (parsed.IsFailure)
+                return Result<ResolvedIdentity, DomainError>.Failure(
+                    DomainError.Unauthorized(
+                        "ACCESS_TEMPLATE_INACTIVE",
+                        "The access grants cannot grant access."));
 
-        var access = _accessResolver.Resolve(template);
+            templates.Add(new AccessTemplateDefinition(
+                associated.TemplateId,
+                associated.TemplateName,
+                active: true,
+                parsed.Value));
+        }
+
+        var access = _accessResolver.Resolve(templates, profile);
         var firstPage = _accessResolver.ResolveFirstPage(access);
 
         var currentUser = new CurrentUser(
@@ -141,7 +154,7 @@ public sealed class IdentityResolutionService
         return Result<ResolvedIdentity, DomainError>.Success(new ResolvedIdentity(
             currentUser,
             record.ActorId,
-            record.ProfileTitle,
+            profile.DisplayName(),
             access,
             firstPage));
     }

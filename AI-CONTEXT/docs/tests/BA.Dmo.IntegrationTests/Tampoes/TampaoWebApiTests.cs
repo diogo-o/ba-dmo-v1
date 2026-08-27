@@ -56,6 +56,34 @@ public class TampaoWebApiTests : IClassFixture<TampaoWebApiTests.TampoesFixture>
     }
 
     [Fact]
+    public async Task Planeamento_IsAbsentFromRenderedSurface_AndEndpoints()
+    {
+        _fixture.Repository.User = _fixture.ValidTampoesUser();
+        var client = _fixture.CreateTestClient();
+        var login = await PostFormAsync(client, "/login", new()
+        {
+            ["email"] = "tampoes@ba-dmo.example",
+            ["password"] = "correct"
+        });
+        Assert.Equal(HttpStatusCode.Redirect, login.StatusCode);
+
+        var page = await client.GetAsync("/tampoes");
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        var html = await page.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("data-view=\"planeamento\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("id=\"planeamento\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-planear", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("planosTable", html, StringComparison.Ordinal);
+
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync("/api/tampoes/planos?includeCanceled=false")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.PostAsync("/api/tampoes/planear", JsonBody("{}"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.PostAsync($"/api/tampoes/planos/{Guid.NewGuid()}/cancelar", JsonBody("{}"))).StatusCode);
+    }
+
+    [Fact]
     public async Task UserWithoutTampoesModule_IsDenied()
     {
         _fixture.Repository.User = _fixture.UserWithoutTampoes();
@@ -91,6 +119,9 @@ public class TampaoWebApiTests : IClassFixture<TampaoWebApiTests.TampoesFixture>
         return await client.PostAsync(url, new FormUrlEncodedContent(values));
     }
 
+    private static StringContent JsonBody(string json) =>
+        new(json, System.Text.Encoding.UTF8, "application/json");
+
     public sealed class TampoesFixture : WebApplicationFactory<Program>
     {
         public FakeIdentityRepository Repository { get; } = new();
@@ -99,7 +130,7 @@ public class TampaoWebApiTests : IClassFixture<TampaoWebApiTests.TampoesFixture>
             ActorId: "tampoes-actor",
             AuthUserId: AuthUserId,
             DisplayName: "Operador Tampões",
-            ProfileTitle: null,
+            ProfileTitle: "Operador / Controlador",
             UserActive: true,
             TemplateId: "tpl-tampoes",
             TemplateName: "Tampões",
@@ -110,7 +141,7 @@ public class TampaoWebApiTests : IClassFixture<TampaoWebApiTests.TampoesFixture>
             ActorId: "other-actor",
             AuthUserId: AuthUserId,
             DisplayName: "Outro",
-            ProfileTitle: null,
+            ProfileTitle: "Operador / Controlador",
             UserActive: true,
             TemplateId: "tpl-other",
             TemplateName: "Outro",

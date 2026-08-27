@@ -4,12 +4,12 @@
 @{
     ViewData["Title"] = "Pegamentos";
 }
-<link rel="stylesheet" href="~/styles/modules/pegamentos-layout.css" />
+<link rel="stylesheet" href="~/styles/modules/pegamentos-layout.css" asp-append-version="true" />
 
-<nav class="pegamentos-tabs" aria-label="Navegação Pegamentos">
-    <button class="tab active" data-view="historicos" type="button">Históricos</button>
-    <button class="tab" data-view="nova" type="button">Nova folha</button>
-    <button class="tab right" data-view="configuracao" type="button">Configuração</button>
+<nav class="dmo-module-tabs pegamentos-tabs" aria-label="Navegação Pegamentos">
+    <button class="dmo-module-tab tab active" data-view="historicos" type="button">Históricos</button>
+    <button class="dmo-module-tab tab" data-view="nova" type="button">Nova folha</button>
+    <button class="dmo-module-tab tab right" data-view="configuracao" type="button">Configuração</button>
 </nav>
 
 <main data-testid="page-pegamentos" class="pegamentos-page">

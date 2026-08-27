@@ -16,11 +16,12 @@ public class PesoPdfVisualCheck
     {
         var data = new PesoFolhaPdf
         {
+            IsComparison = true,
             MoldNumber = "1075C142",
             NeckringNumber = "ST100",
             ProductionCode = "202603",
             Line = "B1",
-            Lote = "L8",
+            Lote = "8",
             Revision = 1,
             PesoMedio = 143.31m,
             CapacidadeMedia = 71.66m,
@@ -29,13 +30,7 @@ public class PesoPdfVisualCheck
             PesoNominal = 138m,
             ApprovedBy = "Gonçalo Duarte",
             ApprovedAtUtc = new DateTimeOffset(2026, 7, 28, 14, 54, 28, TimeSpan.Zero),
-            PreviousPesoMedio = 143.63m,
-            PreviousCapacidadeMedia = 71.88m,
-            DeltaPeso = -0.53m,
-            DeltaPesoPct = -0.37m,
-            DeltaCapacidade = -0.22m,
-            DeltaCapacidadePct = -0.3m,
-            PreviousProductionCode = "202601 - 2026-03-05 - Linha B1",
+            PreviousProductionCode = "202601 · Linha B1 · Lote 7",
             DeltaNominal = 5.1m,
             DeltaNominalPct = 3.7m,
             SapPesoMedio = 145m,
@@ -43,10 +38,10 @@ public class PesoPdfVisualCheck
             TemperaturaC = 25m,
             Densidade = 0.99603m,
             CmRows = new[] {
-                new PesoCmComparisonRow { CmNumber = "Leitura 1 · CM 61", PesoAtual = 71.1m, PesoAnterior = 71.8m, DeltaPeso = -0.7m, CapacidadeAtual = 71.38m, CapacidadeAnterior = 72m, DeltaCapacidade = -0.62m },
-                new PesoCmComparisonRow { CmNumber = "Leitura 2 · CM 95", PesoAtual = 71.4m, PesoAnterior = 71.6m, DeltaPeso = -0.2m, CapacidadeAtual = 71.68m, CapacidadeAnterior = 71.8m, DeltaCapacidade = -0.12m },
-                new PesoCmComparisonRow { CmNumber = "Leitura 3 · CM 63", PesoAtual = 71.2m, PesoAnterior = 71.6m, DeltaPeso = -0.4m, CapacidadeAtual = 71.48m, CapacidadeAnterior = 71.8m, DeltaCapacidade = -0.32m },
-                new PesoCmComparisonRow { CmNumber = "Leitura 4 · CM 36", PesoAtual = 71.8m, PesoAnterior = 71.7m, DeltaPeso = 0.1m, CapacidadeAtual = 72.09m, CapacidadeAnterior = 71.9m, DeltaCapacidade = 0.18m },
+                new PesoCmComparisonRow { CurrentCmNumber = "61", PreviousCmNumber = "95", PesoAtual = 171.1m, PesoAnterior = 171.8m, DeltaPeso = -0.7m, DeltaPesoPct = -0.41m },
+                new PesoCmComparisonRow { CurrentCmNumber = "95", PreviousCmNumber = "63", PesoAtual = 171.4m, PesoAnterior = 171.6m, DeltaPeso = -0.2m, DeltaPesoPct = -0.12m },
+                new PesoCmComparisonRow { CurrentCmNumber = "63", PreviousCmNumber = "36", PesoAtual = 171.2m, PesoAnterior = 171.6m, DeltaPeso = -0.4m, DeltaPesoPct = -0.23m },
+                new PesoCmComparisonRow { CurrentCmNumber = "36", PreviousCmNumber = "61", PesoAtual = 171.8m, PesoAnterior = 171.7m, DeltaPeso = 0.1m, DeltaPesoPct = 0.06m },
             }.ToList().AsReadOnly()
         };
 

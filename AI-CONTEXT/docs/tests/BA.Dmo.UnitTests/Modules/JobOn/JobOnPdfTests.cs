@@ -359,6 +359,25 @@ public class JobOnPdfTests
         Assert.Null(resolution);
     }
 
+    [Fact]
+    public async Task GenerateAsync_ConsumesReferenceImageProvider_IntoPrintProjection()
+    {
+        var jobOnId = await CreateJobOnWithRevision();
+        var imageBytes = new byte[] { 0xFF, 0xD8, 0xFF, 0xD9 };
+        var service = new JobOnPdfService(
+            _repository,
+            new JobOnAuthorizationGate(_identity),
+            new StubJobOnImageProvider(imageBytes, "image/jpeg"));
+        var renderer = new TestPdfRenderer();
+
+        var result = await service.GenerateAsync(renderer, jobOnId);
+
+        Assert.True(result.IsSuccess);
+        var data = Assert.Single(renderer.RenderedDocuments);
+        Assert.Equal(imageBytes, data.ImageBytes);
+        Assert.Equal("image/jpeg", data.ImageMimeType);
+    }
+
     // ---- PDF-14: BuildFileName produces correct format ----
     [Fact]
     public void BuildFileName_ProducesCorrectFormat()
@@ -428,4 +447,22 @@ internal sealed class NullJobOnImageProvider : BA.Dmo.Application.Shared.IJobOnI
 {
     public Task<BA.Dmo.Application.Shared.ImageResolution?> ResolveAsync(Guid jobOnId, CancellationToken ct = default)
         => Task.FromResult<BA.Dmo.Application.Shared.ImageResolution?>(null);
+}
+
+internal sealed class StubJobOnImageProvider : BA.Dmo.Application.Shared.IJobOnImageProvider
+{
+    private readonly byte[] _bytes;
+    private readonly string _mimeType;
+
+    public StubJobOnImageProvider(byte[] bytes, string mimeType)
+    {
+        _bytes = bytes;
+        _mimeType = mimeType;
+    }
+
+    public Task<BA.Dmo.Application.Shared.ImageResolution?> ResolveAsync(
+        Guid jobOnId,
+        CancellationToken ct = default) =>
+        Task.FromResult<BA.Dmo.Application.Shared.ImageResolution?>(
+            new BA.Dmo.Application.Shared.ImageResolution(_bytes, _mimeType));
 }

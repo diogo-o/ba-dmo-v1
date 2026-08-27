@@ -99,6 +99,12 @@ public sealed class FakeAdminRepository : IAdminRepository
     public Task<bool> ChangeUserTemplateAsync(
         string actorId, string templateId, DateTimeOffset expectedUpdatedAt,
         DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default)
+        => ReplaceUserAccessTemplatesAsync(
+            actorId, [templateId], expectedUpdatedAt, updatedAtUtc, cancellationToken);
+
+    public Task<bool> ReplaceUserAccessTemplatesAsync(
+        string actorId, IReadOnlyList<string> templateIds, DateTimeOffset expectedUpdatedAt,
+        DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default)
     {
         ThrowIfConcurrencySimulated();
         if (LockoutNextWrite)
@@ -107,9 +113,14 @@ public sealed class FakeAdminRepository : IAdminRepository
             return Task.FromResult(false);
         }
 
-        Writes.Add($"change_template:{actorId}");
+        Writes.Add($"change_templates:{actorId}");
         var user = Users[actorId];
-        Users[actorId] = user with { TemplateId = templateId, UpdatedAtUtc = updatedAtUtc };
+        Users[actorId] = user with
+        {
+            TemplateId = templateIds[0],
+            TemplateIds = templateIds.ToArray(),
+            UpdatedAtUtc = updatedAtUtc
+        };
         return Task.FromResult(true);
     }
 

@@ -54,6 +54,17 @@ public interface IAdminRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Atomically replaces the authoritative N27 template associations while
+    /// keeping internal_users.template_id synchronized as a compatibility key.
+    /// </summary>
+    Task<bool> ReplaceUserAccessTemplatesAsync(
+        string actorId,
+        IReadOnlyList<string> templateIds,
+        DateTimeOffset expectedUpdatedAt,
+        DateTimeOffset updatedAtUtc,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Guarded activation change with the self-lockout invariant validated
     /// in the same transaction (GLM-ACC-10). Returns false (write rolled
     /// back) when the change would leave no functional admin path.

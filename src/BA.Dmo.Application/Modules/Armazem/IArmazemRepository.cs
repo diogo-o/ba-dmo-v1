@@ -34,12 +34,33 @@ public interface IArmazemRepository
         WarehouseMovement outMovement,
         WarehouseMovement inMovement,
         CancellationToken ct = default);
+    Task CorrectLocationAsync(
+        Guid? currentStockId,
+        WarehouseStock? correctedStock,
+        WarehouseMovement? outMovement,
+        WarehouseMovement? inMovement,
+        CancellationToken ct = default);
 
     // ---- Historical / consultation ----------------------------------------
     Task<IReadOnlyList<WarehouseMovement>> GetMovementHistoryAsync(Guid toolId, CancellationToken ct = default);
+    Task<IReadOnlyList<WarehouseMovementFact>> ListMovementFactsAsync(
+        DateTimeOffset? fromUtc,
+        DateTimeOffset? toUtc,
+        int limit,
+        CancellationToken ct = default);
 
     // ---- Audit -------------------------------------------------------------
     Task InsertAuditEventAsync(
         Guid? entityId, string eventType, string? beforeSnapshot, string? afterSnapshot,
         string actorId, CancellationToken ct = default);
 }
+
+/// <summary>
+/// Armazém-owned persistence projection. It deliberately contains only
+/// warehouse facts; reference/type/lot remain owned by the injected tool
+/// identity resolver.
+/// </summary>
+public sealed record WarehouseMovementFact(
+    Guid ToolId,
+    string? PositionCode,
+    WarehouseMovement Movement);

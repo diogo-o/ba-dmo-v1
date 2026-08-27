@@ -5,8 +5,8 @@ namespace BA.Dmo.Application.Modules.Armazem;
 /// <summary>
 /// U-14 — Armazém-owned abstraction over tool/lot identity for warehouse
 /// operations. Armazém depends ONLY on this port — never on a tool-owner
-/// repository or type. The CM/MF resolver adapts Ferramentas; a future resolver
-/// adapts Boquilhas without changing <c>ArmazemService</c> (owner decision C).
+/// repository or type. The CM/MF/BQ resolver adapts the canonical Ferramentas
+/// master without changing <c>ArmazemService</c> or transferring ownership.
 /// </summary>
 public interface IToolIdentityResolver
 {

@@ -23,7 +23,12 @@
   border-radius: var(--dmo-r-control);
   background: var(--button-color, var(--dmo-brand-600));
   color: var(--dmo-text-on-color);
+  font-family: var(--dmo-font-family);
+  font-size: var(--dmo-font-size-md);
   font-weight: var(--dmo-font-weight-bold);
+  line-height: var(--dmo-line-height-normal);
+  text-align: center;
+  vertical-align: middle;
   text-decoration: none;
   cursor: pointer;
   transition: background var(--dmo-transition-fast),
@@ -127,6 +132,52 @@
   min-height: var(--dmo-row-action-height);
   padding: 5px 8px;
   font-size: var(--dmo-font-size-label);
+}
+
+/* ---------- Module tabs — one shared visual/interaction contract ---------- */
+
+.dmo-module-tabs.dmo-module-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 28px;
+  min-height: var(--dmo-tabs-height);
+  padding: 0 2px;
+  border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+  background: var(--dmo-card);
+  overflow-x: auto;
+}
+
+.dmo-module-tabs.dmo-module-tabs .dmo-module-tab {
+  appearance: none;
+  flex: 0 0 auto;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  padding: 0 2px;
+  color: var(--dmo-muted);
+  font-family: var(--dmo-font-family);
+  font-size: var(--dmo-font-size-md);
+  font-weight: 650;
+  line-height: 1;
+  text-align: center;
+  cursor: pointer;
+  transition: color var(--dmo-transition-fast), border-color var(--dmo-transition-fast);
+}
+
+.dmo-module-tabs.dmo-module-tabs .dmo-module-tab:hover {
+  background: none;
+  color: var(--dmo-brand-600);
+}
+
+.dmo-module-tabs.dmo-module-tabs .dmo-module-tab.active {
+  color: var(--dmo-brand-600);
+  border-bottom-color: var(--dmo-brand-600);
+}
+
+.dmo-module-tabs.dmo-module-tabs .dmo-module-tab.right,
+.dmo-module-tabs.dmo-module-tabs .dmo-module-tab.settings {
+  margin-left: auto;
 }
 
 /* ---------- 2. Field (reference .dmo-field exact) ---------- */
@@ -1020,44 +1071,13 @@
 }
 
 /* ============================================================
-   Boquilhas side panel — positioned below tabs, flows naturally
+   Boquilhas contextual sidebar — canonical dmo-work-split/dmo-sidebar
    ============================================================ */
 
-.boquilhas-page > .boquilhas-layout {
-  display: flex;
-  margin-left: var(--dmo-sidebar-width);
-  min-height: calc(100vh - var(--dmo-header-height) - var(--dmo-tabs-height));
-}
-
-.boquilhas-side {
-  position: fixed;
-  z-index: var(--dmo-z-sticky);
-  top: var(--dmo-header-height);         /* right below header */
-  bottom: 0;
-  left: 0;
-  width: var(--dmo-sidebar-width);
-  background: linear-gradient(180deg, var(--dmo-brand-900), var(--dmo-brand-950));
-  padding: 20px 16px;
-  overflow-y: auto;
-  color: var(--dmo-text-on-color);
-}
-
-/* side-head (reference exact): caps title 12px + muted subtitle 11.5px */
-.boquilhas-side .boquilhas-side__title {
-  margin: 0;
-  font-size: var(--dmo-font-size-xs);
-  letter-spacing: var(--dmo-letter-spacing-caps);
-  color: var(--dmo-text-on-color);
-  font-weight: var(--dmo-font-weight-bold);
-  text-transform: uppercase;
-  padding: 0 4px;
-}
-
-.boquilhas-side .boquilhas-side__sub {
-  margin: 3px 0 16px 0;
-  color: var(--dmo-sidebar-muted);
-  font-size: var(--dmo-font-size-xs);
-  padding: 0 4px;
+.boquilhas-layout,
+.boquilhas-side,
+.boquilhas-content {
+  min-width: 0;
 }
 
 .boquilhas-lines {
@@ -1068,11 +1088,6 @@
 
 .boquilhas-line {
   position: relative;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--dmo-radius-card);
-  padding: 13px;
-  margin-bottom: 10px;
 }
 
 /* machine card anatomy (reference boquilhas.html .machine exact):
@@ -1187,33 +1202,6 @@
 .boquilhas-content {
   flex: 1;
   min-width: 0;
-}
-
-/* Responsive — sidebar stacks on mobile */
-@media (max-width: 980px) {
-  .boquilhas-side {
-    width: var(--dmo-sidebar-width-compact);
-  }
-  .boquilhas-page > .boquilhas-layout {
-    margin-left: var(--dmo-sidebar-width-compact);
-  }
-}
-
-@media (max-width: 720px) {
-  .boquilhas-side {
-    position: relative;
-    top: auto;
-    left: auto;
-    width: 100%;
-    height: auto;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--dmo-space-2);
-    margin-bottom: var(--dmo-space-4);
-  }
-  .boquilhas-page > .boquilhas-layout {
-    margin-left: 0;
-  }
 }
 
 /* ============================================================
@@ -1454,17 +1442,6 @@
   }
 }
 
-/* Module rows clear the fixed sidebar (reference: .main margin-left 276px
-   AND .tabs start at left:276px — the reference tabs bar never runs under
-   the sidebar). The global app-nav is shell-level (recorded, not touched). */
-.boquilhas-page > .dmo-page-head {
-  margin-left: var(--dmo-sidebar-width);
-}
-
-.boquilhas-page > .boquilhas-tabs {
-  margin-left: var(--dmo-sidebar-width);
-}
-
 /* Filter-row button keeps its natural width (reference .filter-actions);
    the fluid auto-fit grid would otherwise stretch it full-column. */
 .boquilhas-page .audit-filters--auto > .dmo-button {
@@ -1482,10 +1459,6 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .boquilhas-page > .dmo-page-head,
-  .boquilhas-page > .boquilhas-tabs {
-    margin-left: var(--dmo-sidebar-width-compact);
-  }
 }
 
 @media (max-width: 720px) {
@@ -1493,10 +1466,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .boquilhas-page > .dmo-page-head,
-  .boquilhas-page > .boquilhas-tabs {
-    margin-left: 0;
-  }
 }
 
 /* Responsive — tabs on mobile stack or scroll */

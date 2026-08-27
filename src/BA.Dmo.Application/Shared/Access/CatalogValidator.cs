@@ -140,13 +140,16 @@ public static class CatalogValidator
                 continue;
             }
 
-            if (area.Kind != ModuleKind.FunctionalArea)
-                violations.Add($"area '{areaId}' is not a functional area");
+            if (area.Kind != ModuleKind.Module || !area.IsAssignable)
+                violations.Add($"area parent '{areaId}' is not an assignable module");
 
             foreach (var childId in childIds)
             {
-                if (!modules.ContainsModule(childId))
+                if (!modules.TryGetModule(childId, out var child))
                     violations.Add($"area '{areaId}' references unknown child '{childId}'");
+                else if (child.IsAssignable)
+                    violations.Add(
+                        $"area '{areaId}' child '{childId}' must not be independently assignable");
             }
         }
     }

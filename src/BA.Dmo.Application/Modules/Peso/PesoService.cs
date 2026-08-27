@@ -56,17 +56,18 @@ public sealed record ReopenControlRequest(Guid ControlId, string Reason);
 public sealed record DeleteControlRequest(Guid ControlId);
 
 public sealed record CreateComparisonRequest(
-    Guid JobOnId,
-    DateTime DataRegisto,
-    decimal? TemperaturaC,
+    Guid CurrentControlId,
+    Guid PreviousApprovedControlId,
     string? Notas,
-    IReadOnlyList<PesoLeituraInput> Leituras);
+    IReadOnlyList<PesoComparisonPairRequest> Pairs);
+
+public sealed record PesoComparisonPairRequest(
+    string CurrentCmNumber,
+    string PreviousCmNumber);
 
 public sealed record DecideComparisonCmRequest(
     string CmNumber,
-    PesoCmDecision Decision,
-    decimal? PesoAtual,
-    decimal? CapacidadeAtual);
+    PesoCmDecision Decision);
 
 public sealed record ConfirmComparisonDecisionsRequest(
     Guid ControlId,
@@ -140,6 +141,9 @@ public sealed record PesoCalculationRow
 /// </summary>
 public sealed class PesoService
 {
+    private static readonly System.Text.Json.JsonSerializerOptions ComparisonJsonOptions =
+        new(System.Text.Json.JsonSerializerDefaults.Web);
+
     private readonly PesoAuthorizationGate _gate;
     private readonly IPesoRepository _repository;
     private readonly IJobOnRepository _jobOnRepository;
@@ -376,6 +380,7 @@ public sealed class PesoService
             Leituras = MapLeituras(request.Leituras)
         };
 
+        await PopulateGlassWeightsAsync(control, ct);
         var id = await _repository.CreateControlAsync(control, ct);
         await _repository.InsertAuditEventAsync(id, "peso.controlo.criar", null, null, gate.Value.ActorId, ct);
         return Result<Guid, DomainError>.Success(id);
@@ -400,6 +405,7 @@ public sealed class PesoService
         control.EstadoMolde = request.EstadoMolde;
         control.Notas = request.Notas;
         control.Leituras = MapLeituras(request.Leituras);
+        await PopulateGlassWeightsAsync(control, ct);
         control.UpdatedAtUtc = _clock.UtcNow;
         await _repository.UpdateControlAsync(control, ct);
         await _repository.InsertAuditEventAsync(control.PesoControloId, "peso.controlo.guardar", null, null, gate.Value.ActorId, ct);
@@ -437,9 +443,9 @@ public sealed class PesoService
 
         if (control.RecordType == PesoRecordType.Comparacao)
         {
-            var decisions = System.Text.Json.JsonSerializer.Deserialize<List<PesoComparisonCmDecision>>(
-                control.ComparisonDecisionsJson ?? "[]", (System.Text.Json.JsonSerializerOptions?)null);
-            if (decisions is null || decisions.Any(d => d.Decision == PesoCmDecision.None))
+            var decisionSnapshot = DeserializeComparisonDecisions(control.ComparisonDecisionsJson);
+            if (decisionSnapshot is null || decisionSnapshot.Decisions.Count == 0 ||
+                decisionSnapshot.Decisions.Any(d => d.Decision == PesoCmDecision.None))
                 return Result<bool, DomainError>.Failure(DomainError.Validation(
                     "PESO_COMPARISON_UNDECIDED",
                     "Todos os CM precisam de decisão antes de confirmar."));
@@ -530,22 +536,95 @@ public sealed class PesoService
         var gate = _gate.Require();
         if (gate.IsFailure) return Result<Guid, DomainError>.Failure(gate.Error);
 
-        var jobOn = await _jobOnRepository.GetByIdAsync(request.JobOnId, ct);
-        if (jobOn is null)
-            return Result<Guid, DomainError>.Failure(DomainError.NotFound("PESO_JOBON_NOT_FOUND", "Job On não encontrado."));
+        var current = await _repository.GetControlByIdAsync(request.CurrentControlId, ct);
+        if (current is null)
+            return Result<Guid, DomainError>.Failure(DomainError.NotFound(
+                "PESO_COMPARISON_CURRENT_NOT_FOUND", "O Novo Controlo atual não foi encontrado."));
+        if (current.RecordType != PesoRecordType.NovoControlo || current.Status != PesoControlState.Rascunho)
+            return Result<Guid, DomainError>.Failure(DomainError.DomainConflict(
+                "PESO_COMPARISON_CURRENT_NOT_DRAFT",
+                "A comparação é criada dentro de um Novo Controlo ainda em rascunho."));
 
-        // Base = the approved Novo controlo of this Job On (TD-29/DG-03).
-        var approved = (await _repository.GetApprovedControlsForJobOnAsync(request.JobOnId, ct))
-            .Where(c => c.RecordType == PesoRecordType.NovoControlo)
-            .OrderByDescending(c => c.Revision)
-            .FirstOrDefault();
-        if (approved is null)
+        var approved = await _repository.GetControlByIdAsync(request.PreviousApprovedControlId, ct);
+        if (approved is null || approved.RecordType != PesoRecordType.NovoControlo ||
+            approved.Status != PesoControlState.Aprovado)
             return Result<Guid, DomainError>.Failure(DomainError.Validation(
                 "PESO_COMPARISON_NO_APPROVED_BASE",
-                "Comparação só pode ser criada depois de existir um Novo controlo aprovado deste Job On."));
+                "Selecione e confirme um Novo Controlo aprovado da produção anterior."));
+        if (current.PesoControloId == approved.PesoControloId ||
+            (current.JobOnId == approved.JobOnId && current.JobOnRevisionId == approved.JobOnRevisionId))
+            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+                "PESO_COMPARISON_SAME_PRODUCTION", "A produção anterior tem de ser diferente da produção atual."));
+        if (!SameReference(current, approved))
+            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+                "PESO_COMPARISON_REFERENCE_MISMATCH", "A produção anterior tem de usar a mesma referência."));
 
-        var context = ResolveJobOnContext(jobOn);
-        if (context.IsFailure) return Result<Guid, DomainError>.Failure(context.Error);
+        await PopulateGlassWeightsAsync(current, ct);
+        await PopulateGlassWeightsAsync(approved, ct);
+
+        var currentReadings = current.Leituras
+            .Where(l => !string.IsNullOrWhiteSpace(l.CmNumber) && l.PesoVidro.HasValue)
+            .ToDictionary(l => l.CmNumber.Trim(), StringComparer.OrdinalIgnoreCase);
+        var previousReadings = approved.Leituras
+            .Where(l => !string.IsNullOrWhiteSpace(l.CmNumber) && l.PesoVidro.HasValue)
+            .ToDictionary(l => l.CmNumber.Trim(), StringComparer.OrdinalIgnoreCase);
+        var pairs = request.Pairs ?? Array.Empty<PesoComparisonPairRequest>();
+        if (currentReadings.Count == 0 || previousReadings.Count == 0 || pairs.Count == 0)
+            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+                "PESO_COMPARISON_NO_GLASS_WEIGHT",
+                "Calcule o peso do vidro de ambas as produções antes de criar a comparação."));
+
+        var normalizedPairs = pairs
+            .Select(p => new PesoComparisonPairRequest(
+                p.CurrentCmNumber?.Trim() ?? string.Empty,
+                p.PreviousCmNumber?.Trim() ?? string.Empty))
+            .ToList();
+        if (normalizedPairs.Any(p => string.IsNullOrWhiteSpace(p.CurrentCmNumber) ||
+                                     string.IsNullOrWhiteSpace(p.PreviousCmNumber)) ||
+            normalizedPairs.Select(p => p.CurrentCmNumber).Distinct(StringComparer.OrdinalIgnoreCase).Count() != normalizedPairs.Count ||
+            normalizedPairs.Select(p => p.PreviousCmNumber).Distinct(StringComparer.OrdinalIgnoreCase).Count() != normalizedPairs.Count ||
+            normalizedPairs.Count != currentReadings.Count ||
+            normalizedPairs.Any(p => !currentReadings.ContainsKey(p.CurrentCmNumber) ||
+                                     !previousReadings.ContainsKey(p.PreviousCmNumber)) ||
+            currentReadings.Keys.Any(cm => !normalizedPairs.Any(p => p.CurrentCmNumber.Equals(cm, StringComparison.OrdinalIgnoreCase))))
+            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+                "PESO_COMPARISON_PAIRING_INVALID",
+                "Associe explicitamente cada CM atual a um único CM da produção anterior."));
+
+        var snapshotRows = normalizedPairs.Select(pair =>
+        {
+            var currentWeight = currentReadings[pair.CurrentCmNumber].PesoVidro!.Value;
+            var previousWeight = previousReadings[pair.PreviousCmNumber].PesoVidro!.Value;
+            var (difference, percentage) = WeightCalculator.DeltaVs(currentWeight, previousWeight);
+            return new PesoComparisonCmSnapshot
+            {
+                CurrentCmNumber = currentReadings[pair.CurrentCmNumber].CmNumber,
+                PreviousCmNumber = previousReadings[pair.PreviousCmNumber].CmNumber,
+                CurrentGlassWeight = currentWeight,
+                PreviousGlassWeight = previousWeight,
+                Difference = difference!.Value,
+                DifferencePercent = percentage!.Value
+            };
+        }).ToList();
+
+        var snapshot = new PesoComparisonSnapshot
+        {
+            CurrentControlId = current.PesoControloId,
+            CurrentJobOnId = current.JobOnId,
+            CurrentJobOnRevisionId = current.JobOnRevisionId,
+            CurrentProductionCode = current.ProductionCode,
+            CurrentLine = current.Line,
+            CurrentLote = current.Lote,
+            PreviousControlId = approved.PesoControloId,
+            PreviousJobOnId = approved.JobOnId,
+            PreviousJobOnRevisionId = approved.JobOnRevisionId,
+            PreviousProductionCode = approved.ProductionCode,
+            PreviousLine = approved.Line,
+            PreviousLote = approved.Lote,
+            CreatedAtUtc = _clock.UtcNow,
+            CreatedBy = gate.Value.ActorId,
+            Rows = snapshotRows
+        };
 
         var control = new PesoControl
         {
@@ -558,24 +637,34 @@ public sealed class PesoService
             ProductionCode = approved.ProductionCode,
             Line = approved.Line,
             Lote = approved.Lote,
-            ControlDate = request.DataRegisto,
-            JobOnId = context.Value.JobOnId,
-            JobOnRevisionId = context.Value.RevisionId,
+            ControlDate = current.ControlDate,
+            JobOnId = current.JobOnId,
+            JobOnRevisionId = current.JobOnRevisionId,
             Status = PesoControlState.Rascunho,
             Revision = 1,
-            TemperaturaC = request.TemperaturaC,
+            TemperaturaC = current.TemperaturaC,
             Notas = request.Notas,
-            DataRegistoComparacao = request.DataRegisto,
-            Processo = approved.Processo,
-            ConstanteGlassUsada = approved.ConstanteGlassUsada ?? (await ResolveProcessDensityAsync(approved.Processo ?? PesoProcesso.Nnpb, ct)),
-            PesoNominal = approved.PesoNominal,
+            DataRegistoComparacao = current.ControlDate,
+            Processo = current.Processo,
+            ConstanteGlassUsada = current.ConstanteGlassUsada,
+            PesoNominal = current.PesoNominal,
+            PreviousControlJson = System.Text.Json.JsonSerializer.Serialize(snapshot, ComparisonJsonOptions),
+            ComparisonDecisionsJson = System.Text.Json.JsonSerializer.Serialize(
+                new PesoComparisonDecisionSnapshot(), ComparisonJsonOptions),
             CreatedAtUtc = _clock.UtcNow,
             CreatedBy = gate.Value.ActorId,
-            Leituras = MapLeituras(request.Leituras)
+            Leituras = snapshotRows.Select(row => new PesoLeitura
+            {
+                PesoLeituraId = Guid.NewGuid(),
+                CmNumber = row.CurrentCmNumber,
+                PesoEmAgua = currentReadings[row.CurrentCmNumber].PesoEmAgua,
+                PesoVidro = row.CurrentGlassWeight
+            }).ToList()
         };
 
         var id = await _repository.CreateControlAsync(control, ct);
-        await _repository.InsertAuditEventAsync(id, "peso.comparacao.criar", approved.PesoControloId.ToString(), null, gate.Value.ActorId, ct);
+        await _repository.InsertAuditEventAsync(
+            id, "peso.comparacao.criar", approved.PesoControloId.ToString(), control.PreviousControlJson, gate.Value.ActorId, ct);
         return Result<Guid, DomainError>.Success(id);
     }
 
@@ -593,12 +682,29 @@ public sealed class PesoService
             return Result<bool, DomainError>.Failure(DomainError.DomainConflict(
                 "PESO_NOT_COMPARISON", "Este registo não é uma Comparação."));
 
-        var decisions = request.Decisions.Select(d => new PesoComparisonCmDecision
+        var comparison = DeserializeComparisonSnapshot(control.PreviousControlJson);
+        if (comparison is null || comparison.Rows.Count == 0)
+            return Result<bool, DomainError>.Failure(DomainError.DomainConflict(
+                "PESO_COMPARISON_SNAPSHOT_INVALID", "A comparação não contém um snapshot CM válido."));
+
+        var requested = request.Decisions ?? Array.Empty<DecideComparisonCmRequest>();
+        if (requested.Count != comparison.Rows.Count ||
+            requested.Select(d => d.CmNumber?.Trim() ?? string.Empty).Distinct(StringComparer.OrdinalIgnoreCase).Count() != requested.Count ||
+            comparison.Rows.Any(row => !requested.Any(d =>
+                row.CurrentCmNumber.Equals(d.CmNumber?.Trim(), StringComparison.OrdinalIgnoreCase))))
+            return Result<bool, DomainError>.Failure(DomainError.Validation(
+                "PESO_COMPARISON_DECISIONS_MISMATCH", "Registe uma decisão para cada CM atual da comparação."));
+
+        var decisions = comparison.Rows.Select(row =>
         {
-            CmNumber = d.CmNumber,
-            Decision = d.Decision,
-            PesoAtual = d.PesoAtual,
-            CapacidadeAtual = d.CapacidadeAtual
+            var requestedDecision = requested.Single(d =>
+                row.CurrentCmNumber.Equals(d.CmNumber?.Trim(), StringComparison.OrdinalIgnoreCase));
+            return new PesoComparisonCmDecision
+            {
+                CmNumber = row.CurrentCmNumber,
+                Decision = requestedDecision.Decision,
+                PesoAtual = row.CurrentGlassWeight
+            };
         }).ToList();
 
         if (decisions.Any(d => d.Decision == PesoCmDecision.None))
@@ -611,8 +717,12 @@ public sealed class PesoService
                 "PESO_COMPARISON_JUSTIFICATION_REQUIRED",
                 "A justificação é obrigatória quando pelo menos um CM é colocado de parte."));
 
-        var payload = new { Decisões = decisions, Justificacao = request.Justification };
-        control.ComparisonDecisionsJson = System.Text.Json.JsonSerializer.Serialize(payload);
+        var payload = new PesoComparisonDecisionSnapshot
+        {
+            Decisions = decisions,
+            Justification = string.IsNullOrWhiteSpace(request.Justification) ? null : request.Justification.Trim()
+        };
+        control.ComparisonDecisionsJson = System.Text.Json.JsonSerializer.Serialize(payload, ComparisonJsonOptions);
         control.UpdatedAtUtc = _clock.UtcNow;
         await _repository.UpdateControlAsync(control, ct);
         await _repository.InsertAuditEventAsync(control.PesoControloId, "peso.comparacao.decidir", null, control.ComparisonDecisionsJson, gate.Value.ActorId, ct);
@@ -658,105 +768,35 @@ public sealed class PesoService
             return Result<GeneratedDocument, DomainError>.Failure(DomainError.Validation(
                 "PESO_DOC_NOT_APPROVED", "Só a revisão aprovada pode gerar a folha de produção."));
 
-        // Previous approved control for comparison (cross-line, earlier production)
-        var previous = await _repository.GetPreviousApprovedAsync(
-            control.MoldNumber, control.NeckringNumber, control.ProductionCode, control.ControlDate, ct);
-
-        // Load reference data (volume_neck/marisa, volume_pu/punção) used by EstimateGlassWeight
-        PesoReference? reference = null;
-        if (control.PesoReferenceId != Guid.Empty)
-            reference = await _repository.GetReferenceByIdAsync(control.PesoReferenceId, ct);
-
-        var (dp, dpPct) = WeightCalculator.DeltaVs(control.PesoMedio, previous?.PreviousPesoMedio);
-        var (dc, dcPct) = WeightCalculator.DeltaVs(control.CapacidadeMedia, previous?.PreviousCapacidadeMedia);
+        await PopulateGlassWeightsAsync(control, ct);
+        var density = control.TemperaturaC is { } tc &&
+                      WeightCalculator.LookupDensity(tc) is { IsSuccess: true, Value: var densityValue }
+            ? (decimal?)densityValue
+            : null;
         var (dNom, dNomPct) = WeightCalculator.DeltaVs(control.PesoMedio, control.PesoNominal);
 
-        var densities = control.TemperaturaC is { } tc && WeightCalculator.LookupDensity(tc) is { IsSuccess: true, Value: var dv } ? (decimal?)dv : null;
-
-        // Resolve density/constant for the current control's readings
-        var currentDensity = densities;
-        var currentProcess = control.Processo ?? PesoProcesso.Nnpb;
-        decimal currentConstant = control.ConstanteGlassUsada ?? await ResolveProcessDensityAsync(currentProcess, ct);
-
-        // Volume neck (marisa) & volume pu (punção) from reference — same source as legacy calc
-        decimal refVolumeNeck = reference?.VolumeNeck ?? 0m;
-        decimal refVolumePu = reference?.VolumePu ?? 0m;
-
-        // Load previous control (needed for per-CM matching + density/constant history)
-        // Must be loaded before we build the readings lookup below.
-        PesoControl? prevControl = null;
-        if (previous?.Exists == true && previous.PreviousPesoControloId.HasValue)
-            prevControl = await _repository.GetControlByIdAsync(previous.PreviousPesoControloId.Value, ct);
-
-        // Build lookup of previous readings by CM number
-        var prevReadingsLookup = new Dictionary<string, PesoLeitura>();
-        if (prevControl?.Leituras != null)
-        {
-            foreach (var pr in prevControl.Leituras)
+        var comparison = control.RecordType == PesoRecordType.Comparacao
+            ? DeserializeComparisonSnapshot(control.PreviousControlJson)
+            : null;
+        var cmRows = comparison is null
+            ? control.Leituras.Select(reading => new PesoCmComparisonRow
             {
-                if (!string.IsNullOrWhiteSpace(pr.CmNumber))
-                    prevReadingsLookup[pr.CmNumber] = pr;
-            }
-        }
-
-        // Density from previous control's own temperature (historical integrity)
-        decimal? prevDensity = null;
-        if (prevControl?.TemperaturaC is { } prevTemp)
-        {
-            var pd = WeightCalculator.LookupDensity(prevTemp);
-            if (pd.IsSuccess) prevDensity = pd.Value;
-        }
-
-        // Helper: compute PesoVidro from water weight using existing C# formula
-        decimal? ComputePesoVidro(decimal? pesoEmAgua, decimal? density, decimal? constant)
-        {
-            if (pesoEmAgua == null || density == null || density.Value == 0m || constant == null || constant == 0m)
-                return null;
-            var capacity = WeightCalculator.VolumeFromWeight(pesoEmAgua, density.Value);
-            return WeightCalculator.EstimateGlassWeight(capacity, refVolumeNeck, refVolumePu, constant.Value);
-        }
-
-        var cmRows = (control.Leituras ?? Array.Empty<PesoLeitura>())
-            .Where(l => l.PesoEmAgua.HasValue)
-            .Select(l =>
+                CurrentCmNumber = reading.CmNumber,
+                PesoAtual = reading.PesoVidro
+            }).ToList()
+            : comparison.Rows.Select(row => new PesoCmComparisonRow
             {
-                // Current row values — compute server-side since PesoVidro is not persisted
-                var capacidadeAtual = WeightCalculator.VolumeFromWeight(l.PesoEmAgua, currentDensity);
-                var pesoAtual = ComputePesoVidro(l.PesoEmAgua, currentDensity, currentConstant);
-
-                // Previous row values — matched by CM number, using previous control's own density
-                var pesoAnterior = (decimal?)null;
-                var capacidadeAnterior = (decimal?)null;
-
-                if (prevReadingsLookup.TryGetValue(l.CmNumber, out var prevL))
-                {
-                    capacidadeAnterior = prevDensity.HasValue
-                        ? WeightCalculator.VolumeFromWeight(prevL.PesoEmAgua, prevDensity.Value)
-                        : null;
-                    // Use previous control's own constant when available
-                    decimal prevConstant = prevControl?.ConstanteGlassUsada ?? currentConstant;
-                    pesoAnterior = ComputePesoVidro(prevL.PesoEmAgua, prevDensity, prevConstant);
-                }
-
-                return new PesoCmComparisonRow
-                {
-                    CmNumber = l.CmNumber,
-                    PesoAtual = pesoAtual,
-                    PesoAnterior = pesoAnterior,
-                    DeltaPeso = pesoAtual.HasValue && pesoAnterior.HasValue
-                        ? WeightCalculator.Round2(pesoAtual.Value - pesoAnterior.Value)
-                        : null,
-                    CapacidadeAtual = capacidadeAtual,
-                    CapacidadeAnterior = capacidadeAnterior,
-                    DeltaCapacidade = capacidadeAtual.HasValue && capacidadeAnterior.HasValue
-                        ? WeightCalculator.Round2(capacidadeAtual.Value - capacidadeAnterior.Value)
-                        : null
-                };
-            })
-            .ToList();
+                CurrentCmNumber = row.CurrentCmNumber,
+                PreviousCmNumber = row.PreviousCmNumber,
+                PesoAtual = row.CurrentGlassWeight,
+                PesoAnterior = row.PreviousGlassWeight,
+                DeltaPeso = row.Difference,
+                DeltaPesoPct = row.DifferencePercent
+            }).ToList();
 
         var folha = new PesoFolhaPdf
         {
+            IsComparison = comparison is not null,
             MoldNumber = control.MoldNumber,
             NeckringNumber = control.NeckringNumber,
             ProductionCode = control.ProductionCode,
@@ -770,22 +810,16 @@ public sealed class PesoService
             Processo = control.Processo?.ToString() ?? "—",
             ApprovedBy = control.ApprovedBy,
             ApprovedAtUtc = control.ApprovedAtUtc,
-            PreviousPesoMedio = previous?.PreviousPesoMedio,
-            PreviousCapacidadeMedia = previous?.PreviousCapacidadeMedia,
-            DeltaPeso = dp,
-            DeltaPesoPct = dpPct,
-            DeltaCapacidade = dc,
-            DeltaCapacidadePct = dcPct,
-            PreviousProductionCode = (previous?.Exists == true && prevControl is { } pc)
-                ? $"{pc.ProductionCode} · {pc.ControlDate:yyyy-MM-dd} · Linha {pc.Line}"
-                : null,
+            PreviousProductionCode = comparison is null
+                ? null
+                : $"{comparison.PreviousProductionCode} · Linha {comparison.PreviousLine} · Lote {comparison.PreviousLote}",
             CmRows = cmRows,
             DeltaNominal = dNom,
             DeltaNominalPct = dNomPct,
             SapPesoMedio = control.PesoMedioAnteriorSap,
             SapPeriodo = string.IsNullOrWhiteSpace(control.FimProducaoAnteriorSap?.ToString("yyyyMM")) ? null : control.FimProducaoAnteriorSap.Value.ToString("yyyyMM"),
             TemperaturaC = control.TemperaturaC,
-            Densidade = densities,
+            Densidade = density,
             ConstanteGlassUsada = control.ConstanteGlassUsada
         };
 
@@ -815,7 +849,7 @@ public sealed class PesoService
                 "PESO_EMAIL_NO_RECIPIENTS",
                 "Configuração de destinatários em falta. A aprovação mantém-se válida; o envio fica bloqueado."));
 
-        var subject = $"Controlo de Peso e Volume · {control.MoldNumber}{control.NeckringNumber} · {control.ProductionCode} · {control.Line} · L{control.Lote}";
+        var subject = $"Controlo de Peso e Volume · {control.MoldNumber}{control.NeckringNumber} · {control.ProductionCode} · {control.Line} · Lote {control.Lote}";
         var attachment = PesoFileName.Builder(control, "Peso");
         return Result<PreparedEmail, DomainError>.Success(new PreparedEmail(
             control.Line, lineGroup, recipientsSetting, subject, attachment));
@@ -883,6 +917,7 @@ public sealed class PesoService
         var control = await _repository.GetControlByIdAsync(controlId, ct);
         if (control is null)
             return Result<PesoControl?, DomainError>.Failure(DomainError.NotFound("PESO_CONTROL_NOT_FOUND", "Controlo não encontrado."));
+        await PopulateGlassWeightsAsync(control, ct);
         return Result<PesoControl?, DomainError>.Success(control);
     }
 
@@ -899,6 +934,8 @@ public sealed class PesoService
             return Result<PesoCalculationResult, DomainError>.Failure(DomainError.NotFound(
                 "PESO_CONTROL_NOT_FOUND", "Controlo não encontrado."));
 
+        await PopulateGlassWeightsAsync(control, ct);
+
         decimal? density = null;
         if (control.TemperaturaC is { } temp)
         {
@@ -911,39 +948,32 @@ public sealed class PesoService
         // configured value when the control has no saved constant yet (live
         // preview before save). Never a hardcoded constant in the calc path.
         var processo = control.Processo ?? PesoProcesso.Nnpb;
-        decimal constant;
-        if (control.ConstanteGlassUsada is { } historical)
-        {
-            constant = historical;
-        }
-        else
-        {
-            constant = await ResolveProcessDensityAsync(processo, ct);
-        }
+        var constant = control.ConstanteGlassUsada ?? await ResolveProcessDensityAsync(processo, ct);
 
         var rows = (control.Leituras ?? Array.Empty<PesoLeitura>())
             .Where(l => l.PesoEmAgua.HasValue)
             .Select(l =>
             {
                 var capacidade = WeightCalculator.VolumeFromWeight(l.PesoEmAgua, density);
-                var vidro = WeightCalculator.EstimateGlassWeight(l.PesoEmAgua, null, null, constant);
                 return new PesoCalculationRow
                 {
                     CmNumber = l.CmNumber,
                     PesoEmAgua = l.PesoEmAgua,
                     Capacidade = capacidade,
-                    PesoVidro = vidro
+                    PesoVidro = l.PesoVidro
                 };
             })
             .ToList();
 
-        var (dif, difPct) = WeightCalculator.DeltaVs(control.PesoMedio, control.PesoNominal);
+        var pesoMedio = WeightCalculator.GlassAverage(rows.Select(row => row.PesoVidro).ToList());
+        var capacidadeMedia = WeightCalculator.GlassAverage(rows.Select(row => row.Capacidade).ToList());
+        var (dif, difPct) = WeightCalculator.DeltaVs(pesoMedio, control.PesoNominal);
         return Result<PesoCalculationResult, DomainError>.Success(new PesoCalculationResult
         {
             Densidade = density,
             ConstanteGlassUsada = constant,
-            PesoMedio = control.PesoMedio,
-            CapacidadeMedia = control.CapacidadeMedia,
+            PesoMedio = pesoMedio,
+            CapacidadeMedia = capacidadeMedia,
             PesoNominal = control.PesoNominal,
             Diferenca = dif,
             DiferencaPct = difPct,
@@ -961,16 +991,79 @@ public sealed class PesoService
             PesoEmAgua = i.PesoEmAgua
         }).ToList();
 
+    private async Task PopulateGlassWeightsAsync(PesoControl control, CancellationToken ct)
+    {
+        PesoReference? reference = null;
+        if (control.PesoReferenceId != Guid.Empty)
+            reference = await _repository.GetReferenceByIdAsync(control.PesoReferenceId, ct);
+
+        decimal? density = null;
+        if (control.TemperaturaC is { } temperature)
+        {
+            var densityResult = WeightCalculator.LookupDensity(temperature);
+            if (densityResult.IsSuccess) density = densityResult.Value;
+        }
+
+        var process = control.Processo ?? PesoProcesso.Nnpb;
+        var constant = control.ConstanteGlassUsada ?? await ResolveProcessDensityAsync(process, ct);
+        control.ConstanteGlassUsada ??= constant;
+        control.Leituras = (control.Leituras ?? Array.Empty<PesoLeitura>())
+            .Select(reading => reading with
+            {
+                PesoVidro = WeightCalculator.EstimateGlassWeight(
+                    WeightCalculator.VolumeFromWeight(reading.PesoEmAgua, density),
+                    reference?.VolumeNeck,
+                    reference?.VolumePu,
+                    constant)
+            })
+            .ToList();
+    }
+
+    private static bool SameReference(PesoControl current, PesoControl previous)
+    {
+        if (current.PesoReferenceId != Guid.Empty && previous.PesoReferenceId != Guid.Empty)
+            return current.PesoReferenceId == previous.PesoReferenceId;
+        return current.MoldNumber.Equals(previous.MoldNumber, StringComparison.OrdinalIgnoreCase) &&
+               current.NeckringNumber.Equals(previous.NeckringNumber, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static PesoComparisonSnapshot? DeserializeComparisonSnapshot(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<PesoComparisonSnapshot>(json, ComparisonJsonOptions);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static PesoComparisonDecisionSnapshot? DeserializeComparisonDecisions(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<PesoComparisonDecisionSnapshot>(json, ComparisonJsonOptions);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
     private async Task<PesoReference?> FindReferenceByTextAsync(string text, CancellationToken ct)
     {
         // The reference text (e.g. "5447T173") is a presentation key; the stable
         // link uses the Peso reference id resolved by mold+neckring when present.
         if (string.IsNullOrWhiteSpace(text)) return null;
-        if (text.Length >= 4 && int.TryParse(text[..3], out _))
-        {
-            var neck = text.Length > 3 ? text[3..] : string.Empty;
-            return await _repository.GetReferenceByMoldNeckringAsync(text[..3], neck, ct);
-        }
+        var normalized = text.Trim();
+        var split = 0;
+        while (split < normalized.Length && char.IsDigit(normalized[split])) split++;
+        if (split > 0 && split < normalized.Length)
+            return await _repository.GetReferenceByMoldNeckringAsync(
+                normalized[..split], normalized[split..], ct);
         return null;
     }
 

@@ -100,7 +100,7 @@ else
                                 }
                             </td>
                             <td>@(string.IsNullOrWhiteSpace(user.ProfileTitle) ? "—" : user.ProfileTitle)</td>
-                            <td>@user.TemplateId</td>
+                            <td>@string.Join(", ", user.AssignedTemplateIds)</td>
                             <td>
                                 <span class="@(user.Active ? "dmo-pill active" : "dmo-pill inactive")">
                                     @(user.Active ? "Ativo" : "Inativo")

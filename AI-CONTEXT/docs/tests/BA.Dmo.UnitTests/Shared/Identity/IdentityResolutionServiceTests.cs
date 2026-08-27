@@ -30,12 +30,12 @@ public class IdentityResolutionServiceTests
     private static InternalUserRecord Record(
         bool userActive = true,
         bool templateActive = true,
-        string modulesJson = "[{\"moduleId\":\"boquilhas\",\"capabilities\":[]}]") =>
+        string modulesJson = "[{\"moduleId\":\"jobon\",\"capabilities\":[]},{\"moduleId\":\"boquilhas\",\"capabilities\":[]}]") =>
         new(
             ActorId: "actor-1",
             AuthUserId: AuthUserId,
             DisplayName: "Utilizador Um",
-            ProfileTitle: "Metrologia",
+            ProfileTitle: FunctionalProfileNames.OperatorController,
             UserActive: userActive,
             TemplateId: "tpl-1",
             TemplateName: "Template 1",
@@ -52,10 +52,10 @@ public class IdentityResolutionServiceTests
         Assert.True(result.IsSuccess);
         var resolved = result.Value;
         Assert.Equal("actor-1", resolved.ActorId);
-        Assert.Equal("Metrologia", resolved.ProfileTitle);
+        Assert.Equal(FunctionalProfileNames.OperatorController, resolved.ProfileTitle);
         Assert.Equal(AuthUserId, resolved.User.InternalUserId);
         Assert.True(resolved.User.HasModule("boquilhas"));
-        // Universal Job On query access (UD-16) — derived, never from claims.
+        // Job On is explicitly assigned; the profile derives its behavior.
         Assert.True(resolved.User.HasModule("jobon"));
         Assert.True(resolved.User.HasCapability("jobon.view"));
         Assert.False(resolved.User.HasModule("admin"));
@@ -117,18 +117,58 @@ public class IdentityResolutionServiceTests
     }
 
     [Fact]
+    public async Task MultipleAssignedTemplates_AreResolvedAsOneModuleUnion()
+    {
+        _repository.User = Record(modulesJson: "[]") with
+        {
+            AccessTemplates =
+            [
+                new InternalUserAccessTemplateRecord(
+                    "tpl-jobon", "Job On", true,
+                    "[{\"moduleId\":\"jobon\",\"capabilities\":[]}]"),
+                new InternalUserAccessTemplateRecord(
+                    "tpl-controlo", "Controlo", true,
+                    "[{\"moduleId\":\"controlo\",\"capabilities\":[]}]")
+            ]
+        };
+
+        var result = await _service.ResolveAsync(AuthUserId);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(result.Value.Access.HasModule(CanonicalModuleCatalog.JobonModuleId));
+        Assert.True(result.Value.Access.HasModule(CanonicalModuleCatalog.ControloAreaId));
+        Assert.True(result.Value.Access.HasModule(CanonicalModuleCatalog.PesoModuleId));
+        Assert.True(result.Value.Access.HasModule(CanonicalModuleCatalog.PegamentosModuleId));
+    }
+
+    [Fact]
+    public async Task MissingOrUnknownFunctionalProfile_FailsClosed()
+    {
+        _repository.User = Record() with { ProfileTitle = "Metrologia" };
+
+        var result = await _service.ResolveAsync(AuthUserId);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("FUNCTIONAL_PROFILE_INVALID", result.Error.Code);
+    }
+
+    [Fact]
     public async Task InvalidGrantEntries_AreDiscarded_NotSilentlyRepaired()
     {
         _repository.User = Record(modulesJson:
             "[{\"moduleId\":\"ghost\",\"capabilities\":[\"peso.aprovar\"]}," +
-            "{\"moduleId\":\"peso\",\"capabilities\":[\"peso.aprovar\",\"ghost.cap\"]}]");
+            "{\"moduleId\":\"controlo\",\"capabilities\":[\"controlo.review\",\"ghost.cap\"]}]");
 
         var result = await _service.ResolveAsync(AuthUserId);
 
         Assert.True(result.IsSuccess);
         var access = result.Value.Access;
+        Assert.True(access.HasModule("controlo"));
         Assert.True(access.HasModule("peso"));
-        Assert.True(access.HasCapability("peso.aprovar"));
+        Assert.True(access.HasModule("pegamentos"));
+        Assert.True(access.HasCapability("controlo.edit"));
+        Assert.False(access.HasCapability("controlo.review"));
+        Assert.False(access.HasCapability("peso.aprovar"));
         Assert.False(access.HasModule("ghost"));
         Assert.False(access.HasCapability("ghost.cap"));
     }
@@ -140,7 +180,10 @@ public class IdentityResolutionServiceTests
         // page. It is NOT granted jobon.view, so it lands on /admin (not the
         // universal Job On work landing).
         _repository.User = Record(modulesJson:
-            "[{\"moduleId\":\"admin\",\"capabilities\":[\"admin.gerir\",\"audit.view\"]}]");
+            "[{\"moduleId\":\"admin\",\"capabilities\":[]}]") with
+        {
+            ProfileTitle = FunctionalProfileNames.Admin
+        };
 
         var result = await _service.ResolveAsync(AuthUserId);
 
@@ -148,6 +191,23 @@ public class IdentityResolutionServiceTests
         Assert.False(result.Value.Access.HasCapability("jobon.view"));
         Assert.True(result.Value.Access.HasModule("admin"));
         Assert.True(result.Value.Access.HasCapability("admin.gerir"));
+    }
+
+    [Fact]
+    public async Task ModulesOverride_IsDormant_AndDoesNotReplaceTemplateModules()
+    {
+        _repository.User = Record(modulesJson:
+            "[{\"moduleId\":\"boquilhas\",\"capabilities\":[]}]") with
+        {
+            ModulesOverrideJson =
+                "[{\"moduleId\":\"admin\",\"capabilities\":[\"admin.gerir\"]}]"
+        };
+
+        var result = await _service.ResolveAsync(AuthUserId);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(result.Value.Access.HasModule("boquilhas"));
+        Assert.False(result.Value.Access.HasModule("admin"));
     }
 
     [Fact]

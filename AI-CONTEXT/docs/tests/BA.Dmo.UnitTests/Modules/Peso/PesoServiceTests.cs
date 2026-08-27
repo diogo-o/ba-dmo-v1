@@ -48,6 +48,8 @@ public class PesoServiceTests
             Components = [new JobOnComponent { Family = ComponentFamily.MP_CM, ReferenceSnapshot = referenceText, LotSnapshot = "4" }]
         };
         _jobOns.Revisions.Add(revision);
+        _jobOns.Components.AddRange(revision.Components.Select(component =>
+            component with { JobOnRevisionId = revision.JobOnRevisionId }));
         _jobOns.JobOns[jobOnId].SaveRevision(revision);
         return jobOnId;
     }
@@ -266,80 +268,122 @@ public class PesoServiceTests
     // ---- comparison (GLM-PESO-06.4/5) ------------------------------------------
 
     [Fact]
-    public async Task CreateComparison_RequiresApprovedNovoControlo()
+    public async Task CreateComparison_RequiresExplicitApprovedPreviousControl()
     {
         var jobOnId = SeedJobOn();
+        SeedReference();
+        var current = await _service.CreateControlAsync(new CreateControlRequest(
+            jobOnId, new DateTime(2026, 8, 17), 20m, "Novo", null,
+            [new PesoLeituraInput("34", 142m)]));
 
-        // No approved Novo controlo yet → blocked.
         var result = await _service.CreateComparisonAsync(new CreateComparisonRequest(
-            jobOnId, new DateTime(2026, 8, 17), 20m, null, [new PesoLeituraInput("34", 142m)]));
+            current.Value, Guid.NewGuid(), null, [new PesoComparisonPairRequest("34", "12")]));
 
         Assert.True(result.IsFailure);
         Assert.Equal("PESO_COMPARISON_NO_APPROVED_BASE", result.Error.Code);
     }
 
     [Fact]
-    public async Task CreateComparison_UsesApprovedBase_AndSubmit()
+    public async Task CreateComparison_PinsBothJobOnIdentities_AndExplicitCmSnapshot()
     {
-        var jobOnId = SeedJobOn();
         SeedReference();
-        var create = await _service.CreateControlAsync(new CreateControlRequest(
-            jobOnId, new DateTime(2026, 8, 17), 20m, "Novo", null, [new PesoLeituraInput("12", 152.43m)]));
-        await _service.SubmitControlAsync(new SubmitControlRequest(create.Value));
+        var previousJobOnId = SeedJobOn(production: "202512");
+        var previous = await _service.CreateControlAsync(new CreateControlRequest(
+            previousJobOnId, new DateTime(2025, 12, 10), 20m, "Novo", null,
+            [new PesoLeituraInput("12", 152.43m)]));
+        await _service.SubmitControlAsync(new SubmitControlRequest(previous.Value));
         _identity.GrantResponsavel();
-        await _service.ApproveControlAsync(new ApproveControlRequest(create.Value));
+        await _service.ApproveControlAsync(new ApproveControlRequest(previous.Value));
 
         _identity.GrantOperador();
+        var currentJobOnId = SeedJobOn(production: "202601");
+        var current = await _service.CreateControlAsync(new CreateControlRequest(
+            currentJobOnId, new DateTime(2026, 1, 10), 20m, "Novo", null,
+            [new PesoLeituraInput("34", 142m)]));
         var comp = await _service.CreateComparisonAsync(new CreateComparisonRequest(
-            jobOnId, new DateTime(2026, 8, 17), 20m, null, [new PesoLeituraInput("34", 142m)]));
+            current.Value, previous.Value, "comparar", [new PesoComparisonPairRequest("34", "12")]));
 
         Assert.True(comp.IsSuccess);
-        Assert.Equal(PesoRecordType.Comparacao, _repository.Controls[comp.Value].RecordType);
+        var comparison = _repository.Controls[comp.Value];
+        Assert.Equal(PesoRecordType.Comparacao, comparison.RecordType);
+        Assert.Equal(currentJobOnId, comparison.JobOnId);
+        Assert.Equal(_repository.Controls[current.Value].JobOnRevisionId, comparison.JobOnRevisionId);
+
+        var snapshot = System.Text.Json.JsonSerializer.Deserialize<PesoComparisonSnapshot>(
+            comparison.PreviousControlJson!, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        Assert.NotNull(snapshot);
+        Assert.Equal(current.Value, snapshot.CurrentControlId);
+        Assert.Equal(previous.Value, snapshot.PreviousControlId);
+        var row = Assert.Single(snapshot.Rows);
+        Assert.Equal("34", row.CurrentCmNumber);
+        Assert.Equal("12", row.PreviousCmNumber);
+        Assert.NotEqual(0m, row.CurrentGlassWeight);
+        Assert.NotEqual(0m, row.PreviousGlassWeight);
+        Assert.DoesNotContain("capacidade", comparison.PreviousControlJson!, StringComparison.OrdinalIgnoreCase);
 
         _identity.GrantResponsavel();
         var decided = await _service.ConfirmComparisonDecisionsAsync(new ConfirmComparisonDecisionsRequest(
-            comp.Value, "aprovado", [new DecideComparisonCmRequest("34", PesoCmDecision.Manter, 142m, 54m)]));
+            comp.Value, "aprovado", [new DecideComparisonCmRequest("34", PesoCmDecision.Manter)]));
         Assert.True(decided.IsSuccess);
+        Assert.DoesNotContain("capacidade", comparison.ComparisonDecisionsJson!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(row.CurrentGlassWeight.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            comparison.ComparisonDecisionsJson!, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task ConfirmComparisonDecisions_HasUndecidedCm_IsBlocked()
+    public async Task CreateComparison_RequiresEveryCurrentCmAndUniquePreviousCm()
     {
-        var jobOnId = SeedJobOn();
         SeedReference();
-        var create = await _service.CreateControlAsync(new CreateControlRequest(
-            jobOnId, new DateTime(2026, 8, 17), 20m, "Novo", null, [new PesoLeituraInput("12", 152.43m)]));
-        await _service.SubmitControlAsync(new SubmitControlRequest(create.Value));
+        var previousJobOnId = SeedJobOn(production: "202512");
+        var previous = await _service.CreateControlAsync(new CreateControlRequest(
+            previousJobOnId, new DateTime(2025, 12, 10), 20m, "Novo", null,
+            [new PesoLeituraInput("12", 152.43m), new PesoLeituraInput("13", 153m)]));
+        await _service.SubmitControlAsync(new SubmitControlRequest(previous.Value));
         _identity.GrantResponsavel();
-        await _service.ApproveControlAsync(new ApproveControlRequest(create.Value));
+        await _service.ApproveControlAsync(new ApproveControlRequest(previous.Value));
 
-        var comp = await _service.CreateComparisonAsync(new CreateComparisonRequest(
-            jobOnId, new DateTime(2026, 8, 17), 20m, null, [new PesoLeituraInput("34", 142m)]));
+        _identity.GrantOperador();
+        var currentJobOnId = SeedJobOn(production: "202601");
+        var current = await _service.CreateControlAsync(new CreateControlRequest(
+            currentJobOnId, new DateTime(2026, 1, 10), 20m, "Novo", null,
+            [new PesoLeituraInput("34", 142m), new PesoLeituraInput("35", 143m)]));
 
-        var result = await _service.ConfirmComparisonDecisionsAsync(new ConfirmComparisonDecisionsRequest(
-            comp.Value, null, [new DecideComparisonCmRequest("34", PesoCmDecision.None, 142m, 54m)]));
+        var result = await _service.CreateComparisonAsync(new CreateComparisonRequest(
+            current.Value, previous.Value, null, [new PesoComparisonPairRequest("34", "12")]));
         Assert.True(result.IsFailure);
-        Assert.Equal("PESO_COMPARISON_UNDECIDED", result.Error.Code);
+        Assert.Equal("PESO_COMPARISON_PAIRING_INVALID", result.Error.Code);
     }
 
     [Fact]
-    public async Task ConfirmComparisonDecisions_WithAsideNeedsJustification()
+    public async Task ConfirmComparisonDecisions_UsesSnapshotRows_AndAsideNeedsJustification()
     {
-        var jobOnId = SeedJobOn();
         SeedReference();
-        var create = await _service.CreateControlAsync(new CreateControlRequest(
-            jobOnId, new DateTime(2026, 8, 17), 20m, "Novo", null, [new PesoLeituraInput("12", 152.43m)]));
-        await _service.SubmitControlAsync(new SubmitControlRequest(create.Value));
+        var previousJobOnId = SeedJobOn(production: "202512");
+        var previous = await _service.CreateControlAsync(new CreateControlRequest(
+            previousJobOnId, new DateTime(2025, 12, 10), 20m, "Novo", null,
+            [new PesoLeituraInput("12", 152.43m)]));
+        await _service.SubmitControlAsync(new SubmitControlRequest(previous.Value));
         _identity.GrantResponsavel();
-        await _service.ApproveControlAsync(new ApproveControlRequest(create.Value));
+        await _service.ApproveControlAsync(new ApproveControlRequest(previous.Value));
 
+        _identity.GrantOperador();
+        var currentJobOnId = SeedJobOn(production: "202601");
+        var current = await _service.CreateControlAsync(new CreateControlRequest(
+            currentJobOnId, new DateTime(2026, 1, 10), 20m, "Novo", null,
+            [new PesoLeituraInput("34", 142m)]));
         var comp = await _service.CreateComparisonAsync(new CreateComparisonRequest(
-            jobOnId, new DateTime(2026, 8, 17), 20m, null, [new PesoLeituraInput("34", 142m)]));
+            current.Value, previous.Value, null, [new PesoComparisonPairRequest("34", "12")]));
 
+        _identity.GrantResponsavel();
         var result = await _service.ConfirmComparisonDecisionsAsync(new ConfirmComparisonDecisionsRequest(
-            comp.Value, null, [new DecideComparisonCmRequest("34", PesoCmDecision.ColocarDeParte, 142m, 54m)]));
+            comp.Value, null, [new DecideComparisonCmRequest("34", PesoCmDecision.ColocarDeParte)]));
         Assert.True(result.IsFailure);
         Assert.Equal("PESO_COMPARISON_JUSTIFICATION_REQUIRED", result.Error.Code);
+
+        var mismatch = await _service.ConfirmComparisonDecisionsAsync(new ConfirmComparisonDecisionsRequest(
+            comp.Value, "motivo", [new DecideComparisonCmRequest("999", PesoCmDecision.Manter)]));
+        Assert.True(mismatch.IsFailure);
+        Assert.Equal("PESO_COMPARISON_DECISIONS_MISMATCH", mismatch.Error.Code);
     }
 
     // ---- document/email (GLM-PESO-09) ---------------------------------------

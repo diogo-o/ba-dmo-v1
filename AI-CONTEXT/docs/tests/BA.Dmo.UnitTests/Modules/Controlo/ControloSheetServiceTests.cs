@@ -33,6 +33,27 @@ public class ControloSheetServiceTests
     }
 
     [Fact]
+    public async Task GetForProduction_SnapshotsAllFiveResumoFamiliesFromExactJobOnRevision()
+    {
+        var (service, repo, ctx) = ControloTestBuilder.Build();
+        ctx.ByJobOn[JobOnId] = FakeControloProductionContextLookup.Context(
+            JobOnId,
+            new ControloFolhaComponent("MP_CM", null, null, "5447", "3", "CM"),
+            new ControloFolhaComponent("BQ", null, null, "T173", "4", "BQ"),
+            new ControloFolhaComponent("MF", null, null, "5447", "2", "MF"),
+            new ControloFolhaComponent("PU", null, null, "PU-5447", null, "PU"),
+            new ControloFolhaComponent("CS", null, null, "CS-173", null, "CS"));
+
+        var result = await service.GetForProductionAsync(JobOnId);
+
+        Assert.True(result.IsSuccess);
+        var sheet = Assert.Single(repo.Sheets);
+        Assert.Equal(new[] { "BQ", "CS", "MF", "MP_CM", "PU" },
+            sheet.Items.Select(item => item.Family).OrderBy(family => family));
+        Assert.Equal("3", sheet.Items.Single(item => item.Family == "MP_CM").LotSnapshot);
+    }
+
+    [Fact]
     public async Task UpdateItems_AppliesControlAndLeavesState()
     {
         var (service, repo, ctx) = ControloTestBuilder.Build(ControloCurrentUser.Edit());

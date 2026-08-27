@@ -14,8 +14,8 @@ namespace BA.Dmo.Infrastructure.Access;
 /// <summary>
 /// R010 — Dapper implementation of <see cref="IControloProductionContextLookup"/>.
 /// Resolves the production context at the Job On's CURRENT revision: production/reference/
-/// machine from the revision snapshots + the MP_CM/MF/BQ component (source ids + snapshots)
-/// rows. Read-only; the created sheet pins job_on_revision_id so a later revision never
+/// machine from the revision snapshots + the MP_CM/MF/BQ/PU/CS component (source ids +
+/// snapshots) rows. Read-only; the created sheet pins job_on_revision_id so a later revision never
 /// reinterprets it (TD-18 / Peso / Pegamentos pattern).
 /// </summary>
 public sealed class DapperControloProductionContextLookup : IControloProductionContextLookup
@@ -93,7 +93,7 @@ SELECT c.family, c.source_tool_id, c.source_lot_id,
        c.reference_snapshot, c.lot_snapshot, c.technical_name_snapshot
 FROM job_on_component c
 WHERE c.job_on_revision_id = @RevisionId
-  AND c.family IN ('MP_CM', 'MF', 'BQ')
+  AND c.family IN ('MP_CM', 'MF', 'BQ', 'PU', 'CS')
 ORDER BY c.family, c.reference_snapshot;";
             var rows = await Db.QueryAsync<dynamic>(conn, componentsSql, new { RevisionId = revisionId }, cancellationToken: ct);
 

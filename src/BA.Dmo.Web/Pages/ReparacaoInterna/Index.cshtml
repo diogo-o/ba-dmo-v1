@@ -4,11 +4,11 @@
 @{
     ViewData["Title"] = "Reparação Interna";
 }
-<link rel="stylesheet" href="~/styles/modules/reparacao-interna-layout.css" />
+<link rel="stylesheet" href="~/styles/modules/reparacao-interna-layout.css" asp-append-version="true" />
 
-<nav class="reparacao-interna-tabs" aria-label="Navegação Reparação Interna">
-    <button class="tab active" data-view="registo" type="button">Registo</button>
-    <button class="tab" data-view="historico" type="button">Histórico</button>
+<nav class="dmo-module-tabs reparacao-interna-tabs" aria-label="Navegação Reparação Interna">
+    <button class="dmo-module-tab tab active" data-view="registo" type="button">Registo</button>
+    <button class="dmo-module-tab tab" data-view="historico" type="button">Histórico</button>
 </nav>
 
 <main data-testid="page-reparacao-interna" class="reparacao-interna-page">
@@ -45,30 +45,15 @@
                     <div><span>Data/contexto</span><strong data-ctx-periodo></strong></div>
                 </div>
 
-                <div class="dmo-row-actions">
-                    <button type="button" class="dmo-button" data-type="CM">CM</button>
-                    <button type="button" class="dmo-button" data-type="MF">MF</button>
-                    <button type="button" class="dmo-button" data-type="BQ">BQ</button>
+                <div class="reparacao-interna-type-choice" role="group" aria-label="Tipo de ferramenta">
+                    <button type="button" class="dmo-button" data-type="CM" aria-pressed="false">CM</button>
+                    <button type="button" class="dmo-button" data-type="MF" aria-pressed="false">MF</button>
                 </div>
                 <div class="dmo-field">
                     <label for="individualNumbers">Números reparados (um por linha; repetidos são válidos)</label>
                     <textarea id="individualNumbers" rows="4" autocomplete="off"></textarea>
                 </div>
                 <div class="dmo-empty-state reparacao-interna-context-note" id="contextNote" hidden></div>
-                <div class="reparacao-interna-override">
-                    <button type="button" class="dmo-button" data-toggle-override>Editar contexto</button>
-                </div>
-                <div id="overridePanel" hidden>
-                    <div class="dmo-field">
-                        <label for="ovProduction">Produção</label>
-                        <input id="ovProduction" type="text" autocomplete="off" />
-                    </div>
-                    <div class="dmo-field">
-                        <label for="ovReference">Referência</label>
-                        <input id="ovReference" type="text" autocomplete="off" />
-                    </div>
-                    <div class="dmo-empty-state">Ao editar o contexto, o registo é guardado com os valores indicados; a produção/Job On original não é alterada.</div>
-                </div>
                 <div class="dmo-row-actions">
                     <button type="button" class="dmo-button success" data-registrar>Registar reparação</button>
                     <button type="button" class="dmo-button" data-refresh-context>Recarregar contexto</button>
@@ -224,26 +209,11 @@
                 <select id="cType">
                     <option value="CM">CM</option>
                     <option value="MF">MF</option>
-                    <option value="BQ">BQ</option>
                 </select>
             </div>
             <div class="dmo-field">
                 <label for="cNumber">Número individual</label>
                 <input id="cNumber" type="text" autocomplete="off" />
-            </div>
-            <div class="reparacao-interna-override">
-                <button type="button" class="dmo-button" data-toggle-ovcorrection>Editar contexto da correção</button>
-            </div>
-            <div id="ovCorrectionPanel" hidden>
-                <div class="dmo-field">
-                    <label for="cProduction">Produção</label>
-                    <input id="cProduction" type="text" autocomplete="off" />
-                </div>
-                <div class="dmo-field">
-                    <label for="cReference">Referência</label>
-                    <input id="cReference" type="text" autocomplete="off" />
-                </div>
-                <div class="dmo-empty-state">Uma correção guarda um novo registo; o original nunca desaparece e o Job On não é alterado.</div>
             </div>
             <div class="dmo-field">
                 <label for="cReason">Motivo (opcional)</label>

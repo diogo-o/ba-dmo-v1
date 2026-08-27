@@ -22,13 +22,21 @@ public sealed record ModuleDefinition
 
     public IReadOnlyList<Capability> Capabilities { get; }
 
+    /// <summary>
+    /// Whether Administration may assign this entry through an access template.
+    /// Technical catalog entries may remain addressable by authorization policies
+    /// while being derived from a parent module instead of assigned directly.
+    /// </summary>
+    public bool IsAssignable { get; }
+
     public ModuleDefinition(
         string moduleId,
         string displayName,
         ModuleKind kind,
         int canonicalOrder,
         string initialRoute,
-        IEnumerable<Capability>? capabilities = null)
+        IEnumerable<Capability>? capabilities = null,
+        bool isAssignable = true)
     {
         if (string.IsNullOrWhiteSpace(moduleId))
             throw new ArgumentException("Module id must not be empty.", nameof(moduleId));
@@ -53,5 +61,6 @@ public sealed record ModuleDefinition
         Capabilities = capabilities is null
             ? Array.Empty<Capability>()
             : capabilities.ToList().AsReadOnly();
+        IsAssignable = isAssignable;
     }
 }

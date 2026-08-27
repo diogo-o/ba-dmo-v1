@@ -7,8 +7,8 @@ namespace BA.Dmo.UnitTests.Modules.Armazem;
 
 /// <summary>
 /// U-14 — FerramentasArmazemToolIdentityResolver adapter tests. Maps Ferramentas
-/// identity → Armazém-owned WarehouseToolIdentity; accepts CM/MF only; rejects
-/// BQ/PU/CS (owner decision C); exposes canonical reference/lot/type/name; and
+/// identity → Armazém-owned WarehouseToolIdentity; accepts CM/MF/BQ; rejects
+/// PU/CS; exposes canonical reference/lot/type/name; and
 /// never mutates Ferramentas (read-only port consumed).
 /// </summary>
 public class FerramentasArmazemToolIdentityResolverTests
@@ -27,7 +27,8 @@ public class FerramentasArmazemToolIdentityResolverTests
     [Theory]
     [InlineData(FerramentasToolType.CM)]
     [InlineData(FerramentasToolType.MF)]
-    public async Task Search_CMAndMF_AreAccepted(FerramentasToolType type)
+    [InlineData(FerramentasToolType.BQ)]
+    public async Task Search_WarehouseTypes_AreAccepted(FerramentasToolType type)
     {
         _lookup.Hits.Add(Hit(type, "REF", "1"));
         var result = await _resolver.SearchAsync(type.ToString(), "REF", null);
@@ -40,7 +41,6 @@ public class FerramentasArmazemToolIdentityResolverTests
     }
 
     [Theory]
-    [InlineData("BQ")]
     [InlineData("PU")]
     [InlineData("CS")]
     public async Task Search_UnsupportedTypes_ReturnEmpty(string type)
