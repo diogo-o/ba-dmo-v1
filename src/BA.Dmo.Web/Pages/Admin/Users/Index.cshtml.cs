@@ -4,29 +4,25 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace BA.Dmo.Web.Pages.Admin.Users;
 
-/// <summary>User listing (04_ACC §9: listar/pesquisar). Read-only view.</summary>
+/// <summary>User listing. The assigned template is presented as the reusable
+/// title/function; the functional profile is shown separately.</summary>
 public class IndexModel : PageModel
 {
     private readonly AdminUserService _users;
+    private readonly AdminTemplateService _templates;
 
-    public IndexModel(AdminUserService users)
+    public IndexModel(AdminUserService users, AdminTemplateService templates)
     {
         _users = users;
+        _templates = templates;
     }
 
     public IReadOnlyList<AdminUserRow> Users { get; private set; } = [];
-
+    public IReadOnlyDictionary<string, string> TemplateTitles { get; private set; }
+        = new Dictionary<string, string>(StringComparer.Ordinal);
     public string? Search { get; private set; }
-
     public string? StateFilter { get; private set; }
-
     public string? Feedback { get; set; }
-
-    /// <summary>
-    /// User-safe service/configuration error (e.g. a required schema migration
-    /// not applied). Rendered as a clear error state — never silently an empty
-    /// user list, which would hide the backend/config failure.
-    /// </summary>
     public string? ServiceErrorMessage { get; private set; }
 
     public async Task OnGetAsync(string? q, string? state)
@@ -38,9 +34,6 @@ public class IndexModel : PageModel
 
     public async Task<IActionResult> OnPostResetPasswordAsync(string id)
     {
-        // HI-3: routes through the SAME service path as the Edit page
-        // (AdminUserService.RequestPasswordResetAsync) — provisioning
-        // generate_link + password_reset_request audit row.
         var result = await _users.RequestPasswordResetAsync(id, HttpContext.RequestAborted);
         Feedback = result.IsSuccess
             ? "Reset de palavra-passe iniciado."
@@ -52,23 +45,27 @@ public class IndexModel : PageModel
         return Page();
     }
 
-    /// <summary>
-    /// Loads the full (email-enriched) set and applies the search filter
-    /// case-insensitively across name, title, actor id AND email, then the
-    /// optional state filter. The list is small so a single fetch is fine.
-    /// </summary>
+    public string TemplateTitleFor(AdminUserRow user) =>
+        TemplateTitles.TryGetValue(user.TemplateId, out var title)
+            ? title
+            : user.TemplateId;
+
     private async Task ReloadUsersAsync()
     {
+        var templates = await _templates.ListAsync(HttpContext.RequestAborted);
+        TemplateTitles = templates.ToDictionary(
+            template => template.TemplateId,
+            template => template.Name,
+            StringComparer.Ordinal);
+
         var result = await _users.ListAsync(null, HttpContext.RequestAborted);
         if (result.IsFailure)
         {
-            // Backend/configuration failure (e.g. N26 not applied). Show the
-            // safe Portuguese error; DO NOT render an empty list that would
-            // hide the problem.
             ServiceErrorMessage = result.Error.Message;
             Users = [];
             return;
         }
+
         Users = result.Value;
         if (!string.IsNullOrWhiteSpace(Search))
         {
@@ -77,11 +74,13 @@ public class IndexModel : PageModel
                 .Where(u =>
                     u.DisplayName.Contains(term, StringComparison.OrdinalIgnoreCase)
                     || (u.ProfileTitle?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || TemplateTitleFor(u).Contains(term, StringComparison.OrdinalIgnoreCase)
                     || u.ActorId.Contains(term, StringComparison.OrdinalIgnoreCase)
                     || (u.AuthEmail?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false))
                 .ToList()
                 .AsReadOnly();
         }
+
         if (!string.IsNullOrWhiteSpace(StateFilter) && StateFilter != "all")
         {
             var isActive = StateFilter.Equals("active", StringComparison.OrdinalIgnoreCase);
