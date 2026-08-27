@@ -22,6 +22,7 @@
 - [15. Migration Infrastructure](#15-migration-infrastructure)
 - [16. Settings / Options](#16-settings--options)
 - [17. Dependency Injection Registration](#17-dependency-injection-registration)
+- [18. Classification / Reconciliation Notes](#18-classification--reconciliation-notes)
 - [Direct Technical References](#direct-technical-references)
 - [Sources Verified](#sources-verified)
 
@@ -61,20 +62,20 @@ Source folders under `src\BA.Dmo.Infrastructure\`:
 
 | Folder | `.cs` files | Technical role |
 |---|---|---|
-| `Access\` | 30 | Dapper repositories, context lookups, UoW factories, PDF renderers, file/image provider |
+| `Access\` | 31 | Dapper repositories, context lookups, UoW factories, PDF renderers, file/image provider |
 | `Auth\` | 3 | Supabase auth + admin provisioning adapters + settings |
 | `Identity\` | 1 | Dapper internal-user repository |
 | `Persistence\` | 6 | Db foundation, connection factory, unit of work, type/name mappings |
 | `Persistence\Migrations\` | 7 | Migration runner, gateway, discovery, checksum, records, exceptions |
-| **Total source `.cs`** | **47** | Excludes `bin\`, `obj\`, and generated `obj\Debug\...` files |
+| **Total source `.cs`** | **48** | Excludes `bin\`, `obj\`, and generated `obj\Debug\...` files |
 
 Generated files excluded (not source-controlled) — `obj\Debug\net10.0\`:
 `BA.Dmo.Infrastructure.GlobalUsings.g.cs`, `BA.Dmo.Infrastructure.AssemblyInfo.cs`,
 `.NETCoreApp,Version=v10.0.AssemblyAttributes.cs`.
 
-SQL-bearing source file count: **25** (files containing embedded SQL statement
-strings; excludes the `Db.cs` wrapper and the PDF/migration-discovery helpers that
-contain no SQL).
+SQL-bearing source file count: **26** (files containing embedded SQL statement
+strings, incl. `DapperArticleReferenceImageRepository`; excludes the `Db.cs`
+wrapper and the PDF/migration-discovery helpers that contain no SQL).
 
 ---
 
@@ -86,6 +87,7 @@ contain no SQL).
 | Access | `DapperAppSettingsReader` | Repository implementation | Read app_settings value | `Access\DapperAppSettingsReader.cs` |
 | Access | `DapperArmazemRepository` | Repository implementation | Armazém stock/movements persistence | `Access\DapperArmazemRepository.cs` |
 | Access | `DapperArmazemRepairMovementRepository` | Repository implementation | Repair-cycle armazém movement port | `Access\DapperArmazemRepairMovementRepository.cs` |
+| Access | `DapperArticleReferenceImageRepository` | Repository implementation | Master Article/Reference image association + Job On audit facts | `Access\DapperArticleReferenceImageRepository.cs` |
 | Access | `DapperBoquilhasRepository` | Repository implementation | Boquilhas lots/traces/movements persistence | `Access\DapperBoquilhasRepository.cs` |
 | Access | `DapperControloSheetRepository` | Repository implementation | Controlo sheets/items/events persistence | `Access\DapperControloSheetRepository.cs` |
 | Access | `DapperFerramentasRepository` | Repository implementation | Ferramentas references/lotes/pieces/rules | `Access\DapperFerramentasRepository.cs` |
@@ -231,8 +233,8 @@ File: `Access\DapperArmazemRepository.cs`
 - Methods + SQL:
   - Locations: `GetOrCreateLocationAsync` (transaction: INSERT `warehouse_locations` `ON CONFLICT (code) DO NOTHING` + re-select), `GetLocationByCodeAsync`, `GetLocationByIdAsync`.
   - Stock: `GetActiveStockByLocationAsync`, `GetActiveStockByToolIdAsync`, `GetActiveStocksAsync`, `GetStockByLocationAsync`, `GetStockByToolIdAsync` — `warehouse_stock` (`released_at_utc IS NULL` for active).
-  - Writes (transaction + explicit locking): `RegisterEntradaAsync` — `SELECT ... FROM warehouse_locations ... FOR UPDATE` then `SELECT ... FROM warehouse_stock ... FOR UPDATE`, collision → `ArmazemLocationOccupiedException`, plus INSERT stock + movement; `RegisterSaidaAsync` — `UPDATE warehouse_stock SET released... WHERE ... released_at_utc IS NULL` + `ConcurrencyGuard` + movement; `ReplaceOccupationAsync` — release + insert + two movements.
-  - History: `GetMovementHistoryAsync` — `warehouse_movements` JOIN `warehouse_stock`.
+  - Writes (transaction + explicit locking): `RegisterEntradaAsync` — `SELECT ... FROM warehouse_locations ... FOR UPDATE` then `SELECT ... FROM warehouse_stock ... FOR UPDATE`, collision → `ArmazemLocationOccupiedException`, plus INSERT stock + movement; `RegisterSaidaAsync` — `UPDATE warehouse_stock SET released... WHERE ... released_at_utc IS NULL` + `ConcurrencyGuard` + movement; `ReplaceOccupationAsync` — release + insert + two movements; `CorrectLocationAsync` — release and/or occupy with target-location `FOR UPDATE` occupancy guard + matching movements (all-or-nothing, transaction-scoped).
+  - History: `GetMovementHistoryAsync` — `warehouse_movements` JOIN `warehouse_stock`; `ListMovementFactsAsync` — paged movement facts JOIN stock + LEFT JOIN location, `@FromUtc/@ToUtc` window.
   - Audit: `InsertAuditEventAsync` — `audit_events` (module 'armazem', entity 'armazem').
 - Codecs: `WarehouseMovementDirectionCodec`.
 
@@ -245,6 +247,18 @@ File: `Access\DapperArmazemRepairMovementRepository.cs`
   - `ConfirmReturnAsync` — normalize position code, get/create location, occupancy check, INSERT or reuse `warehouse_stock`, movement (direction 'in').
   - `GetOrCreateLocationAsync` — `warehouse_locations` `ON CONFLICT DO NOTHING` + re-select.
 - InsertMovement inserts into `warehouse_movements` with `repair_exit_id`.
+
+### `DapperArticleReferenceImageRepository`
+File: `Access\DapperArticleReferenceImageRepository.cs`
+- Implements `IArticleReferenceImageRepository` (interface in `BA.Dmo.Application\Modules\JobOn\ArticleReferenceImage.cs`).
+- Constructor: `IDbConnectionFactory`.
+- Methods + SQL (table `article_reference_images` from N29/N30; key normalized via `ArticleReferenceImageRules.NormalizeReferenceCode`):
+  - `GetAsync` — `SELECT reference_code, image_asset_id, updated_by, updated_at_utc FROM article_reference_images WHERE reference_code=@ReferenceCode`.
+  - `SetAsync` — `DapperUnitOfWork.RunAsync` transaction: upsert `article_reference_images` (`ON CONFLICT (reference_code) DO UPDATE SET image_asset_id/updated_by/updated_at_utc`) + INSERT `job_on_audit_event` (before/after snapshots as `CAST(... AS jsonb)`).
+  - `RemoveAsync` — `DapperUnitOfWork.RunAsync` transaction: `DELETE FROM article_reference_images WHERE reference_code=@ReferenceCode` (exactly-1 row guard → `InvalidOperationException`) + INSERT `job_on_audit_event`.
+- Audit: writes to `job_on_audit_event` (N05 columns: job_on_id, job_on_revision_id, event_type, before_snapshot, after_snapshot, actor_id, occurred_at_utc); the audit insert is atomic with the association write.
+- Related migrations: N29 (table + RLS + legacy `job_on_revision.image_asset_id` promotion), N30 (`ix_article_reference_images_updated_by`).
+- Application consumers: `JobOnService` (set/remove image, `GetAsync` for pre-state) and `FileSystemJobOnImageProvider` (`GetAsync`); registered in `src\BA.Dmo.Web\Program.cs` for `IArticleReferenceImageRepository`.
 
 ### `DapperBoquilhasRepository`
 File: `Access\DapperBoquilhasRepository.cs`
@@ -330,21 +344,24 @@ File: `Access\DapperAdminRepository.cs`
 - Implements `IAdminRepository`.
 - Constructor: `IDbConnectionFactory`.
 - Methods + SQL:
-  - Users: `ListUsersAsync` (interpolated `$"SELECT {UserColumns}..."` + optional ILIKE search, `ORDER BY`), `GetUserAsync`, `AuthUserIdAlreadyRegisteredAsync`, `CreateInternalUserAsync` (`ON CONFLICT (actor_id) DO NOTHING`), `UpdateUserAsync` (optimistic via `updated_at_utc = @ExpectedUpdatedAt` + `ConcurrencyGuard`), `ChangeUserTemplateAsync`, `SetUserActiveAsync` (guarded), `SetUserModulesOverrideAsync` — `internal_users`.
+  - Users: `ListUsersAsync` (interpolated `$"SELECT {UserColumns}..."` + optional ILIKE search; `UserColumns` includes an ARRAY subquery `TemplateIds` over `internal_user_access_templates`), `GetUserAsync`, `AuthUserIdAlreadyRegisteredAsync`, `CreateInternalUserAsync` (`WITH inserted AS (INSERT internal_users ... ON CONFLICT (actor_id) DO NOTHING RETURNING actor_id) INSERT INTO internal_user_access_templates ... ON CONFLICT (actor_id, template_id) DO NOTHING`), `UpdateUserAsync` (optimistic via `updated_at_utc = @ExpectedUpdatedAt` + `ConcurrencyGuard`), `ChangeUserTemplateAsync` → `ReplaceUserAccessTemplatesAsync` (transaction: optimistic `UPDATE internal_users SET template_id=@PrimaryTemplateId` + `DELETE` + INSERT junction rows via `unnest(@TemplateIds::text[])` + admins-count guard), `SetUserActiveAsync` (guarded + admins count), `SetUserModulesOverrideAsync` (N26 `modules_override` guarded write, NO lockout guard — override grants do not feed the admin count) — `internal_users`.
   - Templates: `ListTemplatesAsync`, `GetTemplateAsync`, `CreateTemplateAsync`, `UpdateTemplateAsync` (guarded + admins count) — `access_templates`.
-  - Admin count / self-lockout: `CountActiveAdminsAsync` / `CountActiveAdminsOnAsync` — `SELECT COUNT(*)... t.modules @> @AdminGrantPattern::jsonb`. Guarded writes run in a `DapperUnitOfWork.RunAsync` that performs write + admins-count + rollback on zero (inner `LockoutViolationException` → false).
-  - Audit: `InsertAuditEventAsync` — `audit_events`; `QueryAuditAsync` — dynamic WHERE via `DynamicParameters`, COUNT + paged SELECT `ORDER BY occurred_at_utc DESC LIMIT ... OFFSET ...`.
-- Schema-gate: catches `PostgresException` `SQLSTATE 42703` → `SchemaMigrationRequiredException`.
+  - Admin count / self-lockout: `CountActiveAdminsAsync` / `CountActiveAdminsOnAsync` — `SELECT COUNT(DISTINCT u.actor_id) FROM internal_users u JOIN internal_user_access_templates ut JOIN access_templates t ... WHERE u.active AND u.profile_title='Admin' AND t.active AND t.modules @> @AdminGrantPattern::jsonb` (+ optional `excludeActorId`). Guarded writes run in a `DapperUnitOfWork.RunAsync` that performs write + admins-count + rollback on zero (inner `LockoutViolationException` → false).
+  - Audit: `InsertAuditEventAsync` — `audit_events` (module 'admin'); `QueryAuditAsync` — dynamic WHERE via `DynamicParameters`, COUNT + paged SELECT `ORDER BY occurred_at_utc DESC LIMIT ... OFFSET ...`.
+- Literal JSON grant pattern: `[{"moduleId":"admin"}]`.
+- Schema-gate: catches `PostgresException` `SQLSTATE 42703` (undefined column, N26 `modules_override` missing) → `SchemaMigrationRequiredException`.
+- Related migrations: N01, N26 (modules_override), N27 (junction), N31 (single effective template + profiles).
 
 ### `DapperInternalUserRepository`
 File: `Identity\DapperInternalUserRepository.cs`
 - Implements `IInternalUserRepository`.
 - Constructor: `IDbConnectionFactory`.
 - Methods + SQL:
-  - `FindByAuthUserIdAsync` — `SELECT ... FROM internal_users u JOIN access_templates t ...` (explicit count); throws `AmbiguousIdentityException` on duplicate.
-  - `AdminExistsAsync` — `SELECT 1 ... t.modules @> @AdminGrantPattern::jsonb LIMIT 1`.
-  - `CreateBootstrapAdminAsync` — `DapperUnitOfWork.RunAsync` transaction: INSERT `access_templates` (`ON CONFLICT DO NOTHING`) + INSERT `internal_users` (`ON CONFLICT DO NOTHING`) + INSERT `audit_events` (module 'admin', action 'bootstrap_admin').
-- Literal JSON grant pattern: `[{"moduleId":"admin","capabilities":["admin.gerir"]}]`.
+  - `FindByAuthUserIdAsync` — `SELECT u.*, t.* FROM internal_users u LEFT JOIN internal_user_access_templates ut ON ut.actor_id = u.actor_id LEFT JOIN access_templates t ON t.template_id = ut.template_id WHERE u.auth_user_id = @AuthUserId` (explicit count; multiple distinct actor ids → `AmbiguousIdentityException`; templates collected via the N27 junction).
+  - `AdminExistsAsync` — `SELECT 1 ... FROM internal_users u JOIN internal_user_access_templates ut ... JOIN access_templates t ... WHERE u.active AND u.profile_title = 'Admin' AND t.active AND t.modules @> @AdminGrantPattern::jsonb LIMIT 1`.
+  - `CreateBootstrapAdminAsync` — `DapperUnitOfWork.RunAsync` transaction (4 inserts): INSERT `access_templates` (`ON CONFLICT (template_id) DO NOTHING`) + INSERT `internal_users` (`ON CONFLICT (actor_id) DO NOTHING`) + INSERT `internal_user_access_templates` (`ON CONFLICT (actor_id, template_id) DO NOTHING`) + INSERT `audit_events` (module 'admin', action 'bootstrap_admin', entity 'internal_user').
+- Literal JSON grant pattern: `[{"moduleId":"admin"}]`.
+- Related migrations: N01 identity tables, N27 `internal_user_access_templates` (junction), N31 unique single-template constraint (`ux_internal_user_access_templates_actor`) + `access_template_profiles` (profile kept in sync on `internal_users.profile_title`; the class reads `profile_title`, not the profile table — see Classification Notes §18).
 
 ### `DapperModuleCatalogMirrorRepository`
 File: `Access\DapperModuleCatalogMirrorRepository.cs`
@@ -404,8 +421,8 @@ SQL inventory across the 25 SQL-bearing Infrastructure files; grouped by pattern
 **UPDATE guarded writes** (optimistic concurrency via `updated_at_utc = @ExpectedUpdatedAt`): `DapperAdminRepository` (users, template) with `ConcurrencyGuard.EnsureSingleRowUpdated`.
 
 **ON CONFLICT / UPSERT**:
-- `DapperAdminRepository`, `DapperInternalUserRepository` — `INSERT ... ON CONFLICT (actor_id) DO NOTHING`.
-- `DapperModuleCatalogMirrorRepository`, `DapperPesoRepository` (day approvals, settings), `DapperTampaoRepository` (saldos), `DapperJobOnUserContextRepository` (context), `DapperPegamentoRepository` (documents), `DapperRepairRepository` (line defaults) — `ON CONFLICT ... DO UPDATE SET ...`.
+- `DapperAdminRepository`, `DapperInternalUserRepository` — `INSERT ... ON CONFLICT (actor_id) DO NOTHING` (internal_users) + `ON CONFLICT (actor_id, template_id) DO NOTHING` (internal_user_access_templates junction).
+- `DapperModuleCatalogMirrorRepository`, `DapperPesoRepository` (day approvals, settings), `DapperTampaoRepository` (saldos), `DapperJobOnUserContextRepository` (context), `DapperPegamentoRepository` (documents), `DapperRepairRepository` (line defaults), `DapperArticleReferenceImageRepository` (article_reference_images) — `ON CONFLICT ... DO UPDATE SET ...`.
 
 **Explicit row locking (`FOR UPDATE`)**: `DapperArmazemRepository` (warehouse_locations, warehouse_stock occupation guards), `DapperTampaoRepository` (`GetSaldoInTransactionAsync`).
 
@@ -441,16 +458,18 @@ Reverse navigation — table names referenced literally in Infrastructure SQL.
 | `access_templates` | `DapperInternalUserRepository` | `FindByAuthUserIdAsync`, `AdminExistsAsync`, `CreateBootstrapAdminAsync` |
 | `access_templates` | `DapperAdminRepository` | `ListTemplatesAsync`, `GetTemplateAsync`, `CreateTemplateAsync`, `UpdateTemplateAsync`, `CountActiveAdminsOnAsync` |
 | `app_settings` | `DapperAppSettingsReader` | `GetOutputRootAsync` |
+| `article_reference_images` | `DapperArticleReferenceImageRepository` | `GetAsync`, `SetAsync`, `RemoveAsync` |
 | `audit_events` | `DapperInternalUserRepository`, `DapperAdminRepository`, `DapperArmazemRepository`, `DapperPesoRepository`, `DapperRepairRepository`, `DapperFerramentasRepository`, `DapperReparacaoInternaRepository`, `DapperTampaoRepository`, `DapperBoquilhasRepository`, `DapperHistoriaRepository` | audit inserts / Historia reads |
 | `bq_*` (lotes, traces, movements, lifecycle_history, utilisation_readings, discrepancies) | `DapperBoquilhasRepository` | all BQ methods |
 | `controlo_sheets` / `controlo_sheet_items` / `controlo_sheet_events` | `DapperControloSheetRepository` | all sheet methods |
 | `internal_repair_records` | `DapperReparacaoInternaRepository` | `InsertAsync`, `GetByIdAsync`, `GetChainRootAsync`, `GetChainAsync`, `ListAsync` |
 | `internal_users` | `DapperInternalUserRepository`, `DapperAdminRepository` | user queries / writes |
+| `internal_user_access_templates` | `DapperInternalUserRepository`, `DapperAdminRepository` | N27 junction: identity lookup / template assignment / admin count |
 | `job_on` | `DapperJobOnRepository`, `DapperJobOnProductionFolderResolver` | job on CRUD / folder |
 | `job_on_revision` | `DapperJobOnRepository`, `DapperJobOnProductionContextLookup`, `DapperJobOnActiveContextLookup`, `DapperControloProductionContextLookup` | revision graph / snapshots |
 | `job_on_component` | `DapperJobOnRepository`, context lookups | component rows / lots |
 | `job_on_component_field` / `job_on_component_row` / `job_on_verification_occurrence` | `DapperJobOnRepository` | namespaced child nodes |
-| `job_on_audit_event` | `DapperJobOnRepository` | `InsertAuditEventAsync`, graph writes |
+| `job_on_audit_event` | `DapperJobOnRepository`, `DapperArticleReferenceImageRepository` | `InsertAuditEventAsync`, graph writes / article-image association audit facts |
 | `jobon_user_current` | `DapperJobOnUserContextRepository` | `SetCurrentAsync`, `GetCurrentAsync` |
 | `line_repairer_defaults` | `DapperRepairRepository`, `DapperBoquilhasRepository` | line defaults |
 | `module_catalog_mirror` | `DapperModuleCatalogMirrorRepository` | `GetAllAsync`, `UpsertAllAsync` |
@@ -506,6 +525,7 @@ All repositories dispose connections in `finally` via a static `DisposeAsync(IDb
 - `DapperInternalUserRepository` — `CreateBootstrapAdminAsync` (template + user + audit).
 - `DapperAdminRepository` — `GuardedUserWriteAsync`, `UpdateTemplateAsync` (optimistic write + admins-count, rollback on zero).
 - `DapperModuleCatalogMirrorRepository` — `UpsertAllAsync` (delete + upserts).
+- `DapperArticleReferenceImageRepository` — `SetAsync`, `RemoveAsync` (association write + audit fact atomic).
 
 ### Repository methods participating in a caller-provided `IDbUnitOfWork` (transaction shared with callers / coordinated writes)
 - `DapperRepairRepository` — `ConfirmItemPickedAsync`, `ConfirmItemReturnedAsync`, `UpdateExitStatusAsync`, `InsertRepairEventAsync`.
@@ -546,6 +566,7 @@ Mechanisms used across Infrastructure repositories:
 - `DapperTampaoRepository` — `ParseValues` (values_json → sorted decimal dict).
 - `DapperBoquilhasRepository` — `ParseGuidJsonArray` (deleted_movements), `LikePattern`.
 - `DapperRepairRepository` — `RepairerSnapshot` deserialize via `JsonSerializer`.
+- `DapperArticleReferenceImageRepository` — before/after audit snapshots serialized as `{"reference": ..., "image_asset_id": ...}` (jsonb casts).
 - `DapperAppSettingsReader` — `JsonDocument` parse of `setting_value`.
 
 ---
@@ -610,10 +631,14 @@ File: `Access\PesoSingleFilePdfRenderer.cs`
 ### `FileSystemJobOnImageProvider`
 File: `Access\FileSystemJobOnImageProvider.cs`
 - Implements `IJobOnImageProvider`.
-- Constructor: `IJobOnRepository`, `IAppSettingsReader`, `IDbConnectionFactory`.
-- `ResolveAsync(Guid jobOnId, ct)` → `ImageResolution?`; builds path `Path.Combine(outputRoot, productionFolder, imageAssetId)`, reads bytes via `File.ReadAllBytesAsync`, returns MIME by extension (`DetectMimeType`: jpg/jpeg/png/gif/webp/bmp, fallback image/jpeg). Returns null (never throws) when any chain part is missing.
+- Constructor: `IJobOnRepository`, `IArticleReferenceImageRepository`, `IAppSettingsReader` (no `IDbConnectionFactory` — reads go through the injected ports).
+- `ResolveAsync(Guid jobOnId, ct)` → `ImageResolution?`; chain (never throws, returns null on any missing part):
+  1. `IJobOnRepository.GetByIdAsync` → extract Article/Reference code from the current revision's `reference_snapshot` (`ArticleReferenceImageRules.ExtractReferenceCode`);
+  2. `IArticleReferenceImageRepository.GetAsync(referenceCode)` → current master `image_asset_id` (`article_reference_images`, N29/N30);
+  3. `IAppSettingsReader.GetOutputRootAsync` → `main_documents_output_root` (`app_settings`);
+  4. `Path.Combine(outputRoot, imageAssetId)` (asset id validated by `ArticleReferenceImageRules.TryNormalizeImageAssetId`; N29 CHECK forbids path separators/`..`), `File.ReadAllBytesAsync`, MIME by extension (`DetectMimeType`: jpg/jpeg/png/gif/webp/bmp, fallback image/jpeg).
 
-(No dedicated storage/output-path writer class exists in Infrastructure; output root is read from `app_settings` via `DapperAppSettingsReader`, and production folder from `job_on` via `DapperJobOnProductionFolderResolver`.)
+(No dedicated storage/output-path writer class exists in Infrastructure; the image chain resolves through `article_reference_images` (master) — NOT `job_on.production_folder`. The `job_on.production_folder` resolver (`DapperJobOnProductionFolderResolver`) remains independently consumed by Peso/Pegamentos document metadata.)
 
 ---
 
@@ -660,6 +685,67 @@ File: `Persistence\Migrations\MigrationChecksum.cs`
 
 No `AddInfrastructure(...)` / `IServiceCollection` registration extension exists
 inside `src\BA.Dmo.Infrastructure\` (verified by search — no matches).
+Concrete DI registrations live in the Web composition root: `src\BA.Dmo.Web\Program.cs`
+(`AddSingleton` for `DbConnectionFactory`/`LazyDbConnectionFactory`,
+`IInternalUserRepository`, `IAdminRepository`, `IModuleCatalogMirrorRepository`,
+auth adapters, PDF renderers; `AddScoped` for the per-module repositories/lookups/
+UoW factories; `PersistenceMappings.Configure()` called at line ~60).
+
+---
+
+## 18. Classification / Reconciliation Notes
+
+Evidence-based labels from the reconciliation pass (source > migrations > prior map
+text). Labels and evidence only; no fix or deletion is recommended here.
+
+- **CONFIRMED CURRENT — `DapperArticleReferenceImageRepository` vs N29/N30.**
+  Every column read/written (`reference_code`, `image_asset_id`, `updated_by`,
+  `updated_at_utc`) matches `database\migrations\N29_jobon_reference_images.sql`;
+  the `ON CONFLICT (reference_code) DO UPDATE` upsert matches the PK; audit rows
+  target `job_on_audit_event` columns defined in N05 (before/after as `jsonb`);
+  N30 covers the `updated_by` FK index. Reference normalization
+  (`ArticleReferenceImageRules.NormalizeReferenceCode`) is consistent with the
+  N29 CHECK (uppercase, trimmed).
+- **CONFIRMED CURRENT — `DapperInternalUserRepository` / `DapperAdminRepository`
+  vs N27/N31.** SQL uses the `internal_user_access_templates` junction created in
+  N27 (PK `(actor_id, template_id)`), the N31 single-effective-template constraint,
+  and `profile_title`/`template_id` kept in sync by N27/N31. Admin count + bootstrap
+  queries match the `[{"moduleId":"admin"}]` containment tests used in the
+  migrations. No schema or migration drift found.
+- **CONFIRMED CURRENT — spot-cross-referenced module queries.** `jobon_user_current`
+  (N24), `controlo_sheets/items/events` incl. `mcaliper_link`/`display_id` (N23),
+  `repair_events` incl. `repair_scope`/`internal_repair_record_id`/`canceled` (N08),
+  `repair_exits`/`repair_exit_items` status vocabularies (N08), `peso_leituras`/
+  `peso_day_approvals` (N06), `internal_repair_records` `job_on_revision_id`,
+  `correction_of_id` (N22), `warehouse_movements.repair_exit_id` (N09),
+  `module_catalog_mirror` (N02), `app_settings` (N11) — all match the migrations.
+- **INTENTIONAL NORMALIZATION — `job_on_revision.image_asset_id` legacy.** N29
+  documents the per-revision image column as dormant (not dropped) after the move to
+  the master `article_reference_images` table. `DapperJobOnRepository` still writes/
+  reads `image_asset_id` on revisions (`InsertRevisionAsync`, `InsertImageMutationAsync`)
+  and keeps them audited; the new master write path
+  (`DapperArticleReferenceImageRepository`) does NOT touch the legacy column.
+  Consistent with N29; not drift.
+- **UNKNOWN / OWNER DECISION REQUIRED — `access_template_profiles` (N31) has no
+  Infrastructure counterpart.** The table is created/maintained by migration
+  (trigger `trg_access_templates_ensure_profile` + backfill) and is read/written
+  directly by `src\BA.Dmo.Web\Pages\Admin\TemplateProfileStore.cs` (Web-layer SQL,
+  outside Infrastructure). Infrastructure identity/admin repositories instead read
+  the compatibility columns `internal_users.profile_title` / `internal_users.template_id`
+  which N31 keeps in sync. Whether the Web-layer direct SQL or the dual
+  profile_title/profile-table source should be consolidated is an architecture
+  decision outside this map.
+- **REVIEW NOTE (comment vs code, not behavior) — `Identity\DapperInternalUserRepository.cs`
+  header comment still says "tables from U-02 N01_identity.sql" while the SQL uses the
+  N27 `internal_user_access_templates` junction (and N31 constraint). The SQL is
+  current; only the class-level comment is stale (evidence: comment line ~9 vs
+  `FindByAuthUserIdSql`/`InsertUserTemplateSql` in the same file).
+- **No evidence of role duplication.** Classes that query the same tables serve
+  distinct roles (e.g. `DapperAdminRepository.CountActiveAdminsOnAsync` vs
+  `DapperInternalUserRepository.AdminExistsAsync`; `DapperArmazemRepository`/
+  `DapperArmazemRepairMovementRepository` location get-or-create; the three
+  context lookups over `job_on_revision`). No POTENTIAL OVERLAP /
+  LEGACY CANDIDATE / ORPHAN CANDIDATE finding is supported by evidence.
 
 ---
 
@@ -699,6 +785,7 @@ Direct contracts / interfaces consumed or implemented by Infrastructure classes
 - `DapperModuleCatalogMirrorRepository` → implements `IModuleCatalogMirrorRepository`; constructor receives `IDbConnectionFactory`.
 - `DapperJobOnUserContextRepository` → implements `IJobOnUserContextRepository`; constructor receives `IDbConnectionFactory`.
 - `DapperAppSettingsReader` → implements `IAppSettingsReader`; constructor receives `IDbConnectionFactory`.
+- `DapperArticleReferenceImageRepository` → implements `IArticleReferenceImageRepository`; constructor receives `IDbConnectionFactory`.
 - `DapperJobOnActiveContextLookup` → implements `IJobOnActiveContextLookup`; constructor receives `IJobOnRepository` + `IDbConnectionFactory`.
 - `DapperControloProductionContextLookup` → implements `IControloProductionContextLookup`; constructor receives `IJobOnRepository` + `IDbConnectionFactory`.
 - `DapperJobOnProductionContextLookup` → implements `IJobOnProductionContextLookup`; constructor receives `IDbConnectionFactory`.
@@ -706,7 +793,7 @@ Direct contracts / interfaces consumed or implemented by Infrastructure classes
 - `DapperFerramentasRuleLookup` → implements `IFerramentasRuleLookup`; constructor receives `IDbConnectionFactory`.
 - `DapperFerramentasIdentityLookup` → implements `IFerramentasIdentityLookup`; constructor receives `IDbConnectionFactory`.
 - `DapperFerramentasPieceLookup` → implements `IFerramentasPieceLookup`; constructor receives `IDbConnectionFactory`.
-- `FileSystemJobOnImageProvider` → implements `IJobOnImageProvider`; constructor receives `IJobOnRepository`, `IAppSettingsReader`, `IDbConnectionFactory`.
+- `FileSystemJobOnImageProvider` → implements `IJobOnImageProvider`; constructor receives `IJobOnRepository`, `IArticleReferenceImageRepository`, `IAppSettingsReader`.
 - `DapperRepairUnitOfWorkFactory` → implements `IRepairUnitOfWorkFactory`; constructs `DapperUnitOfWork`.
 - `DapperTampoesUnitOfWorkFactory` → implements `ITampoesUnitOfWorkFactory`; constructs `DapperUnitOfWork`.
 - `DapperBoquilhasUnitOfWorkFactory` → implements `IBoquilhasUnitOfWorkFactory`; constructs `DapperUnitOfWork`.
@@ -725,19 +812,43 @@ Direct contracts / interfaces consumed or implemented by Infrastructure classes
 
 ## Sources Verified
 
-Primary evidence:
-- `src\BA.Dmo.Infrastructure\` (all 47 source `.cs` files; 4 source folders).
-- `src\BA.Dmo.Infrastructure\BA.Dmo.Infrastructure.csproj` (project/package references).
+Primary evidence (this reconciliation pass, HEAD `8478308`):
+- `src\BA.Dmo.Infrastructure\` — all **48** source `.cs` files across 5 folders
+  (`Access\` 31, `Auth\` 3, `Identity\` 1, `Persistence\` 6, `Persistence\Migrations\` 7)
+  read for class/interface/table/transaction facts. `DapperArticleReferenceImageRepository`
+  (`Access\DapperArticleReferenceImageRepository.cs`) was verified and added to this map
+  in this pass.
+- `src\BA.Dmo.Web\Program.cs` — DI registrations of every Infrastructure port
+  (incl. `IArticleReferenceImageRepository` line ~176, `IJobOnImageProvider` line ~180)
+  and `PersistenceMappings.Configure()` call.
+- `src\BA.Dmo.Application\` — port interfaces confirmed at the listed paths
+  (e.g. `Modules\JobOn\ArticleReferenceImage.cs` → `IArticleReferenceImageRepository`,
+  `Shared\IJobOnImageProvider.cs`); consumers confirmed (`JobOnService`,
+  `JobOnPdfService`).
+- `database\migrations\N01–N31` — column/key cross-reference for the most important
+  queries (N29/N30 article images, N27/N31 access junction + profiles, N05
+  job_on_audit_event, N08 repairs, N06 peso, N23 controlo, N24 jobon_user_current,
+  N22 reparação interna, N09 armazém, N02 catalog, N11 app_settings).
 
 Referenced contract names (Identification only):
 - Application persistence-port interfaces implemented by Infrastructure classes
   (listed under each class; interface source locations live in `BA.Dmo.Application`).
 
-Registry / contract:
-- `maps\00_INDEX.md` (mapping contract / register).
+Cross-references (relative links, same `docs\Maps\` folder):
+- [00_INDEX.md](00_INDEX.md) (mapping contract / register)
+- [01_DOMAIN.md](01_DOMAIN.md) · [02_DATABASE.md](02_DATABASE.md) ·
+  [03_MIGRATIONS.md](03_MIGRATIONS.md) · [05_TESTS.md](05_TESTS.md) ·
+  [19_APPLICATION.md](19_APPLICATION.md)
+- Module maps: [06_JOB_ON.md](06_JOB_ON.md) · [07_CONTROLO.md](07_CONTROLO.md) ·
+  [08_FERRAMENTAS.md](08_FERRAMENTAS.md) · [09_ARMAZEM.md](09_ARMAZEM.md) ·
+  [10_BOQUILHAS.md](10_BOQUILHAS.md) · [11_REPARACAO_INTERNA.md](11_REPARACAO_INTERNA.md) ·
+  [12_REPARACAO_EXTERNA.md](12_REPARACAO_EXTERNA.md) · [13_TAMPOES.md](13_TAMPOES.md) ·
+  [14_HISTORIA.md](14_HISTORIA.md) · [15_ADMIN.md](15_ADMIN.md) ·
+  [16_USERS_ACCESS.md](16_USERS_ACCESS.md) · [18_LOGIN.md](18_LOGIN.md)
 
 **Outside this map's scope:**
 - Database schema (`02_DATABASE.md`)
 - migration evolution (`03_MIGRATIONS.md`)
 - Domain (`01_DOMAIN.md`)
-- tests (`05_TESTS.md`)
+- tests — map: `05_TESTS.md`; physical test sources live under
+  `AI-CONTEXT\docs\tests\` (`BA.Dmo.IntegrationTests\`, `BA.Dmo.UnitTests\`)

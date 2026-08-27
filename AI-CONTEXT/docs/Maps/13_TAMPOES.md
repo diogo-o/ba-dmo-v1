@@ -29,9 +29,20 @@ Index route: `/tampoes`
 - 18. Sources Verified
 - Counts
 
+## Cross-References
+
+- `maps\00_INDEX.md` (module order 8, status COMPLETE; MAP-13)
+- `maps\01_DOMAIN.md` (Tampões domain folder/types, §14)
+- `maps\02_DATABASE.md` (DB objects), `maps\03_MIGRATIONS.md` (N10/N12/N21/N25 touchpoints), `maps\04_DAPPER_INFRASTRUCTURE.md` (Dapper adapters)
+- `maps\05_TESTS.md` (test layout), `maps\19_APPLICATION.md` (service/ports), `maps\20_WEB.md` (page/routes/static assets)
+- `maps\06_JOB_ON.md` (planned needs may carry a read-only `job_on_id`/`production_code` on `tampao_planos` — no FK, never resolved by text; planning has no HTTP surface in the current slice, see §11)
+
 ## 1. Scope
 
-Tampões is one canonical top-level module (INDEX order 8). The module source contains: configurable comparable fields (`tampao_field_defs`, `tampao_field_values`), technical configurations (`tampao_configurations`), two balances per configuration (`tampao_saldos`), immutable quantity movements (`tampao_movements`), planned needs (`tampao_planos`), and the multi-machine association (`tampao_configuration_machines`, `tampao_configuration_notes`, `tampao_configuration_machine_event`). A single page surface exposes six tab sections (Registo, Consulta, Planeamento, Histórico, Linhas e Máquinas, Opções). The authorization gate checks `user.HasModule("tampoes")`; no capability or profile split exists.
+Tampões is one canonical top-level module (INDEX order 8). The module source contains: configurable comparable fields (`tampao_field_defs`, `tampao_field_values`), technical configurations (`tampao_configurations`), two balances per configuration (`tampao_saldos`), immutable quantity movements (`tampao_movements`), planned needs (`tampao_planos`), and the multi-machine association (`tampao_configuration_machines`, `tampao_configuration_notes`, `tampao_configuration_machine_event`). A single page surface exposes **five** tab sections (Registo, Consulta, Histórico, Linhas e Máquinas, Opções). The authorization gate checks `user.HasModule("tampoes")`; no capability or profile split exists.
+
+> **NEEDS REVIEW — Planeamento (tampao_planos):** the `PlanearAsync` / `CancelarPlanoAsync` / `ListPlanosAsync` service methods, the repository planning CRUD and the `tampao_planos` table (N10) still exist, but the Planeamento tab was removed from `Index.cshtml`, no `/api/tampoes/planos|planear|cancelar` endpoints exist in `Program.cs`, and `tampoes.js` never calls them — `TampaoWebApiTests.Planeamento_IsAbsentFromRenderedSurface_AndEndpoints` asserts all three 404s and the absence of `data-view="planeamento"`/`planosTable` in the rendered page (evidence: `src\BA.Dmo.Web\Pages\Tampoes\Index.cshtml`, `src\BA.Dmo.Web\Program.cs` lines 1262–1403, `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Tampoes\TampaoWebApiTests.cs`).
+> **Classification:** page/route absence = **CONFIRMED CURRENT** (enforced by integration test); orphaned service/repo planning capability + `tampao_planos` table = **LEGACY CANDIDATE — NEEDS AUDIT** (reachable only from unit tests; no HTTP surface).
 
 ## 2. Layer Summary
 
@@ -42,7 +53,7 @@ Tampões is one canonical top-level module (INDEX order 8). The module source co
 | Infrastructure | `src\BA.Dmo.Infrastructure\Access\` (DapperTampaoRepository, DapperTampoesUnitOfWorkFactory) | 2 |
 | Web pages | `src\BA.Dmo.Web\Pages\Tampoes\` | 2 |
 | Static assets | `wwwroot\scripts\tampoes.js`, `wwwroot\styles\modules\tampoes-layout.css` | 2 |
-| Tests | `tests\...\Modules\Tampoes\`, `tests\...\IntegrationTests\Tampoes\` | 4 |
+| Tests | `AI-CONTEXT\docs\tests\...\Modules\Tampoes\`, `AI-CONTEXT\docs\tests\...\IntegrationTests\Tampoes\` | 4 |
 
 ### 2.1 Layer Coverage
 
@@ -53,7 +64,7 @@ Tampões is one canonical top-level module (INDEX order 8). The module source co
 | Infrastructure | YES | `src\BA.Dmo.Infrastructure\Access\DapperTampaoRepository.cs`, `DapperTampoesUnitOfWorkFactory.cs` |
 | Web | YES | `src\BA.Dmo.Web\Pages\Tampoes\`; `src\BA.Dmo.Web\Program.cs`; `Authorization\ModuleAuthorizationHandler.cs` |
 | Database | YES | `database\migrations\N10_tampoes.sql`, `N21_tampoes_machines.sql`, `N12_rls.sql`, `N25_remediation.sql` |
-| Tests | YES | `tests\BA.Dmo.UnitTests\Modules\Tampoes\`, `tests\BA.Dmo.IntegrationTests\Tampoes\` |
+| Tests | YES | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Tampoes\`, `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Tampoes\` |
 
 This is technical navigation only; it does not explain workflow.
 
@@ -90,7 +101,7 @@ Location: `src\BA.Dmo.Application\Modules\Tampoes\`
 | `TampaoExecutor` | record | `(string ActorId, string DisplayName)` | TampaoAuthorizationGate.cs |
 | `ITampaoRepository` | port | field defs/values CRUD; configurations/saldos read + `CreateConfigurationAsync`; `GetSaldoInTransactionAsync`, `SetSaldoAsync`, `InsertMovementAsync` (within `IDbUnitOfWork`); movement list; machine/note methods; planning CRUD; `InsertAuditEventAsync` | ITampaoRepository.cs |
 | `ITampoesUnitOfWorkFactory` | port | `BeginAsync(CancellationToken)` → `IDbUnitOfWork` | ITampoesUnitOfWorkFactory.cs |
-| `TampaoService` | service | public methods: `ConsultarAsync`, `GetConfigurationAsync`, `GetConfigurationDetailAsync`, `SetConfigurationMachinesAsync`, `AddConfigurationNoteAsync`, `AdicionarQuantidadeAsync`, `RemoverQuantidadeAsync`, `AlterarEstadoAsync`, `AlterarConfiguracaoAsync`, `PlanearAsync`, `CancelarPlanoAsync`, `ListPlanosAsync`, `ListMovimentosAsync`, `ListFieldDefsAsync`, `ListFieldValuesAsync`, `CreateFieldDefAsync`, `UpdateFieldDefAsync`, `CreateFieldValueAsync`, `UpdateFieldValueAsync` | TampaoService.cs |
+| `TampaoService` | service | public methods: `ConsultarAsync`, `GetConfigurationAsync`, `GetConfigurationDetailAsync`, `SetConfigurationMachinesAsync`, `AddConfigurationNoteAsync`, `AdicionarQuantidadeAsync`, `RemoverQuantidadeAsync`, `AlterarEstadoAsync`, `AlterarConfiguracaoAsync`, `PlanearAsync`, `CancelarPlanoAsync`, `ListPlanosAsync`, `ListMovimentosAsync`, `ListFieldDefsAsync`, `ListFieldValuesAsync`, `CreateFieldDefAsync`, `UpdateFieldDefAsync`, `CreateFieldValueAsync`, `UpdateFieldValueAsync` — **note:** `PlanearAsync` / `CancelarPlanoAsync` / `ListPlanosAsync` have NO HTTP endpoints (see §11 NEEDS REVIEW) | TampaoService.cs |
 | Requests | records (commands) | `AdicionarQuantidadeRequest`, `RemoverQuantidadeRequest`, `AlterarEstadoRequest`, `AlterarConfiguracaoRequest`, `PlanearRequest`, `CancelarPlanoRequest`, `SetConfigurationMachinesRequest`, `AddConfigurationNoteRequest` | TampaoRequests.cs |
 | Query filters | records | `ConsultaFilter(Guid? ConfigurationId, string? Machine)`, `PlanoFilter(Guid? ConfigurationId, DateOnly? From, DateOnly? To, bool IncludeCanceled)` | TampaoRequests.cs |
 | DTOs | records | `TampaoFieldDefDto`, `TampaoFieldValueDto`, `TampaoConfigurationDto`, `TampaoConfigurationDetailDto`, `TampaoMovimentoDto`, `TampaoPlanoDto`, `TampaoMachineDto`, `TampaoConfigurationNoteDto`, `TampaoMachineEventDto` | TampaoRequests.cs |
@@ -125,11 +136,11 @@ All endpoints in `Program.cs` use `.RequireAuthorization(ModulePolicies.Tampoes)
 
 ## 7. User Surfaces
 
-Source defines a single module surface. Evidence: one page route `/tampoes`; one `IndexModel`; the authorization gate checks `user.HasModule("tampoes")`; no capability or profile checks are present in the inspected page/code-behind/gate/JS. The six tab views are rendered in the one shared page.
+Source defines a single module surface. Evidence: one page route `/tampoes`; one `IndexModel`; the authorization gate checks `user.HasModule("tampoes")`; no capability or profile checks are present in the inspected page/code-behind/gate/JS. The five tab views (`registo`, `consulta`, `historico`, `linhas`, `opcoes`) are rendered in the one shared page; there is **no `planeamento` tab** in the current `Index.cshtml` (see §1 NEEDS REVIEW).
 
 User Surface: **Shared**
 
-The six tab sections in `Index.cshtml` are shared: `registo`, `consulta`, `planeamento`, `historico`, `linhas`, `opcoes`. All rendered for every authorized user; no profile distinction in source.
+The five tab sections in `Index.cshtml` are shared: `registo`, `consulta`, `historico`, `linhas` (Linhas e Máquinas), `opcoes`. All rendered for every authorized user; no profile distinction in source.
 
 ## 8. Infrastructure Objects
 
@@ -200,16 +211,15 @@ API endpoints (in `src\BA.Dmo.Web\Program.cs`, all `.RequireAuthorization(Module
 | `/api/tampoes/quantidade/remover` | POST | `RemoverQuantidadeAsync` | module policy | Program.cs |
 | `/api/tampoes/estado/alterar` | POST | `AlterarEstadoAsync` | module policy | Program.cs |
 | `/api/tampoes/configuracao/alterar` | POST | `AlterarConfiguracaoAsync` | module policy | Program.cs |
-| `/api/tampoes/planos` | GET | `ListPlanosAsync` | module policy | Program.cs |
-| `/api/tampoes/planear` | POST | `PlanearAsync` | module policy | Program.cs |
-| `/api/tampoes/planos/{planoId:guid}/cancelar` | POST | `CancelarPlanoAsync` | module policy | Program.cs |
 | `/api/tampoes/movimentos` | GET | `ListMovimentosAsync` | module policy | Program.cs |
 | `/api/tampoes/opcoes/fields` | GET | `ListFieldDefsAsync` | module policy | Program.cs |
 | `/api/tampoes/opcoes/fields/{fieldDefId:guid}/values` | GET | `ListFieldValuesAsync` | module policy | Program.cs |
 | `/api/tampoes/opcoes/fields` | POST | `CreateFieldDefAsync` | module policy | Program.cs |
 | `/api/tampoes/opcoes/values` | POST | `CreateFieldValueAsync` | module policy | Program.cs |
 
-Query helpers in `Program.cs`: `ParseTampaoBalance` (Enchidos/PorEncher), `ParseTampaoMovementType` (adicionar/remover/alterar_estado/alterar_configuracao).
+> **NEEDS REVIEW — no Planeamento routes.** The current `Program.cs` Tampões block (lines 1262–1403) does NOT map `/api/tampoes/planos` (GET), `/api/tampoes/planear` (POST) or `/api/tampoes/planos/{planoId:guid}/cancelar` (POST). The service methods `ListPlanosAsync` / `PlanearAsync` / `CancelarPlanoAsync` therefore have no HTTP surface; `TampaoWebApiTests.Planeamento_IsAbsentFromRenderedSurface_AndEndpoints` asserts 404 for all three routes. `UpdateFieldDefAsync` / `UpdateFieldValueAsync` also have no endpoints (service-only; `opcoes` JS only creates fields/values). **Classification:** **LEGACY CANDIDATE — NEEDS AUDIT** (service methods with no HTTP consumers).
+
+Query helpers in `Program.cs`: `ParseTampaoMovementType` (adicionar/remover/alterar_estado/alterar_configuracao). (No `ParseTampaoBalance` helper exists; the balance kind is bound directly from the request JSON enum value.)
 
 Shared web wiring: `src\BA.Dmo.Web\Program.cs` hosts the Tampões API endpoint mappings and DI registration (`ITampoesUnitOfWorkFactory→DapperTampoesUnitOfWorkFactory`, `ITampaoRepository→DapperTampaoRepository`, gate, service). Navigation (`_Navigation.cshtml`) renders modules generically from `IShellService`; no Tampões-specific wiring there.
 
@@ -219,8 +229,8 @@ Dedicated static asset files:
 
 | Asset | Principal content | API routes called / selectors | Path |
 |---|---|---|---|
-| `tampoes.js` | tab switching; Registo add/remove; Consulta select/double-click + balance blocks + alterar estado/configuração cards + detail sheet (machines/comments/history); Planeamento planear/cancel; Histórico filters; Opções field/value management; Linhas e Máquinas panel/detail | `GET /api/tampoes/consulta`, `GET/POST /api/tampoes/opcoes/fields...`, `POST /api/tampoes/quantidade/*`, `POST /api/tampoes/estado/alterar`, `POST /api/tampoes/configuracao/alterar`, `GET /api/tampoes/configuracao/{id}/detalhe`, `POST .../maquinas`, `POST .../observacao`, `GET /api/tampoes/planos`, `POST /api/tampoes/planear`, `POST /api/tampoes/planos/{id}/cancelar`, `GET /api/tampoes/movimentos` | `src\BA.Dmo.Web\wwwroot\scripts\tampoes.js` |
-| `tampoes-layout.css` | module layout/composition only (tabs, views, inline cards, saldo blocks, detail, linhas grid) | selectors `.tampoes-*`, `#consultaTable`, `#planosTable` | `src\BA.Dmo.Web\wwwroot\styles\modules\tampoes-layout.css` |
+| `tampoes.js` | tab switching; Registo add/remove; Consulta select/double-click + balance blocks + alterar estado/configuração cards + detail sheet (machines/comments/history); Histórico filters; Opções field/value management; Linhas e Máquinas panel/detail | `GET /api/tampoes/consulta`, `GET/POST /api/tampoes/opcoes/fields...`, `POST /api/tampoes/quantidade/*`, `POST /api/tampoes/estado/alterar`, `POST /api/tampoes/configuracao/alterar`, `GET /api/tampoes/configuracao/{id}/detalhe`, `POST .../maquinas`, `POST .../observacao`, `GET /api/tampoes/movimentos` | `src\BA.Dmo.Web\wwwroot\scripts\tampoes.js` |
+| `tampoes-layout.css` | module layout/composition only (tabs, views, inline cards, saldo blocks, detail, linhas grid) | selectors `.tampoes-*`, `#consultaTable`; **`#planosTable` selector is stale** (no `planosTable` element in current `Index.cshtml` — leftover of the removed Planeamento view) | `src\BA.Dmo.Web\wwwroot\styles\modules\tampoes-layout.css` |
 
 Shared static consumers/references: the page uses shared `dmo-*` components (`.dmo-button`, `.dmo-card`, `.dmo-table`, `.dmo-field`, `.dmo-toast`, `.dmo-*`) defined in the shared DMO CSS layer (`wwwroot\styles\dmo-*.css`). The Linhas tab renders machine options from `BA.Dmo.Domain.Modules.Boquilhas.BoquilhasModuleCatalog.Lines` (`Index.cshtml` Razor `@foreach`).
 
@@ -228,10 +238,10 @@ Shared static consumers/references: the page uses shared `dmo-*` components (`.d
 
 | Test class | Kind | Direct target | Main method groups | Location |
 |---|---|---|---|---|
-| `TampaoDomainTests` | unit | `TampaoRules` + `TampaoConfigurationKey` | value normalization; key insertion-order stability; `ValidateQuantity`; `ApplySingleBalanceChange` never negative; `ResolveStateOrigin` opposite/in-sufficient; `ApplyBalanceTransfer` destination-equals-origin blocked; `ValidateConfigurationTransform` requires different id + changed characteristic | `tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoDomainTests.cs` |
-| `TampaoServiceTests` | unit | `TampaoService` | add/remove chosen balance + movement; save-failure preserves input; alterar estado atomic single movement; insufficient origin blocked; alterar configuração create/reuse destination; no-characteristic changed blocked; planning does not reserve; cancel plan preserves balances; deactivate field value keeps configs/history; authorization fail-closed; movement filter by type | `tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoServiceTests.cs` |
-| `TampaoMachineTests` | unit | `TampaoService` (machines/notes/detail) | assign/remove machines B1–C3; invalid machine rejected; notes persist + history kept; machine filter returns record once; no config duplication; detail sheet returns machines/notes/events; invalid machine filter rejected | `tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoMachineTests.cs` |
-| `TampaoWebApiTests` | integration (WebApplicationFactory) | `/api/tampoes/*` endpoints + module-policy guards | anonymous denied→login; authorized tampoes user admitted; user without module denied→access-denied | `tests\BA.Dmo.IntegrationTests\Tampoes\TampaoWebApiTests.cs` |
+| `TampaoDomainTests` | unit | `TampaoRules` + `TampaoConfigurationKey` | value normalization; key insertion-order stability; `ValidateQuantity`; `ApplySingleBalanceChange` never negative; `ResolveStateOrigin` opposite/in-sufficient; `ApplyBalanceTransfer` destination-equals-origin blocked; `ValidateConfigurationTransform` requires different id + changed characteristic | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoDomainTests.cs` |
+| `TampaoServiceTests` | unit | `TampaoService` | add/remove chosen balance + movement; save-failure preserves input; alterar estado atomic single movement; insufficient origin blocked; alterar configuração create/reuse destination; no-characteristic changed blocked; planning does not reserve; cancel plan preserves balances (service-level via fake repo — no HTTP surface, see §11); deactivate field value keeps configs/history; authorization fail-closed; movement filter by type | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoServiceTests.cs` |
+| `TampaoMachineTests` | unit | `TampaoService` (machines/notes/detail) | assign/remove machines B1–C3; invalid machine rejected; notes persist + history kept; machine filter returns record once; no config duplication; detail sheet returns machines/notes/events; invalid machine filter rejected | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoMachineTests.cs` |
+| `TampaoWebApiTests` | integration (WebApplicationFactory) | `/api/tampoes/*` endpoints + module-policy guards | anonymous denied→login; authorized tampoes user admitted; user without module denied→access-denied; **planeamento absent from rendered surface + endpoints** (`Planeamento_IsAbsentFromRenderedSurface_AndEndpoints`: asserts no `data-view="planeamento"`/`planosTable` in HTML and 404 on `/api/tampoes/planos`, `/planear`, `/planos/{id}/cancelar`) | `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Tampoes\TampaoWebApiTests.cs` |
 
 Test class count: **4**.
 
@@ -325,11 +335,11 @@ One edge per relationship (module-internal edges):
 | Page `Index.cshtml` / `Index.cshtml.cs` | Web pages | `src\BA.Dmo.Web\Pages\Tampoes\` |
 | API endpoints + module policy + DI | Shared web wiring | `src\BA.Dmo.Web\Program.cs` |
 | `tampoes.js` / `tampoes-layout.css` | Static assets | `wwwroot\scripts\...` / `wwwroot\styles\modules\...` |
-| Tampões tests | Tests | `tests\BA.Dmo.UnitTests\Modules\Tampoes\`, `tests\BA.Dmo.IntegrationTests\Tampoes\` |
+| Tampões tests | Tests | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Tampoes\`, `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Tampoes\` |
 
 ## 18. Sources Verified
 
-- `maps\00_INDEX.md` (structural contract; Tampões order 8, status COMPLETE)
+- `maps\00_INDEX.md` (structural contract; Tampões order 8, status COMPLETE; MAP-13)
 - `src\BA.Dmo.Domain\Modules\Tampoes\` (11 files)
 - `src\BA.Dmo.Application\Modules\Tampoes\` (5 files)
 - `src\BA.Dmo.Application\Shared\Access\CanonicalModuleCatalog.cs`, `CanonicalPageCatalog.cs`
@@ -341,7 +351,8 @@ One edge per relationship (module-internal edges):
 - `src\BA.Dmo.Web\wwwroot\scripts\tampoes.js`, `wwwroot\styles\modules\tampoes-layout.css`
 - `database\migrations\N10_tampoes.sql`, `N12_rls.sql`, `N21_tampoes_machines.sql`, `N25_remediation.sql`
 - `database\consolidated_clean_install.sql`
-- `tests\BA.Dmo.UnitTests\Modules\Tampoes\` (4 files), `tests\BA.Dmo.IntegrationTests\Tampoes\` (1 file)
+- `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Tampoes\` (4 files), `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Tampoes\` (1 file)
+- Cross-referenced: `maps\06_JOB_ON.md` (read-only `job_on_id` on `tampao_planos`)
 
 ## Counts
 

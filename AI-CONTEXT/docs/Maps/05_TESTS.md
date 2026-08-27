@@ -18,27 +18,26 @@
 14. [Module / Area Test Index](#14-module--area-test-index)
 15. [Count Summary by Project](#15-count-summary-by-project)
 16. [Count Summary by Area](#16-count-summary-by-area)
-17. [Source Locations](#17-source-locations)
-18. [Sources Verified](#sources-verified)
+17. [Coverage Gaps — NEEDS REVIEW](#17-coverage-gaps--needs-review)
+18. [Source Locations](#18-source-locations)
+19. [Sources Verified](#sources-verified)
+
+**Related maps (relative links):** [00_INDEX.md](00_INDEX.md) · [03_MIGRATIONS.md](03_MIGRATIONS.md) · [04_DAPPER_INFRASTRUCTURE.md](04_DAPPER_INFRASTRUCTURE.md) · [19_APPLICATION.md](19_APPLICATION.md) · [20_WEB.md](20_WEB.md) · module maps [06_JOB_ON.md](06_JOB_ON.md) [07_CONTROLO.md](07_CONTROLO.md) [08_FERRAMENTAS.md](08_FERRAMENTAS.md) [09_ARMAZEM.md](09_ARMAZEM.md) [10_BOQUILHAS.md](10_BOQUILHAS.md) [11_REPARACAO_INTERNA.md](11_REPARACAO_INTERNA.md) [12_REPARACAO_EXTERNA.md](12_REPARACAO_EXTERNA.md) [13_TAMPOES.md](13_TAMPOES.md) [14_HISTORIA.md](14_HISTORIA.md) [15_ADMIN.md](15_ADMIN.md) [16_USERS_ACCESS.md](16_USERS_ACCESS.md) [17_DESIGN_LABORATORIO.md](17_DESIGN_LABORATORIO.md) [18_LOGIN.md](18_LOGIN.md)
 
 ---
 
 ## 1. Purpose
 
-This is the pure technical **TESTS** transversal map (MAP-05) of the BA DMO codebase.
-
-Mapped:
+This is the pure technical **TESTS** transversal map (MAP-05) of the BA DMO codebase. It is **inventory + location**:
 
 - test projects and `.csproj` definitions;
 - test source files, test classes, test methods;
-- fixtures, shared test infrastructure;
-- fakes / stubs / test doubles;
-- test data builders / helpers;
-- database and web/HTTP test mechanics;
+- fixtures, shared test infrastructure, fakes / stubs / test doubles;
+- test data builders / helpers, database and web/HTTP test mechanics;
 - direct test-to-target references visible in test code;
-- exact source locations.
+- exact source locations (all under `AI-CONTEXT\docs\tests\`).
 
-Per the mapping contract, this document is **inventory + location only**. It does not judge coverage quality, identify missing tests, recommend tests, explain business workflows, or reconcile against Design/SOT.
+This revision reconciles the map against the **current** tree: the test projects now live under `AI-CONTEXT\docs\tests\` (= a `tests` solution folder in `BA-DMO.sln`), and a third project, `BA.Dmo.VisualHost`, was added. Evidence-based `COVERAGE GAP — NEEDS REVIEW` records are included in §17 (per reconciliation mandate) together with classification labels where a suspicious structure is found (`CONFIRMED CURRENT`, `POTENTIAL OVERLAP — NEEDS AUDIT`, `UNKNOWN / OWNER DECISION REQUIRED`, …). No gap is fixed and no deletion is recommended here.
 
 ---
 
@@ -48,11 +47,11 @@ Per the mapping contract, this document is **inventory + location only**. It doe
 
 | Fact | Value |
 |---|---|
-| Root | `D:\BA-DMO-CODEX-CLEAN` |
-| SLN | `BA-DMO.sln` |
-| Central build settings | `D:\BA-DMO-CODEX-CLEAN\Directory.Build.props` |
+| Root | `D:\BA-DMO` |
+| SLN | `BA-DMO.sln` (all three test projects referenced under the `tests` solution folder) |
+| Central build settings | `D:\BA-DMO\Directory.Build.props` |
 | Target framework (all projects) | `net10.0` (from `Directory.Build.props`) |
-| SDK / roll-forward | `10.0.400`, `latestPatch` (`global.json`) |
+| SDK / roll-forward | no `global.json` at repo root (none present anywhere in the tree) |
 | Shared compile settings | `LangVersion=latest`, `Nullable=enable`, `ImplicitUsings=enable`, `NeutralLanguage=pt-PT` |
 
 Both test projects set `<IsPackable>false</IsPackable>` and declare a global `<Using Include="Xunit" />`, so xUnit assert helpers are available file-wide without explicit usings.
@@ -60,1103 +59,465 @@ Both test projects set `<IsPackable>false</IsPackable>` and declare a global `<U
 ### 2.2 Test projects
 
 | Test Project | Path | Framework | Source Files | Main Areas |
-|---|---|---|---:|---|
-| `BA.Dmo.UnitTests` | `tests\BA.Dmo.UnitTests\` | net10.0 | 80 | Domain + Application unit tests, no I/O |
-| `BA.Dmo.IntegrationTests` | `tests\BA.Dmo.IntegrationTests\` | net10.0 | 44 | Web + Infrastructure contract tests |
+|---|---|---:|---:|---|
+| `BA.Dmo.UnitTests` | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\` | net10.0 | 81 | Domain + Application unit tests, no I/O |
+| `BA.Dmo.IntegrationTests` | `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\` | net10.0 | 53 | Web + Infrastructure contract tests |
+| `BA.Dmo.VisualHost` | `AI-CONTEXT\docs\tests\BA.Dmo.VisualHost\` | net10.0 | 1 | Manual Kestrel visual-verification host (Exe) |
 
-**Total test source files:** 124.
-
-Excluded from all counts: `bin\`, `obj\`, build/test-results and coverage output (not source-controlled test code).
+**Total test source files:** 135. Excluded from all counts: `bin\`, `obj\`, build/test-results and coverage output.
 
 ### 2.3 Project references — `BA.Dmo.UnitTests.csproj`
 
-`D:\BA-DMO-CODEX-CLEAN\tests\BA.Dmo.UnitTests\BA.Dmo.UnitTests.csproj`
+`AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\BA.Dmo.UnitTests.csproj`
 
-- Package references:
-  - `coverlet.collector` 6.0.4
-  - `Microsoft.NET.Test.Sdk` 17.14.1
-  - `xunit` 2.9.3
-  - `xunit.runner.visualstudio` 3.1.4
-- Project references:
-  - `src\BA.Dmo.Domain\BA.Dmo.Domain.csproj`
-  - `src\BA.Dmo.Application\BA.Dmo.Application.csproj`
+- Packages: `coverlet.collector` 6.0.4, `Microsoft.NET.Test.Sdk` 17.14.1, `xunit` 2.9.3, `xunit.runner.visualstudio` 3.1.4.
+- Project references: `src\BA.Dmo.Domain`, `src\BA.Dmo.Application`.
 
 ### 2.4 Project references — `BA.Dmo.IntegrationTests.csproj`
 
-`D:\BA-DMO-CODEX-CLEAN\tests\BA.Dmo.IntegrationTests\BA.Dmo.IntegrationTests.csproj`
+`AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\BA.Dmo.IntegrationTests.csproj`
 
-- Package references:
-  - `coverlet.collector` 6.0.4
-  - `Microsoft.AspNetCore.Mvc.Testing` 10.0.11
-  - `Microsoft.NET.Test.Sdk` 17.14.1
-  - `xunit` 2.9.3
-  - `xunit.runner.visualstudio` 3.1.4
-- Project references:
-  - `src\BA.Dmo.Web\BA.Dmo.Web.csproj`
-  - `src\BA.Dmo.Infrastructure\BA.Dmo.Infrastructure.csproj`
+- Packages: `coverlet.collector` 6.0.4, `Microsoft.AspNetCore.Mvc.Testing` 10.0.11, `Microsoft.NET.Test.Sdk` 17.14.1, `xunit` 2.9.3, `xunit.runner.visualstudio` 3.1.4.
+- Project references: `src\BA.Dmo.Web`, `src\BA.Dmo.Infrastructure`.
 
-### 2.5 Test folders (top-level)
+### 2.5 Project — `BA.Dmo.VisualHost`
 
-`BA.Dmo.UnitTests`:
+`AI-CONTEXT\docs\tests\BA.Dmo.VisualHost\`
 
-- `Modules\Armazem`
-- `Modules\Boquilhas`
-- `Modules\Controlo`
-- `Modules\Ferramentas`
-- `Modules\Historia`
-- `Modules\JobOn`
-- `Modules\Pegamentos`
-- `Modules\Peso`
-- `Modules\ReparacaoExterna`
-- `Modules\ReparacaoInterna`
-- `Modules\Tampoes`
-- `Shared\Access`
-- `Shared\Admin`
-- `Shared\Identity`
-- `Shared\Kernel`
-- `Shared\Persistence`
+- `BA.Dmo.VisualHost.csproj`: `OutputType=Exe`, `<IsPackable>false</IsPackable>`; references `BA.Dmo.IntegrationTests` and `src\BA.Dmo.Web`.
+- `Program.cs`: starts a real Kestrel host through `ShellRoutingTests.ShellFixture` (profile-switchable via CLI arg: `boquilhas`, `jobon`, `peso`, `peso-responsavel`, `armazem-create`, `reparacao-interna`, `tampoes`, default `armazem`; port default 5052, overridable as first arg). Serves the app shell with a test-only login page for manual visual verification, then blocks forever (`await Task.Delay(Timeout.Infinite)`).
 
-`BA.Dmo.IntegrationTests`:
+### 2.6 Test folders (top-level)
 
-- `Access`
-- `Cli`
-- `Design`
-- `Ferramentas`
-- `Identity`
-- `Integrity`
-- `JobOn`
-- `Migrations`
-- `Pegamentos`
-- `Persistence`
-- `Peso`
-- `ReparacaoExterna`
-- `ReparacaoInterna`
-- `Security`
-- `Tampoes`
+`BA.Dmo.UnitTests`: `Modules\{Armazem,Boquilhas,Controlo,Ferramentas,Historia,JobOn,Pegamentos,Peso,ReparacaoExterna,ReparacaoInterna,Tampoes}`, `Shared\{Access,Admin,Identity,Kernel,Persistence}`.
+
+`BA.Dmo.IntegrationTests`: `Access`, `Cli`, `Controlo`, `Design`, `Ferramentas`, `Identity`, `Integrity`, `JobOn`, `Migrations`, `Pegamentos`, `Persistence`, `Peso`, `ReparacaoExterna`, `ReparacaoInterna`, `Security`, `Tampoes`, plus root helper `IntegrationTestEnvironment.cs`.
 
 ---
 
 ## 3. Global Test Inventory
 
-Direct targets named below are the production types imported and exercised by each test class.
+Direct targets named below are the production types imported and exercised by each test class. All paths are under `AI-CONTEXT\docs\tests\`.
 
 | Project | Area / Folder | File / Class | Kind | Direct Target | Path |
 |---|---|---|---|---|---|
-| UnitTests | Modules/JobOn | `JobOnServiceTests` | Unit test class | `JobOnService`, `JobOnAuthorizationGate` | `tests\BA.Dmo.UnitTests\Modules\JobOn\JobOnServiceTests.cs` |
-| UnitTests | Modules/JobOn | `JobOnDomainTests` | Unit test class | `BA.Dmo.Domain.Modules.JobOn.JobOn`, `JobOnLifecycleStateCodec` | `tests\BA.Dmo.UnitTests\Modules\JobOn\JobOnDomainTests.cs` |
-| UnitTests | Modules/JobOn | `JobOnPdfTests` | Unit test class | `JobOnPdfService`, `JobOnService` | `tests\BA.Dmo.UnitTests\Modules\JobOn\JobOnPdfTests.cs` |
-| UnitTests | Modules/JobOn | `JobOnVerificationGeneratorTests` | Unit test class | `JobOnVerificationGenerator` | `tests\BA.Dmo.UnitTests\Modules\JobOn\JobOnVerificationGeneratorTests.cs` |
-| UnitTests | Modules/JobOn | `JobOnActivityResolverTests` | Unit test class | `JobOnActivityResolver` | `tests\BA.Dmo.UnitTests\Modules\JobOn\JobOnActivityResolverTests.cs` |
-| UnitTests | Modules/JobOn | `JobOnUserContextTests` | Unit test class | `JobOnService` (current-open context) | `tests\BA.Dmo.UnitTests\Modules\JobOn\JobOnUserContextTests.cs` |
-| UnitTests | Modules/JobOn | `JobOnRevisionImmutabilityIntegrationTests` | Unit-project integration test class | `JobOnService`, `PesoService`, `PegamentoService` | `tests\BA.Dmo.UnitTests\Modules\JobOn\JobOnRevisionImmutabilityIntegrationTests.cs` |
-| UnitTests | Modules/JobOn | `FakeJobOnRepository` | Fake | `IJobOnRepository` | `tests\BA.Dmo.UnitTests\Modules\JobOn\FakeJobOnRepository.cs` |
-| UnitTests | Modules/JobOn | `FakeJobOnUserContextRepository` | Fake | `IJobOnUserContextRepository` | `tests\BA.Dmo.UnitTests\Modules\JobOn\FakeJobOnUserContextRepository.cs` |
-| UnitTests | Modules/Peso | `PesoServiceTests` | Unit test class | `PesoService`, `PesoAuthorizationGate` | `tests\BA.Dmo.UnitTests\Modules\Peso\PesoServiceTests.cs` |
-| UnitTests | Modules/Peso | `PesoDomainTests` | Unit test class | `PesoValidator`, `PesoProcessoCodec`, `PesoRecordTypeCodec`, `PesoControlStateCodec`, `ReportPathValidator` | `tests\BA.Dmo.UnitTests\Modules\Peso\PesoDomainTests.cs` |
-| UnitTests | Modules/Peso | `WeightCalculatorTests` | Unit test class | `WeightCalculator`, `PesoModuleCatalog` | `tests\BA.Dmo.UnitTests\Modules\Peso\WeightCalculatorTests.cs` |
-| UnitTests | Modules/Peso | `PesoControlWorkflowTests` | Unit test class | `PesoControl`, `PesoValidator`, `PesoCmDecisionCodec` | `tests\BA.Dmo.UnitTests\Modules\Peso\PesoControlWorkflowTests.cs` |
-| UnitTests | Modules/Peso | `FakePesoRepository` | Fake | `IPesoRepository` | `tests\BA.Dmo.UnitTests\Modules\Peso\FakePesoRepository.cs` |
-| UnitTests | Modules/Armazem | `ArmazemServiceTests` | Unit test class | `ArmazemService`, `ArmazemAuthorizationGate` | `tests\BA.Dmo.UnitTests\Modules\Armazem\ArmazemServiceTests.cs` |
-| UnitTests | Modules/Armazem | `WarehouseStockRulesTests` | Unit test class | `WarehouseLocation`, `WarehouseStockRules` | `tests\BA.Dmo.UnitTests\Modules\Armazem\WarehouseStockRulesTests.cs` |
-| UnitTests | Modules/Armazem | `ArmazemAuthorizationGateTests` | Unit test class | `ArmazemAuthorizationGate` | `tests\BA.Dmo.UnitTests\Modules\Armazem\ArmazemAuthorizationGateTests.cs` |
-| UnitTests | Modules/Armazem | `FerramentasArmazemToolIdentityResolverTests` | Unit test class | `FerramentasArmazemToolIdentityResolver` | `tests\BA.Dmo.UnitTests\Modules\Armazem\FerramentasArmazemToolIdentityResolverTests.cs` |
-| UnitTests | Modules/Armazem | `FakeArmazemRepository` | Fake | `IArmazemRepository` | `tests\BA.Dmo.UnitTests\Modules\Armazem\FakeArmazemRepository.cs` |
-| UnitTests | Modules/Armazem | `FakeToolIdentityResolver` | Fake | `IToolIdentityResolver` | `tests\BA.Dmo.UnitTests\Modules\Armazem\FakeToolIdentityResolver.cs` |
-| UnitTests | Modules/Armazem | (in `ArmazemTestSupport`) | Test helper | `IClock`, `IPersistenceAuthorshipAccessor`, `ICurrentUserAccessor`, `IFerramentasIdentityLookup` | `tests\BA.Dmo.UnitTests\Modules\Armazem\ArmazemTestSupport.cs` |
-| UnitTests | Modules/Boquilhas | `BoquilhasServiceTests` | Unit test class | `BoquilhasService`, `BqAuthorizationGate` | `tests\BA.Dmo.UnitTests\Modules\Boquilhas\BoquilhasServiceTests.cs` |
-| UnitTests | Modules/Boquilhas | `BqAuthorizationGateTests` | Unit test class | `BqAuthorizationGate` | `tests\BA.Dmo.UnitTests\Modules\Boquilhas\BqAuthorizationGateTests.cs` |
-| UnitTests | Modules/Boquilhas | `BqInventoryCalculatorTests` | Unit test class | `BqInventoryCalculator`, `BqRules` | `tests\BA.Dmo.UnitTests\Modules\Boquilhas\BqInventoryCalculatorTests.cs` |
-| UnitTests | Modules/Boquilhas | (in `BqTestSupport`) | Test helper | `IClock`, `IPersistenceAuthorshipAccessor`, `ICurrentUserAccessor`, `IBoquilhasUnitOfWorkFactory`, `IBoquilhasRepository`, `IDbUnitOfWork` | `tests\BA.Dmo.UnitTests\Modules\Boquilhas\BqTestSupport.cs` |
-| UnitTests | Modules/Controlo | `ControloSheetServiceTests` | Unit test class | `ControloSheetService`, `ControloSheetAuthorizationGate` | `tests\BA.Dmo.UnitTests\Modules\Controlo\ControloSheetServiceTests.cs` |
-| UnitTests | Modules/Controlo | `ControloFolhaTests` | Unit test class | `ControloFolha` | `tests\BA.Dmo.UnitTests\Modules\Controlo\ControloFolhaTests.cs` |
-| UnitTests | Modules/Controlo | (in `ControloTestSupport`) | Test helper | `IClock`, `IPersistenceAuthorshipAccessor`, `IRepairUnitOfWorkFactory`, `IControloSheetRepository`, `IControloProductionContextLookup`, `ControloSheetService` | `tests\BA.Dmo.UnitTests\Modules\Controlo\ControloTestSupport.cs` |
-| UnitTests | Modules/Ferramentas | `FerramentasServiceTests` | Unit test class | `FerramentasService`, `FerramentasAuthorizationGate` | `tests\BA.Dmo.UnitTests\Modules\Ferramentas\FerramentasServiceTests.cs` |
-| UnitTests | Modules/Ferramentas | `FerramentasDomainTests` | Unit test class | `ToolReference`, `ToolLote`, `ToolCheckRule`, `PhysicalPiece`, `FerramentasToolTypeCodec` | `tests\BA.Dmo.UnitTests\Modules\Ferramentas\FerramentasDomainTests.cs` |
-| UnitTests | Modules/Ferramentas | `FerramentasUtilisationServiceTests` | Unit test class | `FerramentasService` (utilisation commands) | `tests\BA.Dmo.UnitTests\Modules\Ferramentas\FerramentasUtilisationServiceTests.cs` |
-| UnitTests | Modules/Ferramentas | `FakeFerramentasRepository` | Fake | `IFerramentasRepository` | `tests\BA.Dmo.UnitTests\Modules\Ferramentas\FakeFerramentasRepository.cs` |
-| UnitTests | Modules/Ferramentas | (in `FerramentasTestSupport`) | Test helper | `IClock`, `IPersistenceAuthorshipAccessor`, `ICurrentUserAccessor`, `IFerramentasRuleLookup` | `tests\BA.Dmo.UnitTests\Modules\Ferramentas\FerramentasTestSupport.cs` |
-| UnitTests | Modules/Historia | `HistoriaServiceTests` | Unit test class | `HistoriaService`, `HistoriaAuthorizationGate` | `tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaServiceTests.cs` |
-| UnitTests | Modules/Historia | `HistoriaAuthorizationGateTests` | Unit test class | `HistoriaAuthorizationGate` | `tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaAuthorizationGateTests.cs` |
-| UnitTests | Modules/Pegamentos | `PegamentoServiceTests` | Unit test class | `PegamentoService`, `PegamentoAuthorizationGate` | `tests\BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoServiceTests.cs` |
-| UnitTests | Modules/Pegamentos | `PegamentoPdfTests` | Unit test class | `PegamentoPdfService` | `tests\BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoPdfTests.cs` |
-| UnitTests | Modules/Pegamentos | `PegamentoMeasurementCalculatorTests` | Unit test class | `PegamentoMeasurementCalculator` | `tests\BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoMeasurementCalculatorTests.cs` |
-| UnitTests | Modules/Pegamentos | `PegamentoHistoricalRelationshipTests` | Unit test class | `PegamentoService` | `tests\BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoHistoricalRelationshipTests.cs` |
-| UnitTests | Modules/Pegamentos | `PegamentoDocumentConfirmationTests` | Unit test class | `PegamentoService` (document-confirmation commands) | `tests\BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoDocumentConfirmationTests.cs` |
-| UnitTests | Modules/Pegamentos | `JobOnProductionFolderResolverTests` | Unit test class | `FakeJobOnProductionFolderResolver`, `PegamentoService` | `tests\BA.Dmo.UnitTests\Modules\Pegamentos\JobOnProductionFolderResolverTests.cs` |
-| UnitTests | Modules/Pegamentos | `FakePegamentoRepository` | Fake | `IPegamentoRepository` | `tests\BA.Dmo.UnitTests\Modules\Pegamentos\FakePegamentoRepository.cs` |
-| UnitTests | Modules/Pegamentos | (in `PegamentoTestSupport`) | Test helper | `IAppSettingsReader`, `IClock`, `IPersistenceAuthorshipAccessor`, `IJobOnProductionContextLookup`, `IPegamentoPdfRenderer`, `PegamentoProductionContext` | `tests\BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoTestSupport.cs` |
-| UnitTests | Modules/Pegamentos | `FakeJobOnProductionFolderResolver` | Fake | `IJobOnProductionFolderResolver` | `tests\BA.Dmo.UnitTests\Modules\Pegamentos\FakeJobOnProductionFolderResolver.cs` |
-| UnitTests | Modules/ReparacaoExterna | `ReparacaoExternaServiceTests` | Unit test class | `ReparacaoExternaService`, `ReparacaoExternaAuthorizationGate` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\ReparacaoExternaServiceTests.cs` |
-| UnitTests | Modules/ReparacaoExterna | `RepairExitStatusMachineTests` | Unit test class | `RepairExitStatusMachine` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\RepairExitStatusMachineTests.cs` |
-| UnitTests | Modules/ReparacaoExterna | `RepairerCapabilityTests` | Unit test class | `ReparacaoExternaService` (repairer capability commands) | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\RepairerCapabilityTests.cs` |
-| UnitTests | Modules/ReparacaoExterna | `ReparacaoExternaAuthorizationGateTests` | Unit test class | `ReparacaoExternaAuthorizationGate` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\ReparacaoExternaAuthorizationGateTests.cs` |
-| UnitTests | Modules/ReparacaoExterna | `FakeRepairRepository` | Fake | `IRepairRepository` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\FakeRepairRepository.cs` |
-| UnitTests | Modules/ReparacaoExterna | (in `ReparacaoExternaTestSupport`) | Test helper | `IClock`, `IPersistenceAuthorshipAccessor`, `ICurrentUserAccessor`, `IRepairUnitOfWorkFactory`, `IArmazemRepairMovementPort`, `IToolPieceResolver`, `IDbUnitOfWork` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\ReparacaoExternaTestSupport.cs` |
-| UnitTests | Modules/ReparacaoInterna | `ReparacaoInternaServiceTests` | Unit test class | `ReparacaoInternaService`, `ReparacaoInternaAuthorizationGate` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaServiceTests.cs` |
-| UnitTests | Modules/ReparacaoInterna | `ReparacaoInternaDomainTests` | Unit test class | `InternalRepairRecord`, `InternalRepairRules`, `InternalRepairToolTypeCodec` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaDomainTests.cs` |
-| UnitTests | Modules/ReparacaoInterna | `ReparacaoInternaProductionProjectionTests` | Unit test class | `ReparacaoInternaProductionProjection` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaProductionProjectionTests.cs` |
-| UnitTests | Modules/ReparacaoInterna | (in `ReparacaoInternaTestSupport`) | Test helper | `IClock`, `IPersistenceAuthorshipAccessor`, `ICurrentUserAccessor`, `IRepairUnitOfWorkFactory`, `IReparacaoInternaRepository`, `IJobOnActiveContextLookup`, `IFerramentasPieceLookup`, `IDbUnitOfWork` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaTestSupport.cs` |
-| UnitTests | Modules/Tampoes | `TampaoServiceTests` | Unit test class | `TampaoService`, `TampaoAuthorizationGate` | `tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoServiceTests.cs` |
-| UnitTests | Modules/Tampoes | `TampaoDomainTests` | Unit test class | `TampaoConfigurationKey`, `TampaoRules` | `tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoDomainTests.cs` |
-| UnitTests | Modules/Tampoes | `TampaoMachineTests` | Unit test class | `TampaoService` (multi-machine commands) | `tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoMachineTests.cs` |
-| UnitTests | Modules/Tampoes | (in `TampaoTestSupport`) | Test helper | `IClock`, `IPersistenceAuthorshipAccessor`, `ICurrentUserAccessor`, `ITampoesUnitOfWorkFactory`, `ITampaoRepository`, `IDbUnitOfWork` | `tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoTestSupport.cs` |
-| UnitTests | Shared/Access | `AccessResolverTests` | Unit test class | `AccessResolver`, `EffectiveAccess`, `CatalogValidator` | `tests\BA.Dmo.UnitTests\Shared\Access\AccessResolverTests.cs` |
-| UnitTests | Shared/Access | `CurrentUserTests` | Unit test class | `CurrentUser`, `ICurrentUserAccessor` | `tests\BA.Dmo.UnitTests\Shared\Access\CurrentUserTests.cs` |
-| UnitTests | Shared/Access | `ModuleCatalogTests` | Unit test class | `ModuleCatalog`, `ModuleDefinition` | `tests\BA.Dmo.UnitTests\Shared\Access\ModuleCatalogTests.cs` |
-| UnitTests | Shared/Access | `CanonicalModuleCatalogTests` | Unit test class | `CanonicalModuleCatalog` | `tests\BA.Dmo.UnitTests\Shared\Access\CanonicalModuleCatalogTests.cs` |
-| UnitTests | Shared/Access | `CanonicalPageCatalogTests` | Unit test class | `CanonicalPageCatalog`, `PageDefinition` | `tests\BA.Dmo.UnitTests\Shared\Access\CanonicalPageCatalogTests.cs` |
-| UnitTests | Shared/Access | `CapabilityAndModuleDefinitionTests` | Unit test class | `Capability`, `ModuleDefinition` | `tests\BA.Dmo.UnitTests\Shared\Access\CapabilityAndModuleDefinitionTests.cs` |
-| UnitTests | Shared/Access | `CatalogValidatorTests` | Unit test class | `CatalogValidator` | `tests\BA.Dmo.UnitTests\Shared\Access\CatalogValidatorTests.cs` |
-| UnitTests | Shared/Access | `GrantNormalizerTests` | Unit test class | `GrantNormalizer` | `tests\BA.Dmo.UnitTests\Shared\Access\GrantNormalizerTests.cs` |
-| UnitTests | Shared/Access | `NavigationServiceTests` | Unit test class | `NavigationService`, `AccessResolver` | `tests\BA.Dmo.UnitTests\Shared\Access\NavigationServiceTests.cs` |
-| UnitTests | Shared/Access | `ModuleCatalogMirrorSynchronizerTests` | Unit test class | `ModuleCatalogMirrorSynchronizer` | `tests\BA.Dmo.UnitTests\Shared\Access\ModuleCatalogMirrorSynchronizerTests.cs` |
-| UnitTests | Shared/Admin | `AdminUserServiceTests` | Unit test class | `AdminUserService`, `AdminAuthorizationGate` | `tests\BA.Dmo.UnitTests\Shared\Admin\AdminUserServiceTests.cs` |
-| UnitTests | Shared/Admin | `AdminAuditAndMirrorTests` | Unit test class | `AdminAuditService`, `AdminMirrorService` | `tests\BA.Dmo.UnitTests\Shared\Admin\AdminAuditAndMirrorTests.cs` |
-| UnitTests | Shared/Admin | `AdminTemplateServiceTests` | Unit test class | `AdminTemplateService`, `GrantNormalizer` | `tests\BA.Dmo.UnitTests\Shared\Admin\AdminTemplateServiceTests.cs` |
-| UnitTests | Shared/Admin | `FakeAdminRepository` | Fake | `IAdminRepository` | `tests\BA.Dmo.UnitTests\Shared\Admin\FakeAdminRepository.cs` |
-| UnitTests | Shared/Identity | `IdentityResolutionServiceTests` | Unit test class | `IdentityResolutionService`, `AccessResolver` | `tests\BA.Dmo.UnitTests\Shared\Identity\IdentityResolutionServiceTests.cs` |
-| UnitTests | Shared/Identity | `AccessTemplateGrantsParserTests` | Unit test class | `AccessTemplateGrantsParser` | `tests\BA.Dmo.UnitTests\Shared\Identity\AccessTemplateGrantsParserTests.cs` |
-| UnitTests | Shared/Identity | `BootstrapAdminServiceTests` | Unit test class | `BootstrapAdminService` | `tests\BA.Dmo.UnitTests\Shared\Identity\BootstrapAdminServiceTests.cs` |
-| UnitTests | Shared/Kernel | `ClockTests` | Unit test class | `SystemClock`, `IClock` | `tests\BA.Dmo.UnitTests\Shared\Kernel\ClockTests.cs` |
-| UnitTests | Shared/Kernel | `ResultTests` | Unit test class | `Result` | `tests\BA.Dmo.UnitTests\Shared\Kernel\ResultTests.cs` |
-| UnitTests | Shared/Kernel | `DomainErrorTests` | Unit test class | `DomainError`, `ErrorCategory` | `tests\BA.Dmo.UnitTests\Shared\Kernel\DomainErrorTests.cs` |
-| UnitTests | Shared/Persistence | `ConcurrencyGuardTests` | Unit test class | `ConcurrencyGuard`, `ConcurrencyConflictException` | `tests\BA.Dmo.UnitTests\Shared\Persistence\ConcurrencyGuardTests.cs` |
-| UnitTests | Shared/Persistence | `PersistenceAuthorshipTests` | Unit test class | `PersistenceAuthorship`, `IPersistenceAuthorshipAccessor` | `tests\BA.Dmo.UnitTests\Shared\Persistence\PersistenceAuthorshipTests.cs` |
-| IntegrationTests | Access | `AdminSecurityGuardTests` | Integration test class | `Program` assembly, `AdminUserService`, `IAdminProvisioningAdapter`, `SupabaseAdminProvisioningAdapter` | `tests\BA.Dmo.IntegrationTests\Access\AdminSecurityGuardTests.cs` |
-| IntegrationTests | Access | `CatalogCompositionGuardTests` | Integration test class | `CatalogValidator`, `CanonicalModuleCatalog`, `CanonicalPageCatalog`, `DapperModuleCatalogMirrorRepository`, `Program` | `tests\BA.Dmo.IntegrationTests\Access\CatalogCompositionGuardTests.cs` |
-| IntegrationTests | Access | `BoquilhasWebAuthorizationTests` | Integration test class (WAF) | `/boquilhas`, `Boquilhas` API, `IBoquilhasRepository` | `tests\BA.Dmo.IntegrationTests\Access\BoquilhasWebAuthorizationTests.cs` |
-| IntegrationTests | Access | `FakeBoquilhasWebRepository` | Fake | `IBoquilhasRepository` | `tests\BA.Dmo.IntegrationTests\Access\FakeBoquilhasWebRepository.cs` |
-| IntegrationTests | Access | `AdminFormAntiforgeryTests` | Integration test class (WAF) | `Program`, /admin Razor pages, antiforgery pipeline | `tests\BA.Dmo.IntegrationTests\Access\AdminFormAntiforgeryTests.cs` |
-| IntegrationTests | Access | `AdminWebAuthorizationTests` | Integration test class (WAF) | `Program`, /admin pages, admin policy | `tests\BA.Dmo.IntegrationTests\Access\AdminWebAuthorizationTests.cs` |
-| IntegrationTests | Access | `DapperAdminRepositoryProjectionTests` | Integration test class | `DapperAdminRepository`, `AdminUserRow`, `IDbConnectionFactory` | `tests\BA.Dmo.IntegrationTests\Access\DapperAdminRepositoryProjectionTests.cs` |
-| IntegrationTests | Access | `AdminUserListResetTests` | Integration test class (WAF) | `Program`, /admin/users reset, `AdminUserService` | `tests\BA.Dmo.IntegrationTests\Access\AdminUserListResetTests.cs` |
-| IntegrationTests | Access | `ShellRoutingTests` | Integration test class (WAF) | `Program`, module routes, `/jobon`, `/boquilhas`, `/peso`… | `tests\BA.Dmo.IntegrationTests\Access\ShellRoutingTests.cs` |
-| IntegrationTests | Access | `HistoriaWebAuthorizationTests` | Integration test class (WAF) | `Program`, `/historia`, `IHistoriaRepository` | `tests\BA.Dmo.IntegrationTests\Access\HistoriaWebAuthorizationTests.cs` |
-| IntegrationTests | Cli | `BootstrapAdminCliTests` | Unit test class (CLI) | `BootstrapAdminCommand`, `SupabaseSettings` | `tests\BA.Dmo.IntegrationTests\Cli\BootstrapAdminCliTests.cs` |
-| IntegrationTests | Cli | `CliCommandPlaceholderTests` (`CliCommandContractTests`) | Unit test class (CLI) | `BootstrapAdminCommand` | `tests\BA.Dmo.IntegrationTests\Cli\CliCommandPlaceholderTests.cs` |
-| IntegrationTests | Cli | `CliRoutingTests` | Unit test class (CLI) | `CliModeResolver`, `CliMode` | `tests\BA.Dmo.IntegrationTests\Cli\CliRoutingTests.cs` |
-| IntegrationTests | Cli | `MigrateCliTests` | Unit test class (CLI) | `MigrateCommand`, connection-string env vars | `tests\BA.Dmo.IntegrationTests\Cli\MigrateCliTests.cs` |
-| IntegrationTests | Design | `DesignSystemGuardTests` | Integration test class (WAF) | `src/BA.Dmo.Web/wwwroot/styles`, `_Layout.cshtml`, `/design-laboratorio` | `tests\BA.Dmo.IntegrationTests\Design\DesignSystemGuardTests.cs` |
-| IntegrationTests | Design | `ShellAndCalendarGuardTests` | Integration test class (WAF) | `wwwroot/styles|scripts|Pages/_Layout*`, `/design-laboratorio` | `tests\BA.Dmo.IntegrationTests\Design\ShellAndCalendarGuardTests.cs` |
-| IntegrationTests | Design | `JobOnScriptSafetyGuardTests` | Unit test class (file guard) | `wwwroot/scripts/jobon.js` | `tests\BA.Dmo.IntegrationTests\Design\JobOnScriptSafetyGuardTests.cs` |
-| IntegrationTests | Ferramentas | `FerramentasWebApiTests` | Integration test class (WAF) | `/api/ferramentas/*`, `IFerramentasRepository`, `IFerramentasRuleLookup` | `tests\BA.Dmo.IntegrationTests\Ferramentas\FerramentasWebApiTests.cs` |
-| IntegrationTests | Identity | `SupabaseAuthAdapterTests` | Integration test class | `SupabaseAuthAdapter` | `tests\BA.Dmo.IntegrationTests\Identity\SupabaseAuthAdapterTests.cs` |
-| IntegrationTests | Identity | `SupabaseAdminProvisioningAdapterTests` | Integration test class | `SupabaseAdminProvisioningAdapter` | `tests\BA.Dmo.IntegrationTests\Identity\SupabaseAdminProvisioningAdapterTests.cs` |
-| IntegrationTests | Identity | `IdentitySecurityGuardTests` | Integration test class (reflection guard) | `Program` assembly, `SessionClaims`, Application assembly | `tests\BA.Dmo.IntegrationTests\Identity\IdentitySecurityGuardTests.cs` |
-| IntegrationTests | Identity | `WebAuthSessionTests` | Integration test class (WAF) | `/login`, `/logout`, session cookie, `ISupabaseAuthAdapter` | `tests\BA.Dmo.IntegrationTests\Identity\WebAuthSessionTests.cs` |
-| IntegrationTests | Identity | `IdentityAmbiguityLandingTests` | Integration test class (WAF) | `/login`, `/no-access`, `IInternalUserRepository` | `tests\BA.Dmo.IntegrationTests\Identity\IdentityAmbiguityLandingTests.cs` |
-| IntegrationTests | Identity | `FakeHttpMessageHandler` | Fake (HTTP handler) | `HttpMessageHandler` | `tests\BA.Dmo.IntegrationTests\Identity\FakeHttpMessageHandler.cs` |
-| IntegrationTests | Integrity | `RemediationGuardTests` | Database integration test class | N25_remediation.sql schema, PostgreSQL | `tests\BA.Dmo.IntegrationTests\Integrity\RemediationGuardTests.cs` |
-| IntegrationTests | JobOn | `JobOnLandingTests` | Integration test class (WAF) | `/jobon` landing, `IJobOnRepository` | `tests\BA.Dmo.IntegrationTests\JobOn\JobOnLandingTests.cs` |
-| IntegrationTests | JobOn | `JobOnLineColorMappingTests` | Unit test class | `JobOnLineColor` | `tests\BA.Dmo.IntegrationTests\JobOn\JobOnLineColorMappingTests.cs` |
-| IntegrationTests | Migrations | `MigrationRunnerTests` | Integration test class | `MigrationRunner`, `IMigrationScriptGateway` | `tests\BA.Dmo.IntegrationTests\Migrations\MigrationRunnerTests.cs` |
-| IntegrationTests | Migrations | `MigrationDiscoveryTests` | Integration test class | `MigrationDiscovery` | `tests\BA.Dmo.IntegrationTests\Migrations\MigrationDiscoveryTests.cs` |
-| IntegrationTests | Migrations | `MigrationChecksumTests` | Integration test class | `MigrationChecksum` | `tests\BA.Dmo.IntegrationTests\Migrations\MigrationChecksumTests.cs` |
-| IntegrationTests | Migrations | `MigrationArchitectureGuardTests` | Integration test class (reflection guard) | `MigrationRunner`, `Program` assembly | `tests\BA.Dmo.IntegrationTests\Migrations\MigrationArchitectureGuardTests.cs` |
-| IntegrationTests | Migrations | `FakeMigrationGateway` | Fake | `IMigrationScriptGateway` | `tests\BA.Dmo.IntegrationTests\Migrations\FakeMigrationGateway.cs` |
-| IntegrationTests | Pegamentos | `PegamentoPdfRendererTests` | Integration test class | `PegamentoPdfRenderer` | `tests\BA.Dmo.IntegrationTests\Pegamentos\PegamentoPdfRendererTests.cs` |
-| IntegrationTests | Pegamentos | `PegamentoWebApiTests` | Integration test class (WAF) | `/api/pegamentos/*`, `IPegamentoRepository` | `tests\BA.Dmo.IntegrationTests\Pegamentos\PegamentoWebApiTests.cs` |
-| IntegrationTests | Persistence | `DbConnectionFactoryTests` | Integration test class | `DbConnectionFactory`, `DatabaseConnectionSettings` | `tests\BA.Dmo.IntegrationTests\Persistence\DbConnectionFactoryTests.cs` |
-| IntegrationTests | Persistence | `DapperUnitOfWorkTests` | Integration test class | `DapperUnitOfWork`, `IDbConnectionFactory` | `tests\BA.Dmo.IntegrationTests\Persistence\DapperUnitOfWorkTests.cs` |
-| IntegrationTests | Persistence | `PersistenceMappingsTests` | Integration test class | `PersistenceMappings`, `DefaultTypeMap` | `tests\BA.Dmo.IntegrationTests\Persistence\PersistenceMappingsTests.cs` |
-| IntegrationTests | Persistence | `PersistenceArchitectureGuardTests` | Integration test class (reflection guard) | Domain/Application/Infrastructure/Web assemblies | `tests\BA.Dmo.IntegrationTests\Persistence\PersistenceArchitectureGuardTests.cs` |
-| IntegrationTests | Persistence | `FakeDbConnection` (+ `FakeDbTransaction`, `FakeConnectionFactory`) | Fake | `IDbConnection`, `IDbTransaction`, `IDbConnectionFactory` | `tests\BA.Dmo.IntegrationTests\Persistence\FakeDbConnection.cs` |
-| IntegrationTests | Peso | `PesoPdfVisualCheck` | Integration test class | `PesoSingleFilePdfRenderer` | `tests\BA.Dmo.IntegrationTests\Peso\PesoPdfVisualCheck.cs` |
-| IntegrationTests | ReparacaoExterna | `ReparacaoExternaWebApiTests` | Integration test class (WAF) | `/api/reparacao-externa/*`, `IRepairRepository` | `tests\BA.Dmo.IntegrationTests\ReparacaoExterna\ReparacaoExternaWebApiTests.cs` |
-| IntegrationTests | ReparacaoInterna | `ReparacaoInternaWebApiTests` | Integration test class (WAF) | `/api/reparacao-interna/*`, `IReparacaoInternaRepository` | `tests\BA.Dmo.IntegrationTests\ReparacaoInterna\ReparacaoInternaWebApiTests.cs` |
-| IntegrationTests | Security | `NoDebugBypassGuardTests` | Integration test class (reflection/file guard) | Production assemblies, `/Pages/Auth/Login.cshtml.cs` | `tests\BA.Dmo.IntegrationTests\Security\NoDebugBypassGuardTests.cs` |
-| IntegrationTests | Tampoes | `TampaoWebApiTests` | Integration test class (WAF) | `/api/tampoes/*`, `ITampaoRepository` | `tests\BA.Dmo.IntegrationTests\Tampoes\TampaoWebApiTests.cs` |
+| UnitTests | Modules/JobOn | `JobOnServiceTests` | Unit test class | `JobOnService`, `JobOnAuthorizationGate`, image attach/replace/remove path (`IArticleReferenceImageRepository`) | `BA.Dmo.UnitTests\Modules\JobOn\JobOnServiceTests.cs` |
+| UnitTests | Modules/JobOn | `JobOnDomainTests` | Unit test class | `JobOn` (domain), `JobOnLifecycleStateCodec` | `BA.Dmo.UnitTests\Modules\JobOn\JobOnDomainTests.cs` |
+| UnitTests | Modules/JobOn | `JobOnPdfTests` | Unit test class | `JobOnPdfService`, `JobOnService`, `IJobOnImageProvider` | `BA.Dmo.UnitTests\Modules\JobOn\JobOnPdfTests.cs` |
+| UnitTests | Modules/JobOn | `JobOnVerificationGeneratorTests` | Unit test class | `JobOnVerificationGenerator` | `BA.Dmo.UnitTests\Modules\JobOn\JobOnVerificationGeneratorTests.cs` |
+| UnitTests | Modules/JobOn | `JobOnActivityResolverTests` | Unit test class | `JobOnActivityResolver` | `BA.Dmo.UnitTests\Modules\JobOn\JobOnActivityResolverTests.cs` |
+| UnitTests | Modules/JobOn | `JobOnUserContextTests` | Unit test class | `JobOnService` (current-open context) | `BA.Dmo.UnitTests\Modules\JobOn\JobOnUserContextTests.cs` |
+| UnitTests | Modules/JobOn | `JobOnRevisionImmutabilityIntegrationTests` | Unit-project cross-module integration | `JobOnService`, `PesoService`, `PegamentoService` | `BA.Dmo.UnitTests\Modules\JobOn\JobOnRevisionImmutabilityIntegrationTests.cs` |
+| UnitTests | Modules/JobOn | `FakeJobOnRepository` | Fake | `IJobOnRepository` | `BA.Dmo.UnitTests\Modules\JobOn\FakeJobOnRepository.cs` |
+| UnitTests | Modules/JobOn | `FakeJobOnUserContextRepository` | Fake | `IJobOnUserContextRepository` | `BA.Dmo.UnitTests\Modules\JobOn\FakeJobOnUserContextRepository.cs` |
+| UnitTests | Modules/JobOn | `FakeArticleReferenceImageRepository` | Fake | `IArticleReferenceImageRepository` | `BA.Dmo.UnitTests\Modules\JobOn\FakeArticleReferenceImageRepository.cs` |
+| UnitTests | Modules/Peso | `PesoServiceTests` | Unit test class | `PesoService`, `PesoAuthorizationGate` | `BA.Dmo.UnitTests\Modules\Peso\PesoServiceTests.cs` |
+| UnitTests | Modules/Peso | `PesoDomainTests` | Unit test class | `PesoValidator`, `PesoProcessoCodec`, `PesoRecordTypeCodec`, `PesoControlStateCodec`, `ReportPathValidator` | `BA.Dmo.UnitTests\Modules\Peso\PesoDomainTests.cs` |
+| UnitTests | Modules/Peso | `WeightCalculatorTests` | Unit test class | `WeightCalculator`, `PesoModuleCatalog` | `BA.Dmo.UnitTests\Modules\Peso\WeightCalculatorTests.cs` |
+| UnitTests | Modules/Peso | `PesoControlWorkflowTests` | Unit test class | `PesoControl`, `PesoValidator`, `PesoCmDecisionCodec` | `BA.Dmo.UnitTests\Modules\Peso\PesoControlWorkflowTests.cs` |
+| UnitTests | Modules/Peso | `FakePesoRepository` | Fake | `IPesoRepository` | `BA.Dmo.UnitTests\Modules\Peso\FakePesoRepository.cs` |
+| UnitTests | Modules/Armazem | `ArmazemServiceTests` | Unit test class | `ArmazemService`, `ArmazemAuthorizationGate` | `BA.Dmo.UnitTests\Modules\Armazem\ArmazemServiceTests.cs` |
+| UnitTests | Modules/Armazem | `WarehouseStockRulesTests` | Unit test class | `WarehouseLocation`, `WarehouseStockRules` | `BA.Dmo.UnitTests\Modules\Armazem\WarehouseStockRulesTests.cs` |
+| UnitTests | Modules/Armazem | `ArmazemAuthorizationGateTests` | Unit test class | `ArmazemAuthorizationGate` | `BA.Dmo.UnitTests\Modules\Armazem\ArmazemAuthorizationGateTests.cs` |
+| UnitTests | Modules/Armazem | `FerramentasArmazemToolIdentityResolverTests` | Unit test class | `FerramentasArmazemToolIdentityResolver` | `BA.Dmo.UnitTests\Modules\Armazem\FerramentasArmazemToolIdentityResolverTests.cs` |
+| UnitTests | Modules/Armazem | `FakeArmazemRepository` / `FakeToolIdentityResolver` | Fakes | `IArmazemRepository`, `IToolIdentityResolver` | `BA.Dmo.UnitTests\Modules\Armazem\` |
+| UnitTests | Modules/Armazem | (in `ArmazemTestSupport`) | Test helper | `IClock`, `IPersistenceAuthorshipAccessor`, `ICurrentUserAccessor`, `IFerramentasIdentityLookup` | `BA.Dmo.UnitTests\Modules\Armazem\ArmazemTestSupport.cs` |
+| UnitTests | Modules/Boquilhas | `BoquilhasServiceTests` | Unit test class | `BoquilhasService`, `BqAuthorizationGate` | `BA.Dmo.UnitTests\Modules\Boquilhas\BoquilhasServiceTests.cs` |
+| UnitTests | Modules/Boquilhas | `BqAuthorizationGateTests` | Unit test class | `BqAuthorizationGate` | `BA.Dmo.UnitTests\Modules\Boquilhas\BqAuthorizationGateTests.cs` |
+| UnitTests | Modules/Boquilhas | `BqInventoryCalculatorTests` | Unit test class | `BqInventoryCalculator`, `BqRules` | `BA.Dmo.UnitTests\Modules\Boquilhas\BqInventoryCalculatorTests.cs` |
+| UnitTests | Modules/Boquilhas | (in `BqTestSupport`) | Test helper + fakes | `IClock`, authorship/current-user, `IBoquilhasUnitOfWorkFactory`, `IBoquilhasRepository`, `IDbUnitOfWork` | `BA.Dmo.UnitTests\Modules\Boquilhas\BqTestSupport.cs` |
+| UnitTests | Modules/Controlo | `ControloSheetServiceTests` | Unit test class | `ControloSheetService`, `ControloSheetAuthorizationGate` | `BA.Dmo.UnitTests\Modules\Controlo\ControloSheetServiceTests.cs` |
+| UnitTests | Modules/Controlo | `ControloFolhaTests` | Unit test class | `ControloFolha` | `BA.Dmo.UnitTests\Modules\Controlo\ControloFolhaTests.cs` |
+| UnitTests | Modules/Controlo | (in `ControloTestSupport`) | Test helper + fakes | `IClock`, authorship, `IRepairUnitOfWorkFactory`, `IControloSheetRepository`, `IControloProductionContextLookup` | `BA.Dmo.UnitTests\Modules\Controlo\ControloTestSupport.cs` |
+| UnitTests | Modules/Ferramentas | `FerramentasServiceTests` | Unit test class | `FerramentasService`, `FerramentasAuthorizationGate` | `BA.Dmo.UnitTests\Modules\Ferramentas\FerramentasServiceTests.cs` |
+| UnitTests | Modules/Ferramentas | `FerramentasDomainTests` | Unit test class | `ToolReference`, `ToolLote`, `ToolCheckRule`, `PhysicalPiece`, `FerramentasToolTypeCodec` | `BA.Dmo.UnitTests\Modules\Ferramentas\FerramentasDomainTests.cs` |
+| UnitTests | Modules/Ferramentas | `FerramentasUtilisationServiceTests` | Unit test class | `FerramentasService` (utilisation commands) | `BA.Dmo.UnitTests\Modules\Ferramentas\FerramentasUtilisationServiceTests.cs` |
+| UnitTests | Modules/Ferramentas | `FakeFerramentasRepository` + `FerramentasTestSupport` | Fake + helper | `IFerramentasRepository`, `IFerramentasRuleLookup`, clock/authorship/user | `BA.Dmo.UnitTests\Modules\Ferramentas\` |
+| UnitTests | Modules/Historia | `HistoriaServiceTests` | Unit test class | `HistoriaService`, `HistoriaAuthorizationGate`, `IHistoriaRepository` | `BA.Dmo.UnitTests\Modules\Historia\HistoriaServiceTests.cs` |
+| UnitTests | Modules/Historia | `HistoriaAuthorizationGateTests` | Unit test class | `HistoriaAuthorizationGate`, `HistoriaModuleCatalog` | `BA.Dmo.UnitTests\Modules\Historia\HistoriaAuthorizationGateTests.cs` |
+| UnitTests | Modules/Pegamentos | `PegamentoServiceTests` | Unit test class | `PegamentoService`, `PegamentoAuthorizationGate` | `BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoServiceTests.cs` |
+| UnitTests | Modules/Pegamentos | `PegamentoPdfTests` | Unit test class | `PegamentoPdfService` (filename `PegamentoPdfFilename.Compute`) | `BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoPdfTests.cs` |
+| UnitTests | Modules/Pegamentos | `PegamentoMeasurementCalculatorTests` | Unit test class | `PegamentoMeasurementCalculator` | `BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoMeasurementCalculatorTests.cs` |
+| UnitTests | Modules/Pegamentos | `PegamentoHistoricalRelationshipTests` | Unit test class | `PegamentoService` | `BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoHistoricalRelationshipTests.cs` |
+| UnitTests | Modules/Pegamentos | `PegamentoDocumentConfirmationTests` | Unit test class | `PegamentoService` (document-confirmation commands) | `BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoDocumentConfirmationTests.cs` |
+| UnitTests | Modules/Pegamentos | `JobOnProductionFolderResolverTests` | Unit test class | `FakeJobOnProductionFolderResolver`, `PegamentoService` | `BA.Dmo.UnitTests\Modules\Pegamentos\JobOnProductionFolderResolverTests.cs` |
+| UnitTests | Modules/Pegamentos | `FakePegamentoRepository` / `PegamentoTestSupport` / `FakeJobOnProductionFolderResolver` | Fakes + helpers | `IPegamentoRepository`, `IAppSettingsReader`, `IJobOnProductionContextLookup`, `IPegamentoPdfRenderer`, `IJobOnProductionFolderResolver` | `BA.Dmo.UnitTests\Modules\Pegamentos\` |
+| UnitTests | Modules/ReparacaoExterna | `ReparacaoExternaServiceTests` | Unit test class | `ReparacaoExternaService`, `ReparacaoExternaAuthorizationGate` | `BA.Dmo.UnitTests\Modules\ReparacaoExterna\ReparacaoExternaServiceTests.cs` |
+| UnitTests | Modules/ReparacaoExterna | `RepairExitStatusMachineTests` | Unit test class | `RepairExitStatusMachine` | `BA.Dmo.UnitTests\Modules\ReparacaoExterna\RepairExitStatusMachineTests.cs` |
+| UnitTests | Modules/ReparacaoExterna | `RepairerCapabilityTests` | Unit test class | `ReparacaoExternaService` (repairer capability commands) | `BA.Dmo.UnitTests\Modules\ReparacaoExterna\RepairerCapabilityTests.cs` |
+| UnitTests | Modules/ReparacaoExterna | `ReparacaoExternaAuthorizationGateTests` | Unit test class | `ReparacaoExternaAuthorizationGate` | `BA.Dmo.UnitTests\Modules\ReparacaoExterna\ReparacaoExternaAuthorizationGateTests.cs` |
+| UnitTests | Modules/ReparacaoExterna | `FakeRepairRepository` + `ReparacaoExternaTestSupport` | Fakes + helpers | `IRepairRepository`, `IRepairUnitOfWorkFactory`, `IArmazemRepairMovementPort`, `IToolPieceResolver` | `BA.Dmo.UnitTests\Modules\ReparacaoExterna\` |
+| UnitTests | Modules/ReparacaoInterna | `ReparacaoInternaServiceTests` | Unit test class | `ReparacaoInternaService`, `ReparacaoInternaAuthorizationGate` | `BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaServiceTests.cs` |
+| UnitTests | Modules/ReparacaoInterna | `ReparacaoInternaDomainTests` | Unit test class | `InternalRepairRecord`, `InternalRepairRules`, `InternalRepairToolTypeCodec` | `BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaDomainTests.cs` |
+| UnitTests | Modules/ReparacaoInterna | `ReparacaoInternaProductionProjectionTests` | Unit test class | `ReparacaoInternaProductionProjection` | `BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaProductionProjectionTests.cs` |
+| UnitTests | Modules/ReparacaoInterna | (in `ReparacaoInternaTestSupport`) | Fakes + helpers | `IReparacaoInternaRepository`, `IRepairUnitOfWorkFactory`, `IJobOnActiveContextLookup`, `IFerramentasPieceLookup` | `BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaTestSupport.cs` |
+| UnitTests | Modules/Tampoes | `TampaoServiceTests` | Unit test class | `TampaoService`, `TampaoAuthorizationGate` | `BA.Dmo.UnitTests\Modules\Tampoes\TampaoServiceTests.cs` |
+| UnitTests | Modules/Tampoes | `TampaoDomainTests` | Unit test class | `TampaoConfigurationKey`, `TampaoRules` | `BA.Dmo.UnitTests\Modules\Tampoes\TampaoDomainTests.cs` |
+| UnitTests | Modules/Tampoes | `TampaoMachineTests` | Unit test class | `TampaoService` (multi-machine commands) | `BA.Dmo.UnitTests\Modules\Tampoes\TampaoMachineTests.cs` |
+| UnitTests | Modules/Tampoes | (in `TampaoTestSupport`) | Fakes + helper | `ITampoesUnitOfWorkFactory`, `ITampaoRepository`, `IDbUnitOfWork` | `BA.Dmo.UnitTests\Modules\Tampoes\TampaoTestSupport.cs` |
+| UnitTests | Shared/Access | `AccessResolverTests` | Unit test class | `AccessResolver`, `EffectiveAccess`, `CatalogValidator` | `BA.Dmo.UnitTests\Shared\Access\AccessResolverTests.cs` |
+| UnitTests | Shared/Access | `CurrentUserTests`, `ModuleCatalogTests`, `CanonicalModuleCatalogTests`, `CanonicalPageCatalogTests`, `CapabilityAndModuleDefinitionTests`, `CatalogValidatorTests`, `GrantNormalizerTests`, `NavigationServiceTests`, `ModuleCatalogMirrorSynchronizerTests` | Unit test classes | `CurrentUser`/`ICurrentUserAccessor`, `ModuleCatalog`/`ModuleDefinition`, `CanonicalModuleCatalog`, `CanonicalPageCatalog`/`PageDefinition`, `Capability`, `CatalogValidator`, `GrantNormalizer`, `NavigationService`, `ModuleCatalogMirrorSynchronizer` | `BA.Dmo.UnitTests\Shared\Access\` |
+| UnitTests | Shared/Admin | `AdminUserServiceTests`, `AdminAuditAndMirrorTests`, `AdminTemplateServiceTests` + `FakeAdminRepository` | Unit test classes + fake | `AdminUserService`, `AdminAuthorizationGate`, `AdminAuditService`, `AdminMirrorService`, `AdminTemplateService`, `GrantNormalizer`, `IAdminRepository` | `BA.Dmo.UnitTests\Shared\Admin\` |
+| UnitTests | Shared/Identity | `IdentityResolutionServiceTests`, `AccessTemplateGrantsParserTests`, `BootstrapAdminServiceTests` | Unit test classes | `IdentityResolutionService`, `AccessTemplateGrantsParser`, `BootstrapAdminService`, `AccessResolver` | `BA.Dmo.UnitTests\Shared\Identity\` |
+| UnitTests | Shared/Kernel | `ClockTests`, `ResultTests`, `DomainErrorTests` | Unit test classes | `SystemClock`/`IClock`, `Result`, `DomainError`/`ErrorCategory` | `BA.Dmo.UnitTests\Shared\Kernel\` |
+| UnitTests | Shared/Persistence | `ConcurrencyGuardTests`, `PersistenceAuthorshipTests` | Unit test classes | `ConcurrencyGuard`, `ConcurrencyConflictException`, `PersistenceAuthorship` | `BA.Dmo.UnitTests\Shared\Persistence\` |
+| IntegrationTests | Access | `AdminSecurityGuardTests` | Reflection/architecture guard | `Program` assembly, `AdminUserService`, `IAdminProvisioningAdapter`, `SupabaseAdminProvisioningAdapter` | `BA.Dmo.IntegrationTests\Access\AdminSecurityGuardTests.cs` |
+| IntegrationTests | Access | `CatalogCompositionGuardTests` | Reflection/architecture guard | `CatalogValidator`, `CanonicalModuleCatalog`, `CanonicalPageCatalog`, `DapperModuleCatalogMirrorRepository`, `Program` | `BA.Dmo.IntegrationTests\Access\CatalogCompositionGuardTests.cs` |
+| IntegrationTests | Access | `BoquilhasWebAuthorizationTests` | Integration (WAF `BoquilhasFixture`) | `Program`, `/boquilhas`, Boquilhas API, `IBoquilhasRepository` | `BA.Dmo.IntegrationTests\Access\BoquilhasWebAuthorizationTests.cs` |
+| IntegrationTests | Access | `FakeBoquilhasWebRepository` | Fake | `IBoquilhasRepository` | `BA.Dmo.IntegrationTests\Access\FakeBoquilhasWebRepository.cs` |
+| IntegrationTests | Access | `AdminFormAntiforgeryTests` | Integration (WAF `AfFixture`, antiforgery enforced) | `Program`, /admin Razor forms, antiforgery pipeline | `BA.Dmo.IntegrationTests\Access\AdminFormAntiforgeryTests.cs` |
+| IntegrationTests | Access | `AdminWebAuthorizationTests` | Integration (WAF `AdminFixture`) | `Program`, /admin pages, admin policy | `BA.Dmo.IntegrationTests\Access\AdminWebAuthorizationTests.cs` |
+| IntegrationTests | Access | `DapperAdminRepositoryProjectionTests` | Integration (ADO doubles) | `DapperAdminRepository`, `AdminUserRow`, `IDbConnectionFactory` | `BA.Dmo.IntegrationTests\Access\DapperAdminRepositoryProjectionTests.cs` |
+| IntegrationTests | Access | `AdminUserListResetTests` | Integration (WAF `ResetFixture`) | `Program`, /admin/users reset, `AdminUserService` | `BA.Dmo.IntegrationTests\Access\AdminUserListResetTests.cs` |
+| IntegrationTests | Access | `ShellRoutingTests` | Integration (WAF `ShellFixture`, profile-switchable) | `Program`, module routes, shell, `/jobon`, `/peso`, `/armazem` GET APIs | `BA.Dmo.IntegrationTests\Access\ShellRoutingTests.cs` |
+| IntegrationTests | Access | `HistoriaWebAuthorizationTests` | Integration (WAF `HistoriaFixture`) | `Program`, `/historia`, `IHistoriaRepository` | `BA.Dmo.IntegrationTests\Access\HistoriaWebAuthorizationTests.cs` |
+| IntegrationTests | Cli | `BootstrapAdminCliTests` | Integration (CLI) | `BootstrapAdminCommand`, `SupabaseSettings` | `BA.Dmo.IntegrationTests\Cli\BootstrapAdminCliTests.cs` |
+| IntegrationTests | Cli | `CliCommandPlaceholderTests` (class `CliCommandContractTests`) | Integration (CLI) | `BootstrapAdminCommand` | `BA.Dmo.IntegrationTests\Cli\CliCommandPlaceholderTests.cs` |
+| IntegrationTests | Cli | `CliRoutingTests` | Integration (CLI) | `CliModeResolver`, `CliMode` | `BA.Dmo.IntegrationTests\Cli\CliRoutingTests.cs` |
+| IntegrationTests | Cli | `MigrateCliTests` | Integration (CLI) | `MigrateCommand`, connection-string env vars | `BA.Dmo.IntegrationTests\Cli\MigrateCliTests.cs` |
+| IntegrationTests | Controlo | `ControloProjectionGuardTests` | Static source-text guard | `DapperControloProductionContextLookup` (5 resumo families) | `BA.Dmo.IntegrationTests\Controlo\ControloProjectionGuardTests.cs` |
+| IntegrationTests | Design | `DesignSystemGuardTests` | Integration (WAF `DesignFixture`) + static guards | `wwwroot/styles`, `_Layout.cshtml`, `/design-laboratorio` | `BA.Dmo.IntegrationTests\Design\DesignSystemGuardTests.cs` |
+| IntegrationTests | Design | `ShellAndCalendarGuardTests` | Integration (WAF `LabFixture`) + static guards | `wwwroot/styles|scripts`, `Pages/_Layout*`, `/design-laboratorio` | `BA.Dmo.IntegrationTests\Design\ShellAndCalendarGuardTests.cs` |
+| IntegrationTests | Design | `JobOnScriptSafetyGuardTests` | Static file-content guard | `wwwroot/scripts/jobon.js` | `BA.Dmo.IntegrationTests\Design\JobOnScriptSafetyGuardTests.cs` |
+| IntegrationTests | Design | `ArmazemBqGuardTests` | Static source-text guard | `Pages/Armazem/Index.cshtml` type selectors (BQ yes, PU/CS no) | `BA.Dmo.IntegrationTests\Design\ArmazemBqGuardTests.cs` |
+| IntegrationTests | Design | `ArmazemCorrectionGuardTests` | Static source-text guard | `Armazem/Index.cshtml` + `armazem.js` correction card, `Program.cs` `/api/armazem/corrigir-localizacao`, `ArmazemService.CorrectLocationAsync` | `BA.Dmo.IntegrationTests\Design\ArmazemCorrectionGuardTests.cs` |
+| IntegrationTests | Design | `ArmazemCreateGuardTests` | Static source-text guard | two-owner create flow (Ferramentas master → Armazém Entrada), `armazem.js` recovery | `BA.Dmo.IntegrationTests\Design\ArmazemCreateGuardTests.cs` |
+| IntegrationTests | Design | `ArmazemRecentMovementsGuardTests` | Static source-text guard | recent movements / consulta / histórico / programadas surfaces, `armazem-layout.css` | `BA.Dmo.IntegrationTests\Design\ArmazemRecentMovementsGuardTests.cs` |
+| IntegrationTests | Design | `PesoComparisonGuardTests` | Static source-text guard | Peso comparison contract (`Pages/Peso/*`, `peso.js`, `PesoSingleFilePdfRenderer`, `PesoService`) | `BA.Dmo.IntegrationTests\Design\PesoComparisonGuardTests.cs` |
+| IntegrationTests | Ferramentas | `FerramentasWebApiTests` | Integration (WAF `FerrFixture`) | `/api/ferramentas/*`, `IFerramentasRepository`, `IFerramentasRuleLookup` | `BA.Dmo.IntegrationTests\Ferramentas\FerramentasWebApiTests.cs` |
+| IntegrationTests | Identity | `SupabaseAuthAdapterTests` | Integration (HTTP adapter, `FakeHttpMessageHandler`) | `SupabaseAuthAdapter` | `BA.Dmo.IntegrationTests\Identity\SupabaseAuthAdapterTests.cs` |
+| IntegrationTests | Identity | `SupabaseAdminProvisioningAdapterTests` | Integration (HTTP adapter, `FakeHttpMessageHandler`) | `SupabaseAdminProvisioningAdapter` | `BA.Dmo.IntegrationTests\Identity\SupabaseAdminProvisioningAdapterTests.cs` |
+| IntegrationTests | Identity | `IdentitySecurityGuardTests` | Reflection guard | `Program` assembly, `SessionClaims`, Application assembly | `BA.Dmo.IntegrationTests\Identity\IdentitySecurityGuardTests.cs` |
+| IntegrationTests | Identity | `WebAuthSessionTests` | Integration (WAF `AuthTestFixture`) | `/login`, `/logout`, session cookie, `ISupabaseAuthAdapter` | `BA.Dmo.IntegrationTests\Identity\WebAuthSessionTests.cs` |
+| IntegrationTests | Identity | `IdentityAmbiguityLandingTests` | Integration (WAF `AmbiguityFixture`) | `/login`, `/no-access`, `IInternalUserRepository` | `BA.Dmo.IntegrationTests\Identity\IdentityAmbiguityLandingTests.cs` |
+| IntegrationTests | Identity | `FakeHttpMessageHandler` | Fake (HTTP handler) | `HttpMessageHandler` | `BA.Dmo.IntegrationTests\Identity\FakeHttpMessageHandler.cs` |
+| IntegrationTests | Integrity | `RemediationGuardTests` | Database integration (real PostgreSQL, env-guarded) | N25_remediation.sql schema (constraints/triggers/RLS/indexes) | `BA.Dmo.IntegrationTests\Integrity\RemediationGuardTests.cs` |
+| IntegrationTests | JobOn | `JobOnLandingTests` | Integration (WAF `LandingFixture`) | `/jobon` landing, `IJobOnRepository.GetHistoricalProductionsAsync` | `BA.Dmo.IntegrationTests\JobOn\JobOnLandingTests.cs` |
+| IntegrationTests | JobOn | `JobOnLineColorMappingTests` | Unit test class | `JobOnLineColor` | `BA.Dmo.IntegrationTests\JobOn\JobOnLineColorMappingTests.cs` |
+| IntegrationTests | JobOn | `JobOnImageWebApiTests` | Integration (WAF `ImageFixture`) | `/api/jobon/{id}/image/attach|remove`, `IArticleReferenceImageRepository` (no revision created) | `BA.Dmo.IntegrationTests\JobOn\JobOnImageWebApiTests.cs` |
+| IntegrationTests | JobOn | `JobOnPdfRendererTests` | Integration test class | `JobOnPdfRenderer` (`BA.Dmo.Infrastructure.Access`) image embedding | `BA.Dmo.IntegrationTests\JobOn\JobOnPdfRendererTests.cs` |
+| IntegrationTests | Migrations | `MigrationRunnerTests`, `MigrationDiscoveryTests`, `MigrationChecksumTests` | Integration (temp dir; `IDisposable`) | `MigrationRunner`, `MigrationDiscovery`, `MigrationChecksum`, `IMigrationScriptGateway` | `BA.Dmo.IntegrationTests\Migrations\` |
+| IntegrationTests | Migrations | `MigrationArchitectureGuardTests` | Reflection guard | `MigrationRunner` assembly, `Program` assembly, `MigrateCommand` | `BA.Dmo.IntegrationTests\Migrations\MigrationArchitectureGuardTests.cs` |
+| IntegrationTests | Migrations | `FakeMigrationGateway` | Fake | `IMigrationScriptGateway` | `BA.Dmo.IntegrationTests\Migrations\FakeMigrationGateway.cs` |
+| IntegrationTests | Pegamentos | `PegamentoPdfRendererTests` | Integration test class | `PegamentoPdfRenderer` | `BA.Dmo.IntegrationTests\Pegamentos\PegamentoPdfRendererTests.cs` |
+| IntegrationTests | Pegamentos | `PegamentoWebApiTests` | Integration (WAF `PegFixture`) | `/api/pegamentos/*`, `IPegamentoRepository`, `IJobOnProductionFolderResolver`, `IAppSettingsReader`, `IJobOnProductionContextLookup` | `BA.Dmo.IntegrationTests\Pegamentos\PegamentoWebApiTests.cs` |
+| IntegrationTests | Persistence | `DbConnectionFactoryTests`, `DapperUnitOfWorkTests`, `PersistenceMappingsTests`, `PersistenceArchitectureGuardTests` | Integration + reflection guard | `DbConnectionFactory`/`DatabaseConnectionSettings`, `DapperUnitOfWork`/`IDbConnectionFactory`, `PersistenceMappings`/`DefaultTypeMap`, assembly dependency graph | `BA.Dmo.IntegrationTests\Persistence\` |
+| IntegrationTests | Persistence | `FakeDbConnection` (+ `FakeDbTransaction`, `FakeConnectionFactory`) | Fakes | `IDbConnection`, `IDbTransaction`, `IDbConnectionFactory` | `BA.Dmo.IntegrationTests\Persistence\FakeDbConnection.cs` |
+| IntegrationTests | Peso | `PesoPdfVisualCheck` | Integration (PDF-to-file visual check) | `PesoSingleFilePdfRenderer.RenderPesoFolha` | `BA.Dmo.IntegrationTests\Peso\PesoPdfVisualCheck.cs` |
+| IntegrationTests | ReparacaoExterna | `ReparacaoExternaWebApiTests` | Integration (WAF `RepExtFixture`) | `/api/reparacao-externa/*`, `IRepairRepository`, `IToolPieceResolver`, `IArmazemRepairMovementPort` | `BA.Dmo.IntegrationTests\ReparacaoExterna\ReparacaoExternaWebApiTests.cs` |
+| IntegrationTests | ReparacaoInterna | `ReparacaoInternaWebApiTests` | Integration (WAF `RepIntFixture`) | `/api/reparacao-interna/*`, `IReparacaoInternaRepository`, `IJobOnActiveContextLookup`, `IFerramentasPieceLookup` | `BA.Dmo.IntegrationTests\ReparacaoInterna\ReparacaoInternaWebApiTests.cs` |
+| IntegrationTests | Security | `NoDebugBypassGuardTests` | Reflection/file guard | Production assemblies, `Program` entry point, `Pages/Auth/Login.cshtml.cs` | `BA.Dmo.IntegrationTests\Security\NoDebugBypassGuardTests.cs` |
+| IntegrationTests | Tampoes | `TampaoWebApiTests` | Integration (WAF `TampoesFixture`) | `/api/tampoes/*`, `ITampaoRepository`, `ITampoesUnitOfWorkFactory` | `BA.Dmo.IntegrationTests\Tampoes\TampaoWebApiTests.cs` |
+| IntegrationTests | (root) | `IntegrationTestEnvironment` | Module initializer (env setup) | sets `ASPNETCORE_ENVIRONMENT=Testing`, `Logging__EventLog__LogLevel__Default=None` | `BA.Dmo.IntegrationTests\IntegrationTestEnvironment.cs` |
 
 ---
 
 ## 4. Unit Test Project
 
-`tests\BA.Dmo.UnitTests\` — Domain + Application layer unit tests (no I/O, no DB).
+`AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\` — Domain + Application layer unit tests (no I/O, no DB). Targets map to [19_APPLICATION.md](19_APPLICATION.md) and the module maps.
 
-### 4.1 Job On
+### 4.1 Job On (module map [06_JOB_ON.md](06_JOB_ON.md))
 
-#### `JobOnServiceTests`
-File: `tests\BA.Dmo.UnitTests\Modules\JobOn\JobOnServiceTests.cs`
-Target: `JobOnService`, `JobOnAuthorizationGate`
-Tests (method groups): `Create_*`, `Duplicate_*`, `SaveRevision_*`, `Transition_*`, `Resolve_*`, `ConfirmVerification_*`, `AttachImage_*/ReplaceImage_*/RemoveImage_*`, `DuplicateJobOn_*`, capability-gate denials.
-Uses: `FakeJobOnRepository`, `FakeJobOnUserContextRepository`, `FakeCurrentUserAccessor` (nested), `FixedClock` (nested).
-Asserts: `Assert.True/False/Equal/Empty/Single/Contains`, `Assert.Single`, JSON `JsonDocument`.
-
-#### `JobOnDomainTests`
-File: `tests\BA.Dmo.UnitTests\Modules\JobOn\JobOnDomainTests.cs`
-Target: `BA.Dmo.Domain.Modules.JobOn.JobOn`, `JobOnLifecycleStateCodec`
-Tests: `Transition_*`, `Close_*`, `Cancel_*`, `DuplicateFrom_*`, `CloneWithChanges_*`, `SaveRevision_*`, `Codec_*`.
-Asserts: `Assert.Throws`, `Assert.Equal`, parameterized `[Theory]/[InlineData]` for codec.
-
-#### `JobOnPdfTests`
-File: `tests\BA.Dmo.UnitTests\Modules\JobOn\JobOnPdfTests.cs`
-Target: `JobOnPdfService`, `JobOnService`
-Tests: `GenerateAsync_ReturnsValidPdf_WithFourPages`, `GenerateAsync_IncludesReferenceInData`, `GenerateAsync_MapsSectionsAndDropCount`, `GenerateAsync_GroupsComponentsByFamily`, `GenerateAsync_MapsCalibreRows`, `GenerateAsync_PreservesPortugueseCharacters`, `GenerateAsync_ReturnsNotFound_ForMissingJobOn`, `GenerateAsync_ReturnsForbidden_WhenUnauthorized`, `GenerateAsync_IncludesGeneralNotes`, `GenerateAsync_MapsPlannedDates`, `GenerateAsync_ComponentFieldsAccessible`, `GenerateAsync_EmptyComponentsAreNull`, `ImageProvider_ResolvesNull_WhenNoImage`, `BuildFileName_ProducesCorrectFormat`.
-Uses: `TestPdfRenderer` (`IJobOnPdfRenderer`), `PdfTestIdentityAccessor`, `PdfTestClock`, `NullJobOnImageProvider` (nested doubles).
-Asserts: `Assert.True/NotEmpty/Equal/StartsWith/EndsWith/Contains`, PDF-byte header check.
-
-#### `JobOnVerificationGeneratorTests`
-File: `tests\BA.Dmo.UnitTests\Modules\JobOn\JobOnVerificationGeneratorTests.cs`
-Target: `JobOnVerificationGenerator`
-Tests: `Generate_OneRule_YieldsOnePendenteOccurrence`, `Generate_MultipleRules_YieldsOnePerRule`, `Generate_EmptyRules_YieldsNone`, `Generate_NullRules_YieldsNone`, `Generate_EmptyRuleId_IsSkipped`, `Generate_RecordsCreationTimestamp`.
-Asserts: `Assert.Single`, `Assert.Equal`, `Assert.Empty`, `Assert.All`.
-
-#### `JobOnActivityResolverTests`
-File: `tests\BA.Dmo.UnitTests\Modules\JobOn\JobOnActivityResolverTests.cs`
-Target: `JobOnActivityResolver`
-Tests: `Resolve_SingleCandidateInsideInterval_ReturnsSingle`, `Resolve_NoCandidate_ReturnsNone`, `Resolve_EmptyCandidates_ReturnsNone`, `Resolve_AtBeforeStart_ReturnsNone`, `Resolve_AtOnEndBoundary_IsExcluded`, `Resolve_TwoOverlappingCandidates_ReturnsAmbiguous`, `Resolve_NullEnd_UsesNextPlannedStartAsUpperBound`, `Resolve_LastCandidateWithNullEnd_IsUnbounded`, `Resolve_NonActiveStates_AreExcluded`.
-
-#### `JobOnUserContextTests`
-File: `tests\BA.Dmo.UnitTests\Modules\JobOn\JobOnUserContextTests.cs`
-Target: `JobOnService` (current-open context methods), `JobOnLineCatalog` (local helper)
-Tests: `SetCurrentOpen_*`, `GetCurrentOpen_*`, `AUser_WithoutEdit_CanStillOpenAndReadPlanningContext`, `CanonicalSixLines_AreSupported_AndDistinct`.
-
-#### `JobOnRevisionImmutabilityIntegrationTests`
-File: `tests\BA.Dmo.UnitTests\Modules\JobOn\JobOnRevisionImmutabilityIntegrationTests.cs`
-Kind: Unit-project cross-module integration test class (real services over in-memory repositories).
-Target: `JobOnService`, `PesoService`, `PegamentoService`
-Test: `RevB_DoesNotMoveOrReinterpret_RevA_Peso_Pegamento_OrToolContext`.
-Uses: `FakeJobOnRepository`, `FakePesoRepository`, `FakePegamentoRepository`, `FakeJobOnProductionContextLookup`, `PegamentoContextBuilder`; file-local fakes `JobOnActor`, `PesoOperador`, `PegFakeAuthorship`, `TestClock`.
-
-#### `FakeJobOnRepository`
-File: `tests\BA.Dmo.UnitTests\Modules\JobOn\FakeJobOnRepository.cs`
-Implements: `IJobOnRepository`. In-memory stores for job-ons, revisions, components, fields, rows, verifications, audit events; records lifecycle/revision/verification updates; exposes `DuplicateAtomicallyAsync`, `SaveRevisionGraphAsync`, historical production summary.
-
-#### `FakeJobOnUserContextRepository`
-File: `tests\BA.Dmo.UnitTests\Modules\JobOn\FakeJobOnUserContextRepository.cs`
-Implements: `IJobOnUserContextRepository`. Records actor id + `JobOnUserCurrent`.
+- **`JobOnServiceTests`** — Target: `JobOnService`, `JobOnAuthorizationGate`. Groups: `Create_*`, `Duplicate_*`, `SaveRevision_*`, `Transition_*`, `Resolve_*`, `ConfirmVerification_*`, `DuplicateJobOn_*`, capability-gate denials; **reference-image path** `AttachImage_*`, `ReplaceImage_*`, `RemoveImage_*`, `AttachImage_WithUnsafeOrNonImageAsset_IsRejected`, `AttachImage_WithoutReadableReference_IsRejected`, `ImageAction_WithoutEditCapability_IsDenied`, `DuplicateJobOn_DoesNotCopyLegacyRevisionImageOwnership`, `SaveRevision_DoesNotPersistLegacyPerRevisionImageAssetId`. Uses: `FakeJobOnRepository`, `FakeJobOnUserContextRepository`, **`FakeArticleReferenceImageRepository`**, `FakeCurrentUserAccessor` (nested), `FixedClock` (nested).
+- **`JobOnDomainTests`** — Target: domain `JobOn`, `JobOnLifecycleStateCodec`. `Transition_*`, `Close_*`, `Cancel_*`, `DuplicateFrom_*`, `CloneWithChanges_*`, `SaveRevision_*`, `Codec_*` (Theories).
+- **`JobOnPdfTests`** — Target: `JobOnPdfService`, `JobOnService`. `GenerateAsync_*` (4 pages, reference data, sections/drop count, family grouping, calibre rows, PT characters, 404/403), notes/dates/builder mapping, `ImageProvider_ResolvesNull_WhenNoImage`, **`GenerateAsync_ConsumesReferenceImageProvider_IntoPrintProjection`** (new; uses `StubJobOnImageProvider`), `BuildFileName_ProducesCorrectFormat`. Doubles: `TestPdfRenderer`, `PdfTestIdentityAccessor`, `PdfTestClock`, `NullJobOnImageProvider`, `StubJobOnImageProvider`.
+- **`JobOnVerificationGeneratorTests`** — `JobOnVerificationGenerator` occurrence generation.
+- **`JobOnActivityResolverTests`** — interval/ambiguity resolution edge cases.
+- **`JobOnUserContextTests`** — current-open context service methods + `JobOnLineCatalog` six-line constant.
+- **`JobOnRevisionImmutabilityIntegrationTests`** — cross-module (real services over fakes): revision B never moves/reinterprets revision A Peso/Pegamento/tool context.
+- Fakes: `FakeJobOnRepository` (full in-memory `IJobOnRepository` with revision-graph/duplicate support), `FakeJobOnUserContextRepository`, **`FakeArticleReferenceImageRepository`** (in-memory `IArticleReferenceImageRepository` with `Associations` dict + `AuditFacts` list; normalizes via `ArticleReferenceImageRules.NormalizeReferenceCode`).
 
 ### 4.2 Peso
 
-#### `PesoServiceTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Peso\PesoServiceTests.cs`
-Target: `PesoService`, `PesoAuthorizationGate`
-Tests: `Approve_*`, `Operador_CanManageNonApprovalOps_ButNotApprove`, `SaveReference_*`, `CreateLote_*`, `CreateControl_InheritsJobOnContext_AndPinsRevision`, `SubmitThenApprove_RegistersDayApproval`, `Submit_WithoutReading_IsHardBlocked`, `Reject_WithoutNote_IsHardBlocked`, `Reopen_Approved_IncrementsRevision`, `Delete_*`, `CreateComparison_*`, `ConfirmComparisonDecisions_*`, `SaveSettings_ChangesDensity_ForFutureOnly_NotHistorical`, `PdfFilenameConvention_MatchesConfirmedReference`, `GenerateDocument_RequiresApprovedControl`, `PrepareEmail_*`.
-Uses: `FakePesoRepository`, `FakeJobOnRepository`, `FakeCurrentUserAccessor` (nested), `NoopPdfRenderer`, `FixedClock`.
-Asserts: `Assert.Equal/True/False`, error-code matching.
+- **`PesoServiceTests`** — `Approve_*`, operator permission split, `SaveReference_*`, `CreateLote_*`, `CreateControl_*`, submit/approve day-registration, hard blocks (submit-without-reading, reject-without-note), reopen revision increments, `Delete_*`, `CreateComparison_*`, `ConfirmComparisonDecisions_*`, settings future-only density, PDF filename convention, `GenerateDocument_RequiresApprovedControl`, `PrepareEmail_*`.
+- **`PesoDomainTests`** — `PesoValidator`, codecs (`PesoProcesso`, `PesoRecordType`, `PesoControlState`), `ReportPathValidator`.
+- **`WeightCalculatorTests`** — density lookup (Theory, 31 rows), glass-weight/volume, calote exclusion, deltas, averages.
+- **`PesoControlWorkflowTests`** — `PesoControl` state machine, comparison uses approved base, `PesoCmDecisionCodec`.
+- **`FakePesoRepository`** — `IPesoRepository` in-memory.
 
-#### `PesoDomainTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Peso\PesoDomainTests.cs`
-Target: `PesoValidator`, `PesoProcessoCodec`, `PesoRecordTypeCodec`, `PesoControlStateCodec`, `ReportPathValidator`
-Tests: `ValidateReference_*`, `ValidateLote_*`, `ProcessoCodec_RoundTrips`, `ReportPath_*`, `RecordType_Codec_RoundTrips`, `Status_Codec_RoundTrips`.
+### 4.3 Armazém (module map [09_ARMAZEM.md](09_ARMAZEM.md))
 
-#### `WeightCalculatorTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Peso\WeightCalculatorTests.cs`
-Target: `WeightCalculator`, `PesoModuleCatalog`
-Tests: `LookupDensity_IntTemperature5To35_ReturnsExactDensity` (Theory, 31 InlineData rows), `LookupDensity_RoundsToNearestInteger_AwayFromZero`, `LookupDensity_BelowMinimum_IsDomainError`, `LookupDensity_AboveMaximum_IsDomainError`, `EstimateGlassWeight_*`, `VolumeFromWeight_*`, `CaloteVolume_DoesNotInfluenceGlassWeight`, `DeltasVs_*`, `GlassAverage_*`.
+- **`ArmazemServiceTests`** — `Entrada_*`, `Saida_*`, `Substituir_*`, `Consulta_*`, `Repor_*`, atomic occupation guards, failure cases. Uses `FakeArmazemRepository` (`FailAtomicWrite` switch), `FakeToolIdentityResolver`, support doubles.
+- **`WarehouseStockRulesTests`** — `WarehouseLocation`/`WarehouseStockRules` position/occupancy/conflict rules.
+- **`ArmazemAuthorizationGateTests`**, **`FerramentasArmazemToolIdentityResolverTests`** (CM/MF accepted, others empty, warehouse-identity mapping).
+- **`ArmazemTestSupport`** — `ArmazemFixedClock`, `ArmazemFakeAuthorship`, `ArmazemCurrentUser`, `FakeFerramentasIdentityLookup`.
 
-#### `PesoControlWorkflowTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Peso\PesoControlWorkflowTests.cs`
-Target: `PesoControl`, `PesoValidator`, `PesoCmDecisionCodec`
-Tests: `Submit_*`, `Reject_*`, `Approve_*`, `ValidateEditable_*`, `Reopen_*`, `DeleteEligibility_*`, `Comparison_UsesApprovedBase_AndBaseStaysImmutable`, `CmDecisionCodec_RoundTrips`.
+### 4.4 Boquilhas (module map [10_BOQUILHAS.md](10_BOQUILHAS.md))
 
-#### `FakePesoRepository`
-File: `tests\BA.Dmo.UnitTests\Modules\Peso\FakePesoRepository.cs`
-Implements: `IPesoRepository`. In-memory references, lotes, controls, day approvals, settings, audit events; approved-base lookups.
+- **`BoquilhasServiceTests`** — atomic create-with-trace, duplicate/invalid reference blocks, entrada 20→25 return + discrepancy, saida exceeding production block, closed-trace movement block, close/reopen lifecycle, audits.
+- **`BqAuthorizationGateTests`**, **`BqInventoryCalculatorTests`** — reconciliation, full trace lifecycle, dispatch/repair blocks, line-change neutrality, physical inventory.
+- **`BqTestSupport`** — fixed clock/authorship/user, `FakeBqUnitOfWork(Factory)`, `FakeBoquilhasRepository` + seed helpers (`SeedLote`, `SeedActiveTrace`, `SeedRepairer`).
 
-### 4.3 Armazém
+### 4.5 Controlo (module map [07_CONTROLO.md](07_CONTROLO.md))
 
-#### `ArmazemServiceTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Armazem\ArmazemServiceTests.cs`
-Target: `ArmazemService`, `ArmazemAuthorizationGate`
-Tests: `Entrada_*`, `Saida_*`, `Substituir_*`, `Consulta_*`, `Repor_*`, `Entrada_TwoDifferentToolsAtSamePosition_OnlyOneOccupiesAtomically`, `Entrada_ReEntrySameToolOnOccupiedPosition_IsConflict`, atomic-failure tests.
-Uses: `FakeArmazemRepository`, `FakeToolIdentityResolver`, `ArmazemCurrentUser`, `ArmazemFakeAuthorship`, `ArmazemFixedClock`.
+- **`ControloSheetServiceTests`** — production-context creation, item updates, submit/review/reopen flows, capability gating, free mode.
+- **`ControloFolhaTests`** — folha creation snapshot + revision pin, submit/decide/reopen, append-only events.
+- **`ControloTestSupport`** — `ControloFixedClock`, `ControloFakeAuthorship`, `FakeControloUow(Factory)`, `ControloCurrentUser`, `FakeControloSheetRepository`, `FakeControloProductionContextLookup`, `ControloTestBuilder`.
 
-#### `WarehouseStockRulesTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Armazem\WarehouseStockRulesTests.cs`
-Target: `WarehouseLocation`, `WarehouseStockRules`
-Tests: `PositionCode_*`, `IsPositionOccupied_*`, `IsFora_*`, `HasReferenceConflict_*`.
+### 4.6 Ferramentas (module map [08_FERRAMENTAS.md](08_FERRAMENTAS.md))
 
-#### `ArmazemAuthorizationGateTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Armazem\ArmazemAuthorizationGateTests.cs`
-Target: `ArmazemAuthorizationGate`
-Tests: `Require_WithModule_SucceedsAndReturnsCanonicalActor`, `Require_WithoutModule_IsForbidden`.
+- **`FerramentasServiceTests`** — create reference + first lote, processo-on-lote rule, duplicate blocks, no-lines validation, module gating, duplicate lote config-only, check rules, piece/condition facts, rule lookup.
+- **`FerramentasDomainTests`** — `ToolReference`, `ToolLote`, `ToolCheckRule`, `PhysicalPiece`, `FerramentasToolTypeCodec` (CM/MF distinct).
+- **`FerramentasUtilisationServiceTests`** — append-only readings, no-formula negative cumulative rejection.
+- **`FakeFerramentasRepository`** (`FailAtomicCreate`), **`FerramentasTestSupport`** (`FixedClock`, `FakeAuthorshipAccessor`, `FakeCurrentUser`, `FakeRuleLookup`).
 
-#### `FerramentasArmazemToolIdentityResolverTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Armazem\FerramentasArmazemToolIdentityResolverTests.cs`
-Target: `FerramentasArmazemToolIdentityResolver`
-Tests: `Search_CMAndMF_AreAccepted`, `Search_UnsupportedTypes_ReturnEmpty`, `Resolve_MapsToWarehouseOwnedIdentity`, `Resolve_Missing_ReturnsNull`.
-Uses: `FakeFerramentasIdentityLookup`.
+### 4.7 História (module map [14_HISTORIA.md](14_HISTORIA.md))
 
-#### `FakeArmazemRepository`
-File: `tests\BA.Dmo.UnitTests\Modules\Armazem\FakeArmazemRepository.cs`
-Implements: `IArmazemRepository`. In-memory locations/stocks/movements/audit; `FailAtomicWrite` switch; atomic occupation guard.
-
-#### `FakeToolIdentityResolver`
-File: `tests\BA.Dmo.UnitTests\Modules\Armazem\FakeToolIdentityResolver.cs`
-Implements: `IToolIdentityResolver`. Preset identities; search counter.
-
-#### `ArmazemTestSupport`
-File: `tests\BA.Dmo.UnitTests\Modules\Armazem\ArmazemTestSupport.cs`
-Declares: `ArmazemFixedClock` (`IClock`), `ArmazemFakeAuthorship` (`IPersistenceAuthorshipAccessor`), `ArmazemCurrentUser` (`ICurrentUserAccessor`), `FakeFerramentasIdentityLookup` (`IFerramentasIdentityLookup`).
-
-### 4.4 Boquilhas
-
-#### `BoquilhasServiceTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Boquilhas\BoquilhasServiceTests.cs`
-Target: `BoquilhasService`, `BqAuthorizationGate`
-Tests: `CreateLoteWithTrace_IsOneAtomicCreation`, `DuplicateReferenceBatch_IsBlocked`, `InvalidReference_IsRejected`, `RegisterEntrada_20To25_AcceptsFullReturnAndOpensDiscrepancy`, `RegisterEntrada_Exact_NoDiscrepancy`, `RegisterSaida_ExceedingProduction_IsBlocked`, `Movement_OnClosedTrace_IsBlocked`, `CloseTrace_MarksClosed_AndAudits`, `Reopen_LastClosedTrace_Works_WhenNoActive`, `Lifecycle_*`, `ListMovements_*`.
-Uses: `FakeBoquilhasRepository`, `FakeBqUnitOfWorkFactory`, `BqCurrentUser`, `BqFakeAuthorship`, `BqFixedClock`.
-
-#### `BqAuthorizationGateTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Boquilhas\BqAuthorizationGateTests.cs`
-Target: `BqAuthorizationGate`
-Tests: `Require_WithModule_IsAuthorized`, `Require_WithoutModule_IsForbidden`.
-
-#### `BqInventoryCalculatorTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Boquilhas\BqInventoryCalculatorTests.cs`
-Target: `BqInventoryCalculator`, `BqRules`
-Tests: `ReconcileReturn_*`, `CalculateTrace_20To25_FullLifecycle`, `Dispatch_ExceedingProduction_IsBlocked`, `NonRepairable_ExceedingRepair_IsBlocked`, `LineChange_DoesNotChangeBalances`, `PhysicalInventory_IncludesExceptional`.
-
-#### `BqTestSupport`
-File: `tests\BA.Dmo.UnitTests\Modules\Boquilhas\BqTestSupport.cs`
-Declares: `BqFixedClock`, `BqFakeAuthorship`, `BqCurrentUser`, `FakeBqUnitOfWork`/`FakeBqUnitOfWorkFactory` (`IBoquilhasUnitOfWorkFactory`, `IDbUnitOfWork`), `FakeBoquilhasRepository` (`IBoquilhasRepository`), seed helpers `SeedLote`, `SeedActiveTrace`, `SeedRepairer`.
-
-### 4.5 Controlo
-
-#### `ControloSheetServiceTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Controlo\ControloSheetServiceTests.cs`
-Target: `ControloSheetService`, `ControloSheetAuthorizationGate`
-Tests: `GetForProduction_NoExistingSheet_CreatesOneFromProductionContext`, `UpdateItems_AppliesControlAndLeavesState`, `Submit_ThenReview_Flow`, `Reopen_AfterSubmission_ReturnsToDraft`, `Create_WithoutEditCapability_Forbidden`, `GetForProductionByContext_ResolvesAndCreatesWithoutReSelection`, `ListSheets_WorksInFreeMode_NoCardRequired`.
-Uses: `ControloTestBuilder`, `FakeControloSheetRepository`, `FakeControloProductionContextLookup`, `FakeControloUowFactory`, `ControloCurrentUser`, `ControloFakeAuthorship`.
-
-#### `ControloFolhaTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Controlo\ControloFolhaTests.cs`
-Target: `ControloFolha`
-Tests: `Create_SnapshotsComponentsAndPinsRevision`, `Create_WithoutContext_Fails`, `Submit_ThenDecide_Flow_Approved`, `Decide_WithoutSubmission_Fails`, `Submit_AfterDecision_IsRejected_ReopenAllowsResubmit`, `EditItemsAfterSubmission_IsAllowed_AndUpdatesResults`, `RecordEvent_IsAppendOnly`.
-
-#### `ControloTestSupport`
-File: `tests\BA.Dmo.UnitTests\Modules\Controlo\ControloTestSupport.cs`
-Declares: `ControloFixedClock`, `ControloFakeAuthorship`, `FakeControloUowFactory`/`FakeControloUow`, `ControloCurrentUser`, `FakeControloSheetRepository` (`IControloSheetRepository`), `FakeControloProductionContextLookup` (`IControloProductionContextLookup`), `ControloTestBuilder` (Build helper).
-
-### 4.6 Ferramentas
-
-#### `FerramentasServiceTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Ferramentas\FerramentasServiceTests.cs`
-Target: `FerramentasService`, `FerramentasAuthorizationGate`
-Tests: `CreateReferenceWithFirstLote_*`, `Reference_DoesNotCarryProcesso_ProcessoLivesOnLote`, `Create_DuplicateReference_IsHardBlocked`, `Create_NoLinesSelected_IsValidationError`, `Create_WithoutModule_IsForbidden`, `DuplicateLote_IsConfigurationOnly_MasterIdentityReadOnly`, `Duplicate_ExistingLoteInSameReference_IsHardBlocked`, `AddCheckRule_*`, `RegisterPiece_AndSetCondition_AreExplicitFacts`, `SetCondition_WithoutReason_IsValidationError`, `ListReferences_MapsProcessoAndLinesFromLotes`, `ResolveActiveRules_ReturnsRuleLookupResult`.
-
-#### `FerramentasDomainTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Ferramentas\FerramentasDomainTests.cs`
-Target: `ToolReference`, `ToolLote`, `ToolCheckRule`, `PhysicalPiece`, `FerramentasToolTypeCodec`
-Tests: `ToolReference_*`, `ToolLote_*`, `CM_And_MF_AreDistinctTypes`, `ToolCheckRule_RequiresText`, `PhysicalPiece_*`, `ConditionChanges_RequireReason`.
-
-#### `FerramentasUtilisationServiceTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Ferramentas\FerramentasUtilisationServiceTests.cs`
-Target: `FerramentasService` (utilisation commands)
-Tests: `RecordReading_Appends_AndNeverOverwrites`, `GetUtilisation_ReturnsRecordedManualPercent_NoFormula`, `RecordReading_InvalidPercent_IsRejected`, `RecordReading_NoFormula_StoresNegativeCumulative_Rejected`.
-
-#### `FakeFerramentasRepository`
-File: `tests\BA.Dmo.UnitTests\Modules\Ferramentas\FakeFerramentasRepository.cs`
-Implements: `IFerramentasRepository`. In-memory references, lotes, pieces, check rules, audit, utilisation readings; `FailAtomicCreate`.
-
-#### `FerramentasTestSupport`
-File: `tests\BA.Dmo.UnitTests\Modules\Ferramentas\FerramentasTestSupport.cs`
-Declares: `FixedClock`, `FakeAuthorshipAccessor`, `FakeCurrentUser`, `FakeRuleLookup` (`IFerramentasRuleLookup`).
-
-### 4.7 História
-
-#### `HistoriaServiceTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaServiceTests.cs`
-Target: `HistoriaService`, `HistoriaAuthorizationGate`
-Tests: `QueryAsync_AuthorizesAndForwardsScopeToRepository`, `QueryAsync_WithAuditView_OrdersChronologicallyStableAndGroupsByEntity`, `QueryAsync_InvalidPageSize_IsValidationError`, `QueryAsync_WithoutHistoriaModule_IsForbidden`.
-Contains: `FakeHistoriaRepository` (`IHistoriaRepository`).
-
-#### `HistoriaAuthorizationGateTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaAuthorizationGateTests.cs`
-Target: `HistoriaAuthorizationGate`
-Tests: `Require_WithHistoriaAndOrigins_ResolvesGrantedOriginsOnly`, `Require_WithAuditView_IncludesAdmin`, `Require_WithNoOriginModules_IsAuthorizedWithEmptyScope`, `Require_WithoutHistoriaModule_IsForbidden`, `Require_WithNoIdentity_IsForbidden`.
-Contains: `HistoriaCurrentUser` (test-double accessor factory).
+- **`HistoriaServiceTests`** — query authorization + scope forwarding, audit-view ordering/grouping, page-size validation, module gating. Contains `FakeHistoriaRepository`.
+- **`HistoriaAuthorizationGateTests`** — origin-scope resolution, audit-view admin inclusion, fail-closed cases. Contains `HistoriaCurrentUser`.
 
 ### 4.8 Pegamentos
 
-#### `PegamentoServiceTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoServiceTests.cs`
-Target: `PegamentoService`, `PegamentoAuthorizationGate`
-Tests: `Create_WithCompleteContext_SucceedsAndDerivesJobOnId`, `Create_WithMissingComponents_IsBlocked`, `GetControlDetail_ResolvesHistoricalProductionContext`, `ListByRevision_ReturnsOnlyThatRevisionsRecords`, `Update_DoesNotRewriteRevisionAnchor`, `Create_WithoutAuthorizedIdentity_IsForbidden`, `AddMeasurement_ComputesOvalizacaoAndMediaServerSide`.
+- **`PegamentoServiceTests`** — create with context (derives JobOn id), missing-components block, historical context detail, revision-scoped listing, revision anchor immutability, authorization, server-side ovalização/média.
+- **`PegamentoPdfTests`** — PDF bytes + canonical filename (`PegamentoPdfFilename.Compute` asserted: `Pegamentos_202601_5447T173_B1_relatorio.pdf`), no persistence, 404/403.
+- **`PegamentoMeasurementCalculatorTests`** — ovalização/média/tolerance corridor.
+- **`PegamentoHistoricalRelationshipTests`** — revision-id persistence proofs 1–5.
+- **`PegamentoDocumentConfirmationTests`** — server-derived final metadata, output-root/folder failure atomicity, closed-control guard, one-to-one upsert.
+- **`JobOnProductionFolderResolverTests`** — configured folder resolution, confirmation attribution, no reinterpretation across revisions.
+- Support: `FakeSettings`, `FixedClock`, `FakeAuthorshipAccessor`, `FakeJobOnProductionContextLookup`, `FakePegamentoPdfRenderer`, `PegamentoContextBuilder`, `FakePegamentoRepository`, `FakeJobOnProductionFolderResolver`.
 
-#### `PegamentoPdfTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoPdfTests.cs`
-Target: `PegamentoPdfService`
-Tests: `Generate_ReturnsPdfBytesAndHumanReadableFilename`, `Generate_DoesNotPersistDocumentRow`, `Generate_UnknownControl_IsNotFound`, `Generate_Unauthorized_IsForbidden`.
-Uses: `FakePegamentoPdfRenderer`.
+### 4.9 Reparação Externa (module map [12_REPARACAO_EXTERNA.md](12_REPARACAO_EXTERNA.md))
 
-#### `PegamentoMeasurementCalculatorTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoMeasurementCalculatorTests.cs`
-Target: `PegamentoMeasurementCalculator`
-Tests: `Ovalizacao_*`, `Media_*`, `Tolerance_InsideCorridor_IsOk`, `Tolerance_OnBoundary_IsExceeded`, `Tolerance_BeyondCorridor_IsExceeded`.
+- **`ReparacaoExternaServiceTests`** — create exit, remove-after-disposicionado block, pickup/return, repairer deactivation, line-default with inactive repairer.
+- **`RepairExitStatusMachineTests`**, **`RepairerCapabilityTests`** (capability separate from line default), **`ReparacaoExternaAuthorizationGateTests`** (fail-closed).
+- **`FakeRepairRepository`** (`FailItemWrite`), **`ReparacaoExternaTestSupport`** (clocks/current-user, `FakeRepairUnitOfWorkFactory`/`FakeUnitOfWork`, `FakeArmazemRepairMovementPort`, `FakeToolPieceResolver` with `Seed`).
 
-#### `PegamentoHistoricalRelationshipTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoHistoricalRelationshipTests.cs`
-Target: `PegamentoService`
-Tests: `Proof1_Creating_Persists_TheExactRevisionId`, `Proof2_History_ResolvesOriginalCmBqMfFromThatRevision`, `Proof3_QueryingRevision_ReturnsItsPegamentos`, `Proof4_LaterRevision_DoesNotMoveOldPegamentos`, `Proof5_TwoRevisionsOfSameProduction_EachHaveOwnHistoricallyCorrectRows`.
+### 4.10 Reparação Interna (module map [11_REPARACAO_INTERNA.md](11_REPARACAO_INTERNA.md))
 
-#### `PegamentoDocumentConfirmationTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoDocumentConfirmationTests.cs`
-Target: `PegamentoService` (document-confirmation commands)
-Tests: `Confirm_PersistsServerDerivedFinalMetadata`, `Confirm_MissingOutputRoot_IsFailureAndDoesNotPersist`, `Confirm_MissingProductionFolder_IsFailureAndDoesNotPersist`, `Confirm_ClosedControl_CannotSilentlyReplaceFinalDocument`, `Confirm_Aberto_OneToOne_UpsertKeepsSingleRow`.
+- **`ReparacaoInternaServiceTests`** — register/line cards/corrigir/history/detail chain.
+- **`ReparacaoInternaDomainTests`** — internal record/rules/tool-type codec, structural rejection, operator capture.
+- **`ReparacaoInternaProductionProjectionTests`** — activation UTC / effective records.
+- **`ReparacaoInternaTestSupport`** — clocks/user, `FakeReparacaoInternaUowFactory`, `FakeReparacaoInternaRepository`, `FakeJobOnActiveContextLookup` (SeedSingle/None/Ambiguous), `FakeFerramentasPieceLookup`.
 
-#### `JobOnProductionFolderResolverTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Pegamentos\JobOnProductionFolderResolverTests.cs`
-Target: `FakeJobOnProductionFolderResolver`, `PegamentoService`
-Tests: `Resolver_ResolvesConfiguredFolder_OrNullWhenAbsent`, `Confirm_UsesResolvedJobOnFolder_AndNotAnIndependentOne`, `Confirm_LaterRevisionDoesNotReinterpretExistingPdfAttribution`.
+### 4.11 Tampões (module map [13_TAMPOES.md](13_TAMPOES.md))
 
-#### `FakePegamentoRepository`
-File: `tests\BA.Dmo.UnitTests\Modules\Pegamentos\FakePegamentoRepository.cs`
-Implements: `IPegamentoRepository`. In-memory controls, measurements, documents; recomputes ovalização/média/tolerance on hydration.
+- **`TampaoServiceTests`** — adicionar/remover/estado/configuração, planning without stock reservation, cancel plan preserves balances, options deactivation, fail-closed consulta, movements filter.
+- **`TampaoDomainTests`** — `TampaoConfigurationKey`, `TampaoRules` (normalization, balance transfers, transform validation).
+- **`TampaoMachineTests`** — multi-machine assignment/removal, filters, detail sheet.
+- **`TampaoTestSupport`** — `FakeTampoesUnitOfWorkFactory`/`FakeTampaoUnitOfWork`, `FakeTampaoRepository`, `SeedConfiguration`.
 
-#### `PegamentoTestSupport`
-File: `tests\BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoTestSupport.cs`
-Declares: `FakeSettings` (`IAppSettingsReader`), `FixedClock`, `FakeAuthorshipAccessor`, `FakeJobOnProductionContextLookup` (`IJobOnProductionContextLookup`), `FakePegamentoPdfRenderer` (`IPegamentoPdfRenderer`), `PegamentoContextBuilder` (produces `PegamentoProductionContext`).
+### 4.12 Shared — Access ([16_USERS_ACCESS.md](16_USERS_ACCESS.md))
 
-#### `FakeJobOnProductionFolderResolver`
-File: `tests\BA.Dmo.UnitTests\Modules\Pegamentos\FakeJobOnProductionFolderResolver.cs`
-Implements: `IJobOnProductionFolderResolver`. DefaultFolder + per-job-on folder map.
+`AccessResolverTests` (landing resolution, capability-constrained pages, Controlo area children, fallback/no-access), `CurrentUserTests`, `ModuleCatalogTests`, `CanonicalModuleCatalogTests`, `CanonicalPageCatalogTests` (route grammar Theories), `CapabilityAndModuleDefinitionTests`, `CatalogValidatorTests` (all violations reported), `GrantNormalizerTests`, `NavigationServiceTests`, `ModuleCatalogMirrorSynchronizerTests`.
 
-### 4.9 Reparação Externa
+### 4.13 Shared — Admin ([15_ADMIN.md](15_ADMIN.md))
 
-#### `ReparacaoExternaServiceTests`
-File: `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\ReparacaoExternaServiceTests.cs`
-Target: `ReparacaoExternaService`, `ReparacaoExternaAuthorizationGate`
-Tests: `CreateExit_*`, `RemoveItem_AfterDisposicionado_IsRejected`, `Pickup_*`, `Return_*`, `DeactivateRepairer_SetsInactiveNotDeleted`, `UpsertLineDefault_WithInactiveRepairer_IsRejected`.
-Uses: `FakeRepairRepository`, `FakeToolPieceResolver`, `FakeArmazemRepairMovementPort`, `FakeRepairUnitOfWorkFactory`, `ReparacaoExternaCurrentUser`, `ReparacaoExternaFakeAuthorship`, `ReparacaoExternaFixedClock`.
+`AdminUserServiceTests` (capability/identity gating, CRUD, templates, privileged password reset), `AdminAuditAndMirrorTests` (audit view/export, mirror save), `AdminTemplateServiceTests` (canonical JSON, invalid-grant Theories, conflict). `FakeAdminRepository`.
 
-#### `RepairExitStatusMachineTests`
-File: `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\RepairExitStatusMachineTests.cs`
-Target: `RepairExitStatusMachine`
-Tests: `Pickup_*`, `Return_*` (transition table).
+### 4.14 Shared — Identity ([18_LOGIN.md](18_LOGIN.md), [16_USERS_ACCESS.md](16_USERS_ACCESS.md))
 
-#### `RepairerCapabilityTests`
-File: `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\RepairerCapabilityTests.cs`
-Target: `ReparacaoExternaService` (repairer capability commands)
-Tests: `CreateRepairer_WithMultipleTypes_SupportsAll`, `CreateRepairer_InvalidType_IsRejected`, `UpdateRepairer_ChangesSupportedTypes`, `ListRepairers_ReturnsSupportedTypes`, `Capability_IsSeparate_FromLineDefault`.
-
-#### `ReparacaoExternaAuthorizationGateTests`
-File: `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\ReparacaoExternaAuthorizationGateTests.cs`
-Target: `ReparacaoExternaAuthorizationGate`
-Tests: `Require_WithModuleGrant_Succeeds`, `Require_WithoutIdentity_FailsClosed`, `Require_WithoutModuleGrant_FailsClosed`.
-
-#### `FakeRepairRepository`
-File: `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\FakeRepairRepository.cs`
-Implements: `IRepairRepository`. In-memory exits, items, repairers, line defaults, audit, coordinated-write records; `FailItemWrite`.
-
-#### `ReparacaoExternaTestSupport`
-File: `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\ReparacaoExternaTestSupport.cs`
-Declares: `ReparacaoExternaFixedClock`, `ReparacaoExternaFakeAuthorship`, `ReparacaoExternaCurrentUser`, `FakeRepairUnitOfWorkFactory`/`FakeUnitOfWork`, `FakeArmazemRepairMovementPort` (`IArmazemRepairMovementPort`), `FakeToolPieceResolver` (`IToolPieceResolver`).
-
-### 4.10 Reparação Interna
-
-#### `ReparacaoInternaServiceTests`
-File: `tests\BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaServiceTests.cs`
-Target: `ReparacaoInternaService`, `ReparacaoInternaAuthorizationGate`
-Tests: `Register_*`, `ListLineCards_ShowsActiveReferenceOrNone`, `Corrigir_*`, `ListHistory_*`, `GetDetail_ReturnsChain`.
-Uses: `FakeReparacaoInternaRepository`, `FakeJobOnActiveContextLookup`, `FakeFerramentasPieceLookup`, `FakeReparacaoInternaUowFactory`, `ReparacaoInternaCurrentUser`.
-
-#### `ReparacaoInternaDomainTests`
-File: `tests\BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaDomainTests.cs`
-Target: `InternalRepairRecord`, `InternalRepairRules`, `InternalRepairToolTypeCodec`
-Tests: `Create_*`, `Create_StructurallyInvalid_IsARejection`, `Create_WithoutOperator_Fails`, `Create_CapturesServerSideOperatorAndTime`, `CreateCorrection_*`, `Rules_*`.
-
-#### `ReparacaoInternaProductionProjectionTests`
-File: `tests\BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaProductionProjectionTests.cs`
-Target: `ReparacaoInternaProductionProjection`
-Tests: `ActivationUtc_Is0920Local_OnTheStartDate`, `SelectEffective_*`.
-
-#### `ReparacaoInternaTestSupport`
-File: `tests\BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaTestSupport.cs`
-Declares: `ReparacaoInternaFixedClock`, `ReparacaoInternaFakeAuthorship`, `FakeReparacaoInternaUowFactory`/`FakeReparacaoInternaUnitOfWork`, `ReparacaoInternaCurrentUser`, `FakeReparacaoInternaRepository` (`IReparacaoInternaRepository`), `FakeJobOnActiveContextLookup` (`IJobOnActiveContextLookup`), `FakeFerramentasPieceLookup` (`IFerramentasPieceLookup`).
-
-### 4.11 Tampões
-
-#### `TampaoServiceTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoServiceTests.cs`
-Target: `TampaoService`, `TampaoAuthorizationGate`
-Tests: `Adicionar_*`, `Remover_*`, `AlterarEstado_*`, `AlterarConfiguracao_*`, `Planear_DoesNotAlterOrReserveStock`, `CancelarPlano_PreservesBalances`, `Opcoes_DeactivateValue_DoesNotDeleteConfigurationsOrHistory`, `Consulta_WithoutModule_FailsClosed`, `ListMovimentos_FiltersByType`.
-
-#### `TampaoDomainTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoDomainTests.cs`
-Target: `TampaoConfigurationKey`, `TampaoRules`
-Tests: `ConfigurationKey_*`, `NormalizeValue_CollapsesLegacyVariants`, `ValidateQuantity_PositiveIntegerOnly`, `ApplySingleBalanceChange_NeverNegative`, `ResolveStateOrigin_OriginIsOpposite_AndBlocksInsufficient`, `ApplyBalanceTransfer_BlocksDestinationEqualsOrigin`, `ValidateConfigurationTransform_RequiresDifferentIdAndAChangedCharacteristic`.
-
-#### `TampaoMachineTests`
-File: `tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoMachineTests.cs`
-Target: `TampaoService` (multi-machine commands)
-Tests: `AssignMachineB1`, `AssignMultipleMachines_B1_B2_C1`, `RemoveMachineB2_KeepsOthers_AndAuditsRemoval`, `InvalidMachine_IsRejected`, `Comments_Persist_AndHistoryKept`, `MachineFilter_ReturnsMultiAssociatedRecord_Once`, `NoConfigurationDuplication_ForMultipleMachines`, `DetailSheet_ReturnsMachinesNotesAndEvents`, `InvalidMachineFilter_IsRejected`.
-
-#### `TampaoTestSupport`
-File: `tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoTestSupport.cs`
-Declares: `TampaoFixedClock`, `TampaoFakeAuthorship`, `TampaoCurrentUser`, `FakeTampoesUnitOfWorkFactory`/`FakeTampaoUnitOfWork`, `FakeTampaoRepository` (`ITampaoRepository`), `SeedConfiguration` helper.
-
-### 4.12 Shared — Access
-
-#### `AccessResolverTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Access\AccessResolverTests.cs`
-Target: `AccessResolver`, `EffectiveAccess`, `CatalogValidator`
-Tests: `InactiveTemplate_*`, `Landing_IsJobOn_ForABoquilhasOnlyUser`, `Landing_IsAdmin_ForAnAdminOnlyTemplate`, `Landing_IsJobOn_EvenWithZeroOperationalGrants`, `Landing_DoesNotDependOnRoleNames`, `PreferredFirstPageId_IsNotUsedInV1`, `Fallback_WhenLandingGenuinelyUnavailable_IsFirstAccessibleInCanonicalOrder`, `NoAccessiblePage_YieldsExplicitNoAccess`, `NavigationModules_FollowCanonicalOrder`, `ControloArea_VisibleOnlyWithAuthorizedChildren`, `AreaFirstPage_IsFirstAuthorizedChild_InCanonicalOrder`, `PesoExperience_IsResolvedByCapability_NotByRole`, `Capabilities_ConstrainPageAccess`, `UnauthorizedModule_PagesAreNotAccessible`, `NewCatalogModule_RequiresNoNavigationChanges_Acceptance`, `InactivePage_IsNeverAccessible`.
-
-#### `CurrentUserTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Access\CurrentUserTests.cs`
-Target: `CurrentUser`, `ICurrentUserAccessor`
-Tests: `CurrentUser_NormalizesGrants_AndAnswersQueries`, `CurrentUser_EmptyIdOrBlankName_AreRejected`, `Accessor_ReturnsNull_WhenNoUserIsResolved`, `Accessor_ReturnsResolvedUser_WhenPresent`.
-
-#### `ModuleCatalogTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Access\ModuleCatalogTests.cs`
-Target: `ModuleCatalog`, `ModuleDefinition`
-Tests: `EmptyCatalog_IsValid`, `EmptyCatalog_NullOrBlankQueries_NeverThrow`, `Catalog_ExposesEntriesInCanonicalOrder`, `Catalog_SameCanonicalOrder_FallsBackToModuleIdOrder`, `Catalog_LookupFindsRegisteredModule_AndItsCapabilities`, `Catalog_DuplicateModuleId_IsRejected`, `Catalog_NullEntries_AreRejected`, `FunctionalAreaKind_IsRepresented`.
-
-#### `CanonicalModuleCatalogTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Access\CanonicalModuleCatalogTests.cs`
-Target: `CanonicalModuleCatalog`
-Tests: `Catalog_ContainsExactlyTheCanonicalModules`, `Catalog_CanonicalOrder_MatchesModules00`, `Catalog_InitialRoutes_MatchModules00`, `Controlo_IsAFunctionalArea_WithFolhaControloCapabilities`, `AllOtherEntries_AreModules`, `Capabilities_AreExactlyTheCanonicalSet_WithExactOwnership`, `CapabilityIds_AreUnique_AcrossTheCatalog`, `ModulesWithoutCapabilities_HaveNoneDeclared`.
-
-#### `CanonicalPageCatalogTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Access\CanonicalPageCatalogTests.cs`
-Target: `CanonicalPageCatalog`, `PageDefinition`
-Tests: `PageCatalog_*`, `Routes_MatchTheCanonicalGrammar`, `RouteGrammar_AcceptsCanonicalShapes` (Theory), `RouteGrammar_RejectsInvalidShapes` (Theory), `PageDefinition_Constructor_RejectsInvalidRoute`, `EveryPage_ReferencesAKnownModule`, `RequiredCapabilities_AreKnownAndOwnedByThePageModule`, `CapabilityGatedPages_AreExactlyTheCanonicalOnes`, `ExactlyOneLandingPage_AndItIsJobOn`, `DuplicatePageIds_AndDuplicateRoutes_AreRejected`.
-
-#### `CapabilityAndModuleDefinitionTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Access\CapabilityAndModuleDefinitionTests.cs`
-Target: `Capability`, `ModuleDefinition`
-Tests: `Capability_ParsesModuleSegment` (Theory), `Capability_InvalidFormat_IsRejected` (Theory), `ModuleDefinition_*` (Theories), `ModuleDefinition_TrimsAndFreezesCapabilities`.
-
-#### `CatalogValidatorTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Access\CatalogValidatorTests.cs`
-Target: `CatalogValidator`
-Tests: `CanonicalConfiguration_IsValid`, `PageReferencingUnknownModule_Fails`, `PageRequiringUnknownCapability_Fails`, `PageRequiringCapabilityOfAnotherModule_Fails`, `CapabilityDeclaredByTwoModules_Fails`, `MissingLandingPage_Fails`, `TwoLandingPages_Fail`, `InactiveLandingPage_Fails`, `DuplicateModuleInitialRoutes_Fail`, `AreaWithUnknownChild_Fails`, `AreaPointingAtNonFunctionalArea_Fails`, `AllViolations_AreReportedTogether`.
-
-#### `GrantNormalizerTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Access\GrantNormalizerTests.cs`
-Target: `GrantNormalizer`
-Tests: `KnownModuleGrant_IsPreserved`, `UnknownModuleId_IsDiscarded_AndReported`, `CapabilityNotOwnedByTheGrantedModule_IsDiscarded`, `OwnedCapability_IsPreserved`, `AuditCapabilities_AreValidOnlyUnderTheAdminModule`, `DuplicateModuleEntries_FirstPrevails_AndLaterAreDiscarded`, `DuplicateCapabilities_AreDeduplicated`, `FunctionalArea_GrantIsDiscarded`, `BlankCapabilities_AreDiscarded`.
-
-#### `NavigationServiceTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Access\NavigationServiceTests.cs`
-Target: `NavigationService`, `AccessResolver`
-Tests: `EmptyTemplate_ShowsOnlyJobOn_NoControlo_NoAdmin`, `MultipleModules_RenderInCanonicalOrder_OnlyAuthorized`, `ControloGroup_ShowsOnlyAuthorizedChildren` (Theory), `NoControloChildren_NoAreaEntry`, `PesoEntry_ResolvesTheExperienceByCapability`, `AdminEntry_RequiresAdminGerir_AndIsRightAligned`, `ActiveState_FollowsTheCurrentRoute`, `InactiveTemplate_ProducesNoNavigation`.
-
-#### `ModuleCatalogMirrorSynchronizerTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Access\ModuleCatalogMirrorSynchronizerTests.cs`
-Target: `ModuleCatalogMirrorSynchronizer`
-Tests: `BuildSyncRows_MirrorsTheCanonicalCatalog_InCanonicalOrder`, `ValidateMirrorRows_*`, `MergeForDisplay_*`.
-
-### 4.13 Shared — Admin
-
-#### `AdminUserServiceTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Admin\AdminUserServiceTests.cs`
-Target: `AdminUserService`, `AdminAuthorizationGate`
-Tests: `Mutation_WithoutCapability_IsDenied_AndWritesNothing`, `Mutation_WithoutResolvedIdentity_IsDenied`, `CreateUser_*`, `UpdateUser_*`, `Deactivate*_*`, `ChangeTemplate_*`, `SaveUserModules_*`, `ListAsync_*`, `GetAsync_MissingSchema_IsAFailure_NotANotFound`, `PasswordReset_GoesThroughPrivilegedAdapter_AndAuditsWithoutSecrets`.
-Uses: `FakeAdminRepository`, `FakeProvisioning` (nested `IAdminProvisioningAdapter`), `FakeCurrentUserAccessor`, `FixedClock`.
-
-#### `AdminAuditAndMirrorTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Admin\AdminAuditAndMirrorTests.cs`
-Target: `AdminAuditService`, `AdminMirrorService`
-Tests: `AuditQuery_RequiresAuditView_AndUsesCanonicalPagination`, `AuditExport_RequiresAuditExport_AndNeverCarriesSecrets`, `AuditExport_FactualContentOnly`, `MirrorSave_UnknownModule_IsRejected_NothingPersisted`, `MirrorSave_CanonicalEntries_PersistAndAudit`.
-Uses: `FakeAdminRepository`, nested `FakeMirrorRepository`, `FakeCurrentUserAccessor`, `FixedClock`.
-
-#### `AdminTemplateServiceTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Admin\AdminTemplateServiceTests.cs`
-Target: `AdminTemplateService`, `GrantNormalizer`
-Tests: `CreateTemplate_ValidGrants_PersistsCanonicalJson`, `CreateTemplate_InvalidGrants_AreRejected_WithExplicitReport` (Theory), `CreateTemplate_DuplicateId_IsConflict`, `UpdateTemplate_*`, `Mutations_WithoutCapability_AreDenied`.
-Uses: `FakeAdminRepository`, nested `FakeCurrentUserAccessor`, `FixedClock`.
-
-#### `FakeAdminRepository`
-File: `tests\BA.Dmo.UnitTests\Shared\Admin\FakeAdminRepository.cs`
-Implements: `IAdminRepository`. In-memory users, templates, audits, writes; switches for lockout, concurrency, schema-migration-required, fail-internal-create.
-
-### 4.14 Shared — Identity
-
-#### `IdentityResolutionServiceTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Identity\IdentityResolutionServiceTests.cs`
-Target: `IdentityResolutionService`, `AccessResolver`
-Tests: `ValidActiveUserAndTemplate_ResolveAuthoritativeIdentity`, `Landing_IsJobOn_AfterSuccessfulResolution`, `MissingInternalUser_FailsClosed_WithInternalUserInactive`, `InactiveInternalUser_IsDenied`, `InactiveTemplate_IsDenied`, `MalformedTemplateGrants_FailClosed`, `InvalidGrantEntries_AreDiscarded_NotSilentlyRepaired`, `AdminGrants_LandOnAdmin_InsteadOfJobOn`, `TemplateNames_DoNotInfluenceResolution`, `RepositoryFailure_FailsClosed`, `AmbiguousIdentity_FailsClosed_AsIdentityAmbiguous_NotBackendUnavailable`, `EmptyAuthUserId_FailsClosed`.
-Uses: nested `FakeInternalUserRepository`.
-
-#### `AccessTemplateGrantsParserTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Identity\AccessTemplateGrantsParserTests.cs`
-Target: `AccessTemplateGrantsParser`
-Tests: `ValidModulesJson_ParsesGrants`, `EmptyModules_ParsesToNoGrants` (Theory), `MalformedJson_FailsExplicitly`, `EntriesWithoutModuleId_AreSkipped`, `BlankCapabilities_AreDropped`, `UnknownModulesAndCapabilities_AreLeftForNormalization`.
-
-#### `BootstrapAdminServiceTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Identity\BootstrapAdminServiceTests.cs`
-Target: `BootstrapAdminService`
-Tests: `Success_CreatesMinimalAdminTemplateAndActiveUser`, `ExistingValidAdmin_IsIdempotent_NoWrites`, `MissingExplicitConfiguration_FailsValidation` (Theory), `FreshlyCreatedAccount_NoRecoveryLinkRequested`, `PreExistedAccount_AutoRecoveryLinkIssued_AndAdminCreated`, `PreExistedAccount_RecoveryFailure_FailsBeforeAnyWrite`, `ProvisioningFailure_Propagates_AndNothingIsPersisted`, `PersistenceFailure_Propagates`.
-Uses: nested `FakeProvisioningAdapter`, `FakeInternalUserRepository`, `FixedClock`.
+`IdentityResolutionServiceTests` (authoritative resolution, fail-closed matrix), `AccessTemplateGrantsParserTests`, `BootstrapAdminServiceTests` (idempotency, recovery-link semantics, failure atomicity).
 
 ### 4.15 Shared — Kernel
 
-#### `ClockTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Kernel\ClockTests.cs`
-Target: `SystemClock`, `IClock`
-Tests: `SystemClock_ReportsUtcCloseToNow`, `FixedFakeClock_SatisfiesContract_ForDeterministicTests`.
+`ClockTests`, `ResultTests`, `DomainErrorTests` (all eight categories, factories).
 
-#### `ResultTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Kernel\ResultTests.cs`
-Target: `Result`
-Tests: `Success_CarriesValue_AndIsNotFailure`, `Failure_CarriesError_AndIsNotSuccess`, `Value_OnFailure_Throws`, `Error_OnSuccess_Throws`, `ConvenienceFactories_UseDomainErrorChannel`, `Failure_WithNullDomainError_Throws`, `Map_TransformsSuccessValue_AndPreservesFailure`, `Bind_ChainsSuccess_AndShortCircuitsFailure`, `GenericErrorChannel_IsNotLimitedToDomainError`.
+### 4.16 Shared — Persistence ([04_DAPPER_INFRASTRUCTURE.md](04_DAPPER_INFRASTRUCTURE.md))
 
-#### `DomainErrorTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Kernel\DomainErrorTests.cs`
-Target: `DomainError`, `ErrorCategory`
-Tests: `EveryCategory_HasAFactory` (Theory), `AllEightCategories_AreCovered`, `EmptyCode_IsRejected` (Theory), `EmptyMessage_IsRejected` (Theory), `ToString_IncludesCategoryCodeAndMessage`.
-
-### 4.16 Shared — Persistence
-
-#### `ConcurrencyGuardTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Persistence\ConcurrencyGuardTests.cs`
-Target: `ConcurrencyGuard`, `ConcurrencyConflictException`
-Tests: `SingleRowUpdated_Passes`, `ZeroRows_ThrowsConcurrencyConflict_WithReloadMessage`, `MoreThanOneRow_AlsoConflicts`, `BlankDescription_IsRejectedOnConflict`.
-
-#### `PersistenceAuthorshipTests`
-File: `tests\BA.Dmo.UnitTests\Shared\Persistence\PersistenceAuthorshipTests.cs`
-Target: `PersistenceAuthorship`, `IPersistenceAuthorshipAccessor`
-Tests: `Authorship_CarriesActorAndUtcTimestamp`, `Authorship_AllowsNullActor_ForSystemOperations`, `NonUtcTimestamp_IsRejected`, `AccessorPort_ResolvesCurrentAuthorship`.
+`ConcurrencyGuardTests`, `PersistenceAuthorshipTests`.
 
 ---
 
 ## 5. Integration Test Project
 
-`tests\BA.Dmo.IntegrationTests\` — Web + Infrastructure contract tests. Uses `Microsoft.AspNetCore.Mvc.Testing` (`WebApplicationFactory<Program>`) for web hosts, and tests Infrastructure types (Dapper, migrations, Supabase adapters, persistence) using in-memory/fake collaborators. No live Supabase or production DB is used by most tests; the single database-backed suite (`RemediationGuardTests`) is env-guarded.
+`AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\` — Web + Infrastructure contract tests. Uses `Microsoft.AspNetCore.Mvc.Testing` (`WebApplicationFactory<Program>`) for web hosts, and exercises Infrastructure types (Dapper, migrations, Supabase adapters, persistence) with in-memory/fake collaborators. No live Supabase or production DB except the env-guarded `RemediationGuardTests`. `IntegrationTestEnvironment` (ModuleInitializer) sets `ASPNETCORE_ENVIRONMENT=Testing` before any test runs.
 
-### 5.1 Access
+### 5.1 Access ([16_USERS_ACCESS.md](16_USERS_ACCESS.md), [20_WEB.md](20_WEB.md))
 
-#### `AdminSecurityGuardTests` / `CatalogCompositionGuardTests`
-Files: `tests\BA.Dmo.IntegrationTests\Access\AdminSecurityGuardTests.cs`, `CatalogCompositionGuardTests.cs`
-Kind: Reflection/architecture guard test classes.
-Targets: `Program` assembly; `AdminUserService`; `IAdminProvisioningAdapter`; `SupabaseAdminProvisioningAdapter` (asserted absent from page-model ctor params); `CatalogValidator`, `CanonicalModuleCatalog`, `CanonicalPageCatalog`, `DapperModuleCatalogMirrorRepository`, `IModuleCatalogMirrorRepository`, `IDbConnectionFactory`.
-Tests (methods): `PrivilegedProvisioning_IsNotReachableFromAdminPages`, `AdminPages_AuthorizeViaCanonicalCapabilityPolicies_NotRoleNames`, `ApplicationAdminServices_HaveNoProviderSpecificDependencies`; `CanonicalConfiguration_WiredAtStartup_IsValid`, `CatalogDefinitions_DoNotLiveInTheWebAssembly`, `LandingPolicy_IsSingleAndGlobal`, `MirrorPort_IsImplementedInInfrastructure_WithU03FactoryContract`.
-
-#### `BoquilhasWebAuthorizationTests`
-File: `tests\BA.Dmo.IntegrationTests\Access\BoquilhasWebAuthorizationTests.cs`
-Kind: Integration test class (WAF: nested `BoquilhasFixture : WebApplicationFactory<Program>`).
-Targets: `Program`; `/boquilhas` page; `/api/boquilhas/*` controllers; `IBoquilhasRepository`; `IBoquilhasUnitOfWorkFactory`.
-Tests: `Unauth_BoquilhasPage_RedirectsToLogin`, `WithoutBoquilhasModule_IsDenied`, `WithModule_PageRenders`, `CreateLot_ThenReturn20To25_AcceptsFullReturnAndOpensDiscrepancy`, `DispatchExceedingProduction_IsBadRequest`.
-Uses: `FakeBoquilhasWebRepository`, nested `FakeAuthAdapter`/`FakeIdentityRepository`/`FakeBqWebUnitOfWorkFactory`/`FakeBqWebUnitOfWork`. Antiforgery disabled via `IgnoreAntiforgeryTokenAttribute`.
-Endpoints: `GET /boquilhas`, `POST /api/boquilhas/lotes`, `GET /api/boquilhas/lotes/{lotId}`, `POST /api/boquilhas/movements`, `GET /api/boquilhas/discrepancies?lotId=`, `POST /login`.
-
-#### `FakeBoquilhasWebRepository`
-File: `tests\BA.Dmo.IntegrationTests\Access\FakeBoquilhasWebRepository.cs`
-Implements: `IBoquilhasRepository`. In-memory lots/traces/movements/discrepancies/lifecycle/utilisation/repairers/line-defaults; `Reset()`.
-
-#### `AdminFormAntiforgeryTests`
-File: `tests\BA.Dmo.IntegrationTests\Access\AdminFormAntiforgeryTests.cs`
-Kind: Integration test class (WAF: nested `AfFixture`; antiforgery intentionally enforced).
-Targets: `Program`; /admin/users/create, /admin/templates/edit, /admin/applications; Razor antiforgery pipeline.
-Tests: `AdminForms_RenderAnAntiForgeryToken`, `TokenlessPost_IsRejected400_AndWritesNothing` (Theory, 3 rows), `UserCreate_WithToken_CreatesTheUser`, `TemplateEdit_WithToken_CreatesTheTemplate`, `Applications_WithToken_SavesTheMirror`, `CrossSessionToken_IsRejected400`, `AnonymousPost_RedirectsToLogin_AndWritesNothing`, `OperatorSession_Post_IsDeniedByPolicy_AndWritesNothing`.
-Uses: nested `FakeAuthAdapter`, `FakeIdentityRepository`, `FakeProvisioningAdapter`, `FakeAdminRepository`, `FakeMirrorRepository`.
-
-#### `AdminWebAuthorizationTests`
-File: `tests\BA.Dmo.IntegrationTests\Access\AdminWebAuthorizationTests.cs`
-Kind: Integration test class (WAF: nested `AdminFixture`).
-Targets: `Program`; /admin, /admin/users, /admin/templates, /admin/audit, /jobon; admin policy.
-Tests: `Unauthenticated_AdminPage_RedirectsToLogin`, `AuthenticatedWithoutAdminCapability_IsDenied_AndForgedPostWritesNothing`, `AdminCapability_AllowsAdminPages_AndLoginLandsOnAdmin`, `AdminWithOnlyAdminGerir_LoginRedirectsToAdmin`, `AdminWithOnlyAdminGerir_DoesNotRequireJobOnAccess`, `AuditPage_RequiresAuditView`.
-Uses: nested `FakeAuthAdapter`, `FakeIdentityRepository`, `FakeMirrorRepository`, `FakeAdminWritesRepository`.
-
-#### `DapperAdminRepositoryProjectionTests`
-File: `tests\BA.Dmo.IntegrationTests\Access\DapperAdminRepositoryProjectionTests.cs`
-Kind: Integration test class driving the real `DapperAdminRepository` over ADO.NET doubles (no DB).
-Targets: `DapperAdminRepository`, `AdminUserRow` (9-param projection), `IDbConnectionFactory`.
-Test: `UserColumns_MaterializesAdminUserRow_WithAuthEmailNull_BeforeEnrichment`.
-Uses: nested doubles `DataReaderDbConnection`, `DataReaderDbCommand`, `NoParameterCollection`, `FixedReaderConnectionFactory` (capture `IssuedSql`, `WasDisposed`).
-
-#### `AdminUserListResetTests`
-File: `tests\BA.Dmo.IntegrationTests\Access\AdminUserListResetTests.cs`
-Kind: Integration test class (WAF: nested `ResetFixture`).
-Targets: `Program`; `/admin/users` Reset handler; `AdminUserService.RequestPasswordResetAsync`; provisioning adapter.
-Tests: `ListPageReset_UsesTheExistingServicePath_AuditsAndShowsBanner`, `ListPageReset_UnknownUser_ShowsError_NoProvisioningNoAudit`, `EditPageReset_StillUsesTheSamePath`.
-Uses: nested `RecordingProvisioningAdapter`, `RecordingAdminRepository`.
-
-#### `ShellRoutingTests`
-File: `tests\BA.Dmo.IntegrationTests\Access\ShellRoutingTests.cs`
-Kind: Integration test class (WAF: nested `ShellFixture`, profile-switchable).
-Targets: `Program`; module/route authorization; `/` landing; all module routes; `/access-denied`, `/no-access`.
-Tests: `Scenario1_BoquilhasOnly_LandsOnJobOn_AllOtherModulesDenied`, `Scenario10_DeepLinkDenied_RedirectsToAuthorizedAreaWithFeedback`, `Scenario2_PesoOperador_CannotReachResponsavelRoutes`, `Scenario3_PesoResponsavel_IsRedirectedFromOperadorRoute`, `Scenarios4To6_ControloShowsOnlyAuthorizedChildren` (Theory), `Scenario7_AdminOnly_LandsOnAdmin_AndCannotOpenJobOn`, `JobOnPage_RendersTheU13Surface_InsideTheAuthorizedShell`, `JobOnPage_WithoutEditOrConfigure_HidesPrivilegedControls`, `Scenario9_NoInternalIdentity_NoAccessSafeState_NoLoop`, `Scenario12_TemplateDeactivated_SessionAuthenticatedWithoutAccess`, `Scenario11_GrantsRemovedMidSession_ReResolvedPerRequest`, `Unauthenticated_ModuleRoutes_RedirectToLogin`.
-Uses: nested `FakeAuthAdapter`, `FakeIdentityRepository`, `FakeJobOnRepository`, `FakePesoRepository`.
-
-#### `HistoriaWebAuthorizationTests`
-File: `tests\BA.Dmo.IntegrationTests\Access\HistoriaWebAuthorizationTests.cs`
-Kind: Integration test class (WAF: nested `HistoriaFixture`).
-Targets: `Program`; `/historia`; `IHistoriaRepository.QueryAsync`; ancestry `visibleModuleIds`/`includeAdminWithAuditView`.
-Tests: `Unauth_HistoriaPage_RedirectsToLogin`, `WithoutHistoriaModule_IsDenied`, `WithHistoria_OnlyGrantedOriginModulesReachTheProjection`, `WithHistoria_AdminEventsExcludedWithoutAuditView`.
-Uses: nested `FakeHistoriaReadRepository` (records scope), `FakeAdminRepo`, `FakeJobOnRepo`.
+- **`AdminSecurityGuardTests` / `CatalogCompositionGuardTests`** — reflection/architecture guards: privileged provisioning not reachable from admin pages, canonical capability policies not role names, no provider-specific deps in Application; canonical catalog wired at startup, catalog not in Web assembly, single landing policy, mirror port implemented in Infrastructure with U03 factory contract.
+- **`AdminFormAntiforgeryTests`** (WAF `AfFixture`, antiforgery **enforced**) — token rendered, tokenless/cross-session posts rejected 400 and write nothing, tokened create/edit/apply succeed, anonymous/operator posts denied.
+- **`AdminWebAuthorizationTests`** (WAF `AdminFixture`) — unauthenticated redirect, capability denial (forged post writes nothing), admin landing for `admin.gerir`, audit-view required.
+- **`AdminUserListResetTests`** (WAF `ResetFixture`) — reset uses the existing service path, audits, banner; unknown-user error path.
+- **`BoquilhasWebAuthorizationTests`** (WAF `BoquilhasFixture`) — anon redirect, module denial, page render, create lot + 20→25 return discrepancy, dispatch-exceeding bad request. Uses `FakeBoquilhasWebRepository`.
+- **`HistoriaWebAuthorizationTests`** (WAF `HistoriaFixture`) — anon redirect, module denial, grant-scoped projection, admin events excluded without audit view.
+- **`DapperAdminRepositoryProjectionTests`** — real `DapperAdminRepository` over ADO.NET doubles: `UserColumns_MaterializesAdminUserRow_WithAuthEmailNull_BeforeEnrichment` (captures SQL/disposal).
+- **`ShellRoutingTests`** (WAF `ShellFixture`, 13 `UserProfile`s) — **18 tests**: `Scenario1_JobOnAndBoquilhas_LandsOnJobOn_WithDerivedHistoria`, `Scenario2_PesoOperador_CannotReachResponsavelRoutes`, `Scenario3_PesoResponsavel_IsRedirectedFromOperadorRoute`, `Scenarios4To6_ControloGrantShowsOneGlobalEntry` (Theory), `Scenario7_AdminOnly_LandsOnAdmin_AndCannotOpenJobOn`, `Scenario9_NoInternalIdentity_NoAccessSafeState_NoLoop`, `Scenario10_DeepLinkDenied_RedirectsToAuthorizedAreaWithFeedback`, `Scenario11_GrantsRemovedMidSession_ReResolvedPerRequest`, `Scenario12_TemplateDeactivated_SessionAuthenticatedWithoutAccess`, `Unauthenticated_ModuleRoutes_RedirectToLogin`, `JobOnPage_RendersTheU13Surface_InsideTheAuthorizedShell`, `JobOnPage_WithoutEditOrConfigure_HidesPrivilegedControls`, `JobOnResponsible_OpenedProduction_RendersAuthorizedIdentityPreservingReadLinks`, `JobOnUser_WithoutTargetModules_DoesNotReceiveCrossModuleReadLinks`, `Armazem_Substituir_IsAbsentFromRenderedSurface_AndHasNoEndpoint` (asserts `POST /api/armazem/substituir` → 404), `Armazem_CreateNew_IsVisibleOnlyWithFerramentasMasterAccess`, `Armazem_ConsultaWithoutFilters_ReturnsSeededCmMfBqRows`, `Armazem_MovementFeed_IsNewestFirstAndKeepsRawLotValues`. Fixture replaces `ISupabaseAuthAdapter`, `IInternalUserRepository`, `IJobOnRepository`, `IJobOnUserContextRepository`, `IPesoRepository`, `IArmazemRepository`, `IToolIdentityResolver`.
 
 ### 5.2 Cli
 
-CLI command tests invoke command `Run` methods directly with injected environment resolvers and `StringWriter` stdout/stderr; no web server is started.
+CLI tests invoke `Run` directly with injected environment resolvers and `StringWriter` stdout/stderr; no web server.
 
-#### `BootstrapAdminCliTests`
-File: `tests\BA.Dmo.IntegrationTests\Cli\BootstrapAdminCliTests.cs`
-Target: `BootstrapAdminCommand.Run`, `ConfigurationErrorExitCode`.
-Tests: `NoConfiguration_FailsExplicitly_WithExitCode2`, `PartialConfiguration_ListsOnlyTheMissingVariables`, `MissingDatabaseConfiguration_FailsBeforeAnyProvisioning`.
+`BootstrapAdminCliTests` (exit-code 2 for missing config, partial-config listing, DB-config fails before provisioning), `CliCommandContractTests` (file `CliCommandPlaceholderTests.cs`), `CliRoutingTests` (operational-verb Theory ×5, non-verb fallback Theory ×3), `MigrateCliTests` (missing env fails non-zero, unusable connection, `DATABASE_URL` fallback).
 
-#### `CliCommandPlaceholderTests` (class `CliCommandContractTests`)
-File: `tests\BA.Dmo.IntegrationTests\Cli\CliCommandPlaceholderTests.cs`
-Target: `BootstrapAdminCommand.Run`.
-Test: `BootstrapAdmin_MissingConfiguration_FailsExplicitly_UntilConfigured`.
+### 5.3 Design ([17_DESIGN_LABORATORIO.md](17_DESIGN_LABORATORIO.md))
 
-#### `CliRoutingTests`
-File: `tests\BA.Dmo.IntegrationTests\Cli\CliRoutingTests.cs`
-Target: `CliModeResolver.Resolve`, `CliMode`.
-Tests: `OperationalVerbs_AreDistinguished` (Theory, 5 rows), `NoArguments_MeansNormalWebStartup`, `BlankFirstArgument_MeansNormalWebStartup`, `NonVerbLeadingArgument_FallsBackToWebStartup` (Theory, 3 rows), `OnlyTheFirstArgument_SelectsTheMode`.
+WAF + static-file guards. `DesignSystemGuardTests` (token files, reduced motion, semantics, canonical layout order, no legacy CSS, button state machine, no inline design CSS, laboratory page session), `ShellAndCalendarGuardTests` (single calendar, shell composition, laboratory consumes canonical calendar), `JobOnScriptSafetyGuardTests` (jobon.js `CatalogLabel` escaping via `EscHelper`).
 
-#### `MigrateCliTests`
-File: `tests\BA.Dmo.IntegrationTests\Cli\MigrateCliTests.cs`
-Target: `MigrateCommand.Run`; `ConnectionStringVariable`, `MigrationsDirectoryVariable`, `FallbackConnectionStringVariable`, exit codes.
-Tests: `MissingConnectionConfiguration_FailsExplicitly_NonZero`, `MissingMigrationsDirectory_FailsExplicitly_NonZero`, `UnusableConnection_FailsNonZero_WithoutWebServer`, `DatabaseUrlFallback_IsHonored_WhenPrimaryVariableAbsent`.
-
-### 5.3 Design
-
-#### `DesignSystemGuardTests`
-File: `tests\BA.Dmo.IntegrationTests\Design\DesignSystemGuardTests.cs`
-Kind: Integration test class (WAF: nested `DesignFixture`) + static file guards.
-Targets: `src/BA.Dmo.Web/wwwroot/styles` CSS token files, `_Layout.cshtml` load order, `/design-laboratorio`, `/jobon`.
-Tests: `TokenFile_DefinesAllRequiredTokenGroups`, `ReducedMotion_IsImplemented`, `SemanticTokens_MatchTheDesignReferenceExactly`, `Layout_WiresTheCanonicalLoadOrder_ExactlyOnce`, `SingleDesignSystem_NoCompetingLegacyCss`, `SharedComponentLayer_ConsumesTokensOnly`, `ButtonStateMachine_FilledRestInvertedHover`, `Pages_ContainNoLocalDesignCss`, `LaboratoryPage_RequiresASession_AndRendersTheCatalog`.
-Uses: nested `FakeAuthAdapter`, `FakeIdentityRepository`, `FakeJobOnRepository`. Finds repo root via `BA-DMO.sln`.
-
-#### `ShellAndCalendarGuardTests`
-File: `tests\BA.Dmo.IntegrationTests\Design\ShellAndCalendarGuardTests.cs`
-Kind: Integration test class (WAF: nested `LabFixture`) + static file guards.
-Targets: `wwwroot/styles`, `wwwroot/scripts`, `Pages/Shared/_Layout.cshtml/_Header.cshtml/_Navigation.cshtml`, `/design-laboratorio`.
-Tests: `SingleCanonicalCalendar_NoCompetingImplementations`, `ShellComposition_UsesTheDesignSystem`, `LaboratoryPage_ConsumesTheCanonicalCalendar`.
-
-#### `JobOnScriptSafetyGuardTests`
-File: `tests\BA.Dmo.IntegrationTests\Design\JobOnScriptSafetyGuardTests.cs`
-Kind: Static file-content guard test class.
-Targets: `wwwroot/scripts/jobon.js`.
-Tests: `CatalogLabel_IsEscaped_BeforeInsertAdjacentHtml`, `NoRawUnescapedCatalogLabel_IsInterpolatedIntoHtml`, `EscHelper_IsDefinedInTheScript`.
+**Static source-text guards (new in this revision):**
+- `ArmazemBqGuardTests` — all five Armazém type selectors expose BQ, never PU/CS.
+- `ArmazemCorrectionGuardTests` — correction card surface + dedicated auditable `/api/armazem/corrigir-localizacao` endpoint and `ArmazemService.CorrectLocationAsync` path.
+- `ArmazemCreateGuardTests` — two-owner create (Ferramentas master first, Armazém Entrada second, partial-failure recovery in `armazem.js`).
+- `ArmazemRecentMovementsGuardTests` — Registo/Consulta/Histórico movement-backed surfaces, no filename-only `L`-prefix leakage, `Programadas` dormant, responsive/print CSS.
+- `PesoComparisonGuardTests` — comparison contract (explicit pairing/submit, per-CM glass-weight comparison, no global water/capacity comparison, `L`-prefix reserved for filename).
 
 ### 5.4 Ferramentas
 
-#### `FerramentasWebApiTests`
-File: `tests\BA.Dmo.IntegrationTests\Ferramentas\FerramentasWebApiTests.cs`
-Kind: Integration test class (WAF: nested `FerrFixture`).
-Targets: `/api/ferramentas/*`; `IFerramentasRepository`; `IFerramentasRuleLookup`; `ferramentas.configure` capability.
-Tests: `Anonymous_IsDenied_RedirectsToLogin` (Theory, 3 rows), `AuthorizedFerramentasUser_Search_IsAdmitted`, `UserWithoutFerramentasModule_IsDenied`, `RulesEndpoint_WithoutConfigure_IsDenied`, `RulesEndpoint_WithConfigure_IsAdmitted`.
-Uses: nested `FakeAuthAdapter`, `FakeIdentityRepository`, `FakeLookup`, `FakeRepo`. Scoped replacement for `IFerramentasRepository`/`IFerramentasRuleLookup`.
+`FerramentasWebApiTests` (WAF `FerrFixture`) — anonymous denial Theory ×3, search admitted, module denial, rules endpoint gated by `ferramentas.configure`.
 
-### 5.5 Identity
+### 5.5 Identity ([18_LOGIN.md](18_LOGIN.md))
 
-#### `SupabaseAuthAdapterTests`
-File: `tests\BA.Dmo.IntegrationTests\Identity\SupabaseAuthAdapterTests.cs`
-Kind: Integration test class (HTTP adapter via `FakeHttpMessageHandler`).
-Target: `SupabaseAuthAdapter`.
-Tests (response scenarios): `ValidCredentials_ReturnTheAuthUserId`, `InvalidCredentials_FailWithProviderReason_ForServerSideLogging`, `RateLimited429_IsProviderUnavailable_NeverInvalidCredentials`, `ApiKeyRejected401_IsConfigSuspect_NeverInvalidCredentials`, `ApiKeyRejected403_IsConfigSuspect_NeverInvalidCredentials`, `ServerError503_IsProviderUnavailable`, `NetworkFailure_FailsClosed_AsBackendUnavailable`, `UnconfiguredAdapter_FailsClosed_WithoutHttpCalls`, `BlankCredentials_FailWithoutHttpCalls`.
-Asserts endpoint `{SupabaseUrl}/auth/v1/token?grant_type=password`, `apikey` header, status mapping to `ErrorCategory`, no secret leaks.
-
-#### `SupabaseAdminProvisioningAdapterTests`
-File: `tests\BA.Dmo.IntegrationTests\Identity\SupabaseAdminProvisioningAdapterTests.cs`
-Kind: Integration test class (HTTP adapter via `FakeHttpMessageHandler`).
-Target: `SupabaseAdminProvisioningAdapter`.
-Tests: `GetUserEmails_*` (pagination: user-on-page-2, stops-when-all-found, stops-on-short-page, no-one-request-per-user, lookup-failure returns empty, missing-config returns empty), `CreateUser_SendsServiceRoleOnlyServerSide_AndReturnsTheUserId`, `ExistingAccount_IsResolvedIdempotently_ViaAdminLookup`, `MissingConfiguration_FailsClearly_WithoutHttpCalls`, `HardFailure_*`, `NetworkFailure_*`.
-Asserts `/auth/v1/admin/users`, Bearer service-role header, idempotent 409/422 path, no secret leaks.
-
-#### `IdentitySecurityGuardTests`
-File: `tests\BA.Dmo.IntegrationTests\Identity\IdentitySecurityGuardTests.cs`
-Kind: Reflection/security guard test class.
-Targets: `Program` assembly; `SessionClaims`; `IAdminProvisioningAdapter`; Application assembly.
-Tests: `ProvisioningAdapter_IsNeverHeldByWebTypes_PagesAndHandlersIncluded`, `SessionCookieContract_CarriesOnlyTheAuthUserId_NoGrantsOrRoles`, `ApplicationLayer_HasNoProviderSpecificDependencies`.
-
-#### `WebAuthSessionTests`
-File: `tests\BA.Dmo.IntegrationTests\Identity\WebAuthSessionTests.cs`
-Kind: Integration test class (WAF: nested `AuthTestFixture`).
-Targets: `/login`, `/logout`, `/`, `/no-access`, `/access-denied`, `/jobon`; `ISupabaseAuthAdapter`; `IInternalUserRepository`.
-Tests: `UnauthenticatedRequest_IsRedirectedToLogin`, `LoginPage_IsPublic`, `SafeStatePages_ArePublic`, `SuccessfulLogin_RedirectsToTheJobOnLanding_WithSessionCookie`, `ExternalOrSuppliedReturnUrl_CanNeverOverrideTrustedRouting`, `InvalidCredentials_ShowGenericError_AndNoSession`, `AuthenticatedWithoutInternalMapping_GoesToNoAccessSafeState`, `AuthenticatedWithInactiveTemplate_GoesToNoAccessSafeState`, `Logout_ClearsTheSession`, `ProviderFailure_ShowsGenericError_NoSession`, `FailedLogin_PreservesSubmittedEmail_AndDoesNotRenderPassword`, `ProviderUnavailable_PreservesSubmittedEmail`, `BlankPassword_ValidationFailure_PreservesSubmittedEmail`, `AuthenticatedUser_WhenIdentityDatabaseUnavailable_ShowsBackendUnavailableState`.
-Uses: nested `FakeAuthAdapter` (AuthMode switchable), `FakeIdentityRepository`. Antiforgery disabled.
-
-#### `IdentityAmbiguityLandingTests`
-File: `tests\BA.Dmo.IntegrationTests\Identity\IdentityAmbiguityLandingTests.cs`
-Kind: Integration test class (WAF: nested `AmbiguityFixture`).
-Targets: `/login`, `/no-access`; `IInternalUserRepository`.
-Tests: `AmbiguousIdentity_LoginLandsOnPlainNoAccess_NeverIndisponivel`, `GenuineRepositoryFailure_StillLandsOnIndisponivel`.
-Uses: nested `FakeAuthAdapter`, `FakeIdentityRepository` (ThrowAmbiguous / ThrowOnFind).
-
-#### `FakeHttpMessageHandler`
-File: `tests\BA.Dmo.IntegrationTests\Identity\FakeHttpMessageHandler.cs`
-Extends: `HttpMessageHandler`. Captures `Requests`, `RequestBodies`; scriptable `Responders` queue; optional `Throw`.
+- **`SupabaseAuthAdapterTests`** — response scenarios via `FakeHttpMessageHandler`: success, invalid credentials, 429/401/403 never "invalid credentials", 503, network failure, unconfigured/blank fail closed; asserts endpoint + `apikey` header, no secret leaks.
+- **`SupabaseAdminProvisioningAdapterTests`** — email pagination, idempotent create (409/422), service-role Bearer only server-side, missing-config/network/hard failures.
+- **`IdentitySecurityGuardTests`** — provisioning adapter never held by Web types, session cookie carries only auth user id, Application has no provider-specific deps.
+- **`WebAuthSessionTests`** (WAF `AuthTestFixture`) — login/logout/safe-state coverage, open-redirect negative asserts, generic error no session, backend-unavailable state.
+- **`IdentityAmbiguityLandingTests`** (WAF `AmbiguityFixture`) — ambiguous identity lands on plain `/no-access`, never "indisponível"; genuine repo failure still "indisponível".
+- **`FakeHttpMessageHandler`** — scriptable HTTP responses.
 
 ### 5.6 Integrity (Database)
 
-#### `RemediationGuardTests`
-File: `tests\BA.Dmo.IntegrationTests\Integrity\RemediationGuardTests.cs`
-Kind: Database integration test class against a real PostgreSQL instance.
-Target: `N25_remediation.sql` schema (constraints, triggers, RLS, indexes).
-Setup: reads env var `BA_DMO_TEST_DATABASE` (Npgsql connection string); when absent the tests return (skip); seeds fresh GUID keys; assumes schema migrated N01–N25.
-Tests: `DuplicateAuthUserId_IsRejected`, `NullAuthUserId_IsRejected`, `JobOnIdentity_CanceledPairMayBeReissued_SecondActiveBlocked`, `SecondActiveTracePerLote_IsRejected`, `RevisionRows_AreAppendOnly`, `ApprovedPeso_IsImmutable_AtDatabaseLevel`, `PesoApprovedConsistency_IsEnforced`, `InvalidStatusValues_AreRejected`, `LateTables_RlsPolicyAndGrants_MatchN12Convention`, `AuditEventsModuleTime_IndexExists`.
-Direct references: `internal_users`, `job_on`, `job_on_revision`, `job_on_component`, `job_on_component_field`, `job_on_component_row`, `bq_lotes`, `bq_traces`, `peso_references`, `peso_lotes`, `peso_controlos`, `repair_exits`, `repair_exit_items`, `pegamento_controlos`, `job_on_verification_occurrence`, `access_templates`, `audit_events`, `pg_trigger`/`pg_policy`/`pg_class`/`information_schema`.
-Assertions: PostgreSQL `SQLSTATE` codes `23505`, `23502`, `23514`; trigger/message text; index/RLS/privilege counts.
+`RemediationGuardTests` — real PostgreSQL (env `BA_DMO_TEST_DATABASE`; each test skips with `[SKIP]` when absent). 10 tests: duplicate/null auth-user-id, canceled JobOn pair reissue, second-active-trace-per-lote, revision append-only, approved Peso immutability + consistency, invalid status values, late-tables RLS/grants per N12 convention, `audit_events.module_time` index. Asserts SQLSTATE `23505/23502/23514`, trigger text, `pg_trigger`/`pg_policy`/`pg_indexes` counts. Class doc assumes schema migrated N01–N25 (see §5.8 — migration family now extends to N31).
+> Cross-ref: [03_MIGRATIONS.md](03_MIGRATIONS.md).
 
 ### 5.7 JobOn
 
-#### `JobOnLandingTests`
-File: `tests\BA.Dmo.IntegrationTests\JobOn\JobOnLandingTests.cs`
-Kind: Integration test class (WAF: nested `LandingFixture`).
-Targets: `/jobon` landing; `IJobOnRepository.GetHistoricalProductionsAsync`.
-Tests: `Landing_ReturnsPlanningData_AndDefaultsToPlaneamento`, `CalendarMarkers_Represent_DistinctLineKeys_ForB1AndB2`, `ListRow_Contains_Date_Production_Reference_Machine_AndLineKey`, `SameLineProductions_UseTheSameKey`.
-Uses: nested `FakeAuthAdapter`, `FakeIdentityRepository`, `FakeDataJobOnRepository`.
+- **`JobOnLandingTests`** (WAF `LandingFixture`) — landing defaults to Planeamento, calendar markers per distinct line key, list row fields.
+- **`JobOnLineColorMappingTests`** — six-line stable keys (Theory ×6), unknown line null/invalid, canonical set.
+- **`JobOnImageWebApiTests`** (WAF `ImageFixture`, **new**) — `AttachAndRemove_ChangeReferenceAssociation_WithoutAddingRevision`, `UnsafePath_IsRejected_AndWritesNothing` (`..\outside.jpg` → 400). Replaces `IArticleReferenceImageRepository`/`IJobOnRepository` with file-local fakes; asserts revision count unchanged.
+- **`JobOnPdfRendererTests`** (**new**) — `JobOnPdfRenderer` byte-level: draws reference image exactly once (`/Im1 Do`), no image object when absent, PNG embedded with `/FlateDecode`, JPEG with `/DCTDecode`.
 
-#### `JobOnLineColorMappingTests`
-File: `tests\BA.Dmo.IntegrationTests\JobOn\JobOnLineColorMappingTests.cs`
-Kind: Unit test class.
-Target: `JobOnLineColor` (Web page helper).
-Tests: `AllSixLines_ResolveTo_AStableKey` (Theory, 6 rows), `SameLine_AlwaysResolvesToTheSameKey`, `DifferentLines_ResolveToDifferentKeys`, `UnknownLine_ResolvesToNull_AndIsNotValid`, `CanonicalSixLineSet_MatchesThePlatformCatalog`.
+### 5.8 Migrations ([03_MIGRATIONS.md](03_MIGRATIONS.md))
 
-### 5.8 Migrations
-
-#### `MigrationRunnerTests`
-File: `tests\BA.Dmo.IntegrationTests\Migrations\MigrationRunnerTests.cs`
-Kind: Integration test class (temp dir + `FakeMigrationGateway`); `IDisposable`.
-Target: `MigrationRunner` (`BA.Dmo.Infrastructure.Persistence.Migrations`).
-Tests: `UnappliedMigration_IsExecutedWhole_AndRecordedAfterSuccess`, `AppliedMigrationWithSameChecksum_IsSkipped_NotReExecuted`, `AppliedMigrationWithDifferentChecksum_FailsExplicitly`, `FailedScript_IsNotRecorded_AndStopsTheRun`, `Migrations_ExecuteInCanonicalOrder_AndAllRecorded`, `EmptyFamily_SucceedsWithNothingToDo`, `ScriptsWithSemicolonsInsideStrings_AreNeverSplit`.
-Setup: `Directory.CreateTempSubdirectory("ba_dmo_runner_")`; `Dispose` deletes it. Uses SHA-256 checksum comparison.
-
-#### `MigrationDiscoveryTests`
-File: `tests\BA.Dmo.IntegrationTests\Migrations\MigrationDiscoveryTests.cs`
-Kind: Integration test class (temp dir); `IDisposable`.
-Target: `MigrationDiscovery`.
-Tests: `Discover_ReturnsCanonicalOrdinal_EvenWhenCreatedOutOfOrder`, `Discover_IsDeterministic_AcrossRepeatedCalls`, `Discover_RejectsFileOutsideTheFamilyPattern`, `Discover_RejectsDuplicateVersions`, `Discover_MissingDirectory_FailsExplicitly`, `Discover_IgnoresNonSqlFiles`, `ShippedFreshBuildFamily_IsComplete_N01ThroughN26`.
-
-#### `MigrationChecksumTests`
-File: `tests\BA.Dmo.IntegrationTests\Migrations\MigrationChecksumTests.cs`
-Kind: Integration test class (temp dir); `IDisposable`.
-Target: `MigrationChecksum`.
-Tests: `ComputeSha256_MatchesKnownFipsVector`, `ComputeSha256File_HashesExactFileBytes`, `ComputeSha256_DetectsAnyContentChange`.
-
-#### `MigrationArchitectureGuardTests`
-File: `tests\BA.Dmo.IntegrationTests\Migrations\MigrationArchitectureGuardTests.cs`
-Kind: Reflection/architecture guard test class.
-Targets: `MigrationRunner` assembly; `Program` assembly; `MigrateCommand`.
-Tests: `ProductionAssemblies_ContainNoMigrationParsingOrHttpSurface`, `WebProgram_HasNoMigrationHookBeyondCliVerb`.
-
-#### `FakeMigrationGateway`
-File: `tests\BA.Dmo.IntegrationTests\Migrations\FakeMigrationGateway.cs`
-Implements: `IMigrationScriptGateway`. In-memory applied-map, `ExecutedScripts`, `Records`, `EnsureTrackingTableCalled`, `FailOnScriptContaining`, `SeedApplied`.
+- **`MigrationRunnerTests`** — whole-script execution, record-after-success, same-checksum skip, checksum-mismatch fail, failure stops run, canonical order, semicolons-in-strings never split.
+- **`MigrationDiscoveryTests`** — canonical ordinal, determinism, family-pattern/duplicate-version/missing-dir/non-SQL rejection, **`ShippedFreshBuildFamily_IsComplete_N01ThroughN31`** (family N01_identity … N31_template_profiles_single_assignment), plus per-migration closure guards `N28_FailsClosedAndNarrowsInternalRepairTypeToCmMf`, `N29_FailsClosedAndCreatesReferenceOwnedImageAssociation`, `N30_AddsCoveringIndexForReferenceImageUpdaterForeignKey`, `N31_EnforcesSingleTemplateAndClosedProfile`.
+- **`MigrationChecksumTests`** — SHA-256 FIPS vector, exact bytes, change detection.
+- **`MigrationArchitectureGuardTests`** — no migration/HTTP surface in production assemblies; Web has no migration hook beyond the CLI verb.
+- **`FakeMigrationGateway`** — `IMigrationScriptGateway` double with failure injection.
 
 ### 5.9 Pegamentos
 
-#### `PegamentoPdfRendererTests`
-File: `tests\BA.Dmo.IntegrationTests\Pegamentos\PegamentoPdfRendererTests.cs`
-Kind: Integration test class.
-Target: `PegamentoPdfRenderer` (`BA.Dmo.Infrastructure.Access`).
-Tests: `Render_ProducesValidPdfHeader`, `Render_IncludesProductionIdentityAndComponentData`, `Render_DoesNotEmitHtmlOrBrowserPrintArtifacts`.
-Checks: PDF header/signature bytes, embedded text strings, absence of `file:///`/`.html`/page markers.
+`PegamentoPdfRendererTests` (`PegamentoPdfRenderer` — valid PDF header, identity/component data, no HTML/print artifacts), `PegamentoWebApiTests` (WAF `PegFixture` — anonymous Theory ×3, search admitted, module denial).
 
-#### `PegamentoWebApiTests`
-File: `tests\BA.Dmo.IntegrationTests\Pegamentos\PegamentoWebApiTests.cs`
-Kind: Integration test class (WAF: nested `PegFixture`).
-Targets: `/api/pegamentos/*`; `IPegamentoRepository`, `IJobOnProductionFolderResolver`, `IAppSettingsReader`, `IJobOnProductionContextLookup`.
-Tests: `Anonymous_IsDenied_RedirectsToLogin` (Theory, 3 rows), `AuthorizedPegamentosUser_Search_IsAdmitted`, `UserWithoutPegamentosModule_IsDenied`.
-Uses: nested `FakeAuthAdapter`, `FakeIdentityRepository`, `FakeResolver`, `FakeSettings`, `FakeContextLookup`, `FakePegRepo`.
+### 5.10 Persistence ([04_DAPPER_INFRASTRUCTURE.md](04_DAPPER_INFRASTRUCTURE.md))
 
-### 5.10 Persistence
-
-#### `DbConnectionFactoryTests`
-File: `tests\BA.Dmo.IntegrationTests\Persistence\DbConnectionFactoryTests.cs`
-Kind: Integration test class (no DB; unreachable endpoint for failure scenarios).
-Target: `DbConnectionFactory`, `DatabaseConnectionSettings`.
-Tests: `ResolveConnectionString_PrefersPrimaryVariable`, `ResolveConnectionString_FallsBackToDatabaseUrl`, `ResolveConnectionString_ReturnsNull_WhenUnconfigured`, `FromEnvironment_*`, `Constructor_RejectsEmptyConnectionString`, `Constructor_RejectsUriFormat_WithActionableMessage_AndNoLeak`, `Constructor_RejectsUnparseableString_WithConfigurationError`, `OpenFailure_IsTranslated_AndNeverLeaksCredentials`, `OpenAsync_HonorsCancellation`.
-Environment: exercises `DatabaseConnectionSettings.ConnectionStringVariable` / `FallbackConnectionStringVariable`.
-
-#### `DapperUnitOfWorkTests`
-File: `tests\BA.Dmo.IntegrationTests\Persistence\DapperUnitOfWorkTests.cs`
-Kind: Integration test class (lifecycle via `FakeDbConnection`).
-Target: `DapperUnitOfWork`, `IDbConnectionFactory`.
-Tests: `BeginAsync_OpensConnection_AndBeginsTransaction`, `RunAsync_CommitsAfterSuccess_AndReturnsResult`, `RunAsync_RollsBackOnFailure_AndRethrows`, `DisposeWithoutCommit_RollsBack_AndDisposesEverything`, `DisposeAfterCommit_DoesNotRollback`, `CommitTwice_IsRejected`, `Cancellation_PreventsCommit_AndRollsBack`, `CancellationDuringOperation_RollsBack_WithoutCommit`, `BeginTransactionFailure_DisposesTheOpenedConnection`, `ScopesAreIndependent_NoSharedStateBetweenRuns`.
-
-#### `PersistenceMappingsTests`
-File: `tests\BA.Dmo.IntegrationTests\Persistence\PersistenceMappingsTests.cs`
-Kind: Integration test class.
-Target: `PersistenceMappings`, `DefaultTypeMap` (Dapper).
-Tests: `Configure_EnablesUnderscoreMatching_AndIsIdempotent`, `SnakeCaseColumns_MapToPascalCaseMembers`, `UnknownColumns_DoNotMap`.
-
-#### `PersistenceArchitectureGuardTests`
-File: `tests\BA.Dmo.IntegrationTests\Persistence\PersistenceArchitectureGuardTests.cs`
-Kind: Reflection/architecture guard test class.
-Targets: Domain/Application/Infrastructure/Web assemblies; `DbConnectionFactory`.
-Tests: `NoEfCoreOrOrmFramework_IsReferenced`, `NoGlobalOrStaticConnectionState_ExistsInProductionCode`, `NoAmbientTransactionScope_DependencyExists`, `WebLayer_DoesNotReferenceNpgsqlDirectly`, `DependencyGraph_MatchesPlanV3`, `Infrastructure_DoesNotLeakIntoDomain`.
-Mechanic: reads `.csproj` `ProjectReference` entries; reflects assembly references.
-
-#### `FakeDbConnection` (incl. `FakeDbTransaction`, `FakeConnectionFactory`)
-File: `tests\BA.Dmo.IntegrationTests\Persistence\FakeDbConnection.cs`
-Implements: `IDbConnection`/`IAsyncDisposable`, `IDbTransaction`, `IDbConnectionFactory`. Records `Committed`/`RollbackCount`/`Disposed`/`AsyncDisposed`; `BeginTransactionThrows`.
+`DbConnectionFactoryTests` (env resolution, uri/unparseable rejection without leaks, open-failure translation, cancellation), `DapperUnitOfWorkTests` (begin/commit/rollback/dispose lifecycle via `FakeDbConnection`, cancellation, scope independence), `PersistenceMappingsTests` (snake_case↔PascalCase idempotent), `PersistenceArchitectureGuardTests` (no EF/ORM, no global/static connection state, no ambient transactions, Web does not reference Npgsql, dependency graph per Plan-V3, Infrastructure does not leak into Domain). `FakeDbConnection`/`FakeDbTransaction`/`FakeConnectionFactory` doubles.
 
 ### 5.11 Peso
 
-#### `PesoPdfVisualCheck`
-File: `tests\BA.Dmo.IntegrationTests\Peso\PesoPdfVisualCheck.cs`
-Kind: Integration test class (generates a sample PDF to file for manual inspection).
-Target: `PesoSingleFilePdfRenderer` (`BA.Dmo.Infrastructure.Access`).
-Test: `RenderSample_ToFile_ForManualInspection`.
-Output: `<base>\sample_peso.pdf`. Checks byte length `>100` and `%PDF` header.
+`PesoPdfVisualCheck` — renders a sample `PesoFolhaPdf` (comparison + CM rows) with `PesoSingleFilePdfRenderer` to `bin/Debug/net10.0/sample_peso.pdf` for manual visual check; asserts `%PDF` + length. **Data-flow web coverage for `/peso` does not exist (see §17).**
 
 ### 5.12 Reparação Externa
 
-#### `ReparacaoExternaWebApiTests`
-File: `tests\BA.Dmo.IntegrationTests\ReparacaoExterna\ReparacaoExternaWebApiTests.cs`
-Kind: Integration test class (WAF: nested `RepExtFixture`).
-Targets: `/api/reparacao-externa/*`; `IRepairRepository`, `IToolPieceResolver`, `IArmazemRepairMovementPort`.
-Tests: `Anonymous_IsDenied_RedirectsToLogin` (Theory, 4 rows), `AuthorizedRepExtUser_SearchTools_IsAdmitted`, `UserWithoutRepExtModule_IsDenied`.
-Uses: nested `FakeAuthAdapter`, `FakeIdentityRepository`, `FakeRepairRepo`, `FakeToolResolver`, `FakeArmazemRepair`, `FakeUowFactory`.
+`ReparacaoExternaWebApiTests` (WAF `RepExtFixture`) — anonymous Theory ×4, tool search admitted, module denial.
 
 ### 5.13 Reparação Interna
 
-#### `ReparacaoInternaWebApiTests`
-File: `tests\BA.Dmo.IntegrationTests\ReparacaoInterna\ReparacaoInternaWebApiTests.cs`
-Kind: Integration test class (WAF: nested `RepIntFixture`).
-Targets: `/api/reparacao-interna/*`; `IReparacaoInternaRepository`, `IJobOnActiveContextLookup`, `IFerramentasPieceLookup`; `reparacao_interna.corrigir` capability.
-Tests: `Anonymous_IsDenied_RedirectsToLogin` (Theory, 3 rows), `AuthorizedRepIntUser_LineCards_IsAdmitted`, `UserWithoutRepIntModule_IsDenied`, `Correcao_WithoutCorrigirCapability_IsForbidden`.
-Uses: nested `FakeAuthAdapter`, `FakeIdentityRepository`, `FakeRepIntRepo`, `FakeContextLookup`, `FakePieceLookup`, `FakeUowFactory`.
+`ReparacaoInternaWebApiTests` (WAF `RepIntFixture`) — anonymous Theory ×3, line cards admitted, module denial, `reparacao_interna.corrigir` capability gate.
 
 ### 5.14 Security
 
-#### `NoDebugBypassGuardTests`
-File: `tests\BA.Dmo.IntegrationTests\Security\NoDebugBypassGuardTests.cs`
-Kind: Reflection/static-file guard test class.
-Targets: production assemblies (`DomainError`, Application, Infrastructure, `Program`); `Program` entry point; `Pages/Auth/Login.cshtml.cs` + `Cli` sources.
-Tests: `ProductionAssemblies_ContainNoDebugAuthBypassTypes`, `WebStartup_EntryPoint_IsTheRealProgram_CompositionRoot`, `AuthPath_Sources_HaveNoDebugBlocks_AndExactlyOneSignInCallSite` (source-level; no-op when source tree absent).
+`NoDebugBypassGuardTests` — production assemblies contain no debug auth-bypass types; entry point is the real Program composition root; auth-path sources have no debug blocks and exactly one sign-in call site (no-op when source tree absent next to build output).
 
 ### 5.15 Tampões
 
-#### `TampaoWebApiTests`
-File: `tests\BA.Dmo.IntegrationTests\Tampoes\TampaoWebApiTests.cs`
-Kind: Integration test class (WAF: nested `TampoesFixture`).
-Targets: `/api/tampoes/*`; `ITampaoRepository`, `ITampoesUnitOfWorkFactory`.
-Tests: `Anonymous_IsDenied_RedirectsToLogin` (Theory, 3 rows), `AuthorizedTampoesUser_Consulta_IsAdmitted`, `UserWithoutTampoesModule_IsDenied`.
-Uses: nested `FakeAuthAdapter`, `FakeIdentityRepository`, `FakeRepo`, `FakeUowFactory`.
+`TampaoWebApiTests` (WAF `TampoesFixture`) — anonymous Theory ×3, consulta admitted, module denial.
+
+### 5.16 Controlo (**new folder**)
+
+`ControloProjectionGuardTests` — static source-text guard on `src\BA.Dmo.Infrastructure\Access\DapperControloProductionContextLookup.cs`: `c.family IN ('MP_CM','MF','BQ','PU','CS')` present, three-family variant absent. **Functional coverage of the lookup does not exist (see §17).**
 
 ---
 
 ## 6. Fixtures / Shared Test Infrastructure
 
-### 6.1 `WebApplicationFactory<Program>` test-host fixtures
+### 6.1 `WebApplicationFactory<Program>` test-host fixtures (17)
 
-Each web integration test file defines one nested fixture extending `Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program>`. All override `ConfigureWebHost`/`ConfigureTestServices` to replace singletons/scoped services via local `ReplaceSingleton<T>`/`Replace<T>` helpers; clients use `AllowAutoRedirect=false` + `HandleCookies=true`.
+All override `ConfigureWebHost`/`ConfigureTestServices`; clients use `AllowAutoRedirect=false` + `HandleCookies=true`. Antiforgery disabled via `IgnoreAntiforgeryTokenAttribute` except `AfFixture` (enforced).
 
-| Fixture | File | Replaces | Antiforgery |
+| Fixture | File (under `BA.Dmo.IntegrationTests\`) | Replaces | Antiforgery |
 |---|---|---|---|
-| `BoquilhasFixture` | `tests\BA.Dmo.IntegrationTests\Access\BoquilhasWebAuthorizationTests.cs` | `ISupabaseAuthAdapter`, `IInternalUserRepository`, `IBoquilhasRepository`, `IBoquilhasUnitOfWorkFactory` | disabled |
-| `AfFixture` | `tests\BA.Dmo.IntegrationTests\Access\AdminFormAntiforgeryTests.cs` | auth/identity/`IAdminRepository`/`IModuleCatalogMirrorRepository`/`IAdminProvisioningAdapter` | **enforced** |
-| `AdminFixture` | `tests\BA.Dmo.IntegrationTests\Access\AdminWebAuthorizationTests.cs` | auth/identity/`IAdminRepository`/`IModuleCatalogMirrorRepository` | disabled |
-| `ResetFixture` | `tests\BA.Dmo.IntegrationTests\Access\AdminUserListResetTests.cs` | auth/identity/admin/provisioning/mirror | disabled |
-| `ShellFixture` | `tests\BA.Dmo.IntegrationTests\Access\ShellRoutingTests.cs` | auth/identity/`IJobOnRepository`/`IPesoRepository` | disabled |
-| `HistoriaFixture` | `tests\BA.Dmo.IntegrationTests\Access\HistoriaWebAuthorizationTests.cs` | auth/identity/`IHistoriaRepository`/`IAdminRepository`/`IJobOnRepository` | disabled |
-| `LabFixture` | `tests\BA.Dmo.IntegrationTests\Design\ShellAndCalendarGuardTests.cs` | auth/identity | disabled |
-| `DesignFixture` | `tests\BA.Dmo.IntegrationTests\Design\DesignSystemGuardTests.cs` | auth/identity/`IJobOnRepository` | disabled |
-| `FerrFixture` | `tests\BA.Dmo.IntegrationTests\Ferramentas\FerramentasWebApiTests.cs` | auth/identity/`IFerramentasRepository` (scoped)/`IFerramentasRuleLookup` (scoped) | disabled |
-| `LandingFixture` | `tests\BA.Dmo.IntegrationTests\JobOn\JobOnLandingTests.cs` | auth/identity/`IJobOnRepository` | disabled |
-| `AuthTestFixture` | `tests\BA.Dmo.IntegrationTests\Identity\WebAuthSessionTests.cs` | `ISupabaseAuthAdapter`, `IInternalUserRepository` | disabled |
-| `AmbiguityFixture` | `tests\BA.Dmo.IntegrationTests\Identity\IdentityAmbiguityLandingTests.cs` | auth/identity | disabled |
-| `PegFixture` | `tests\BA.Dmo.IntegrationTests\Pegamentos\PegamentoWebApiTests.cs` | auth/identity/`IPegamentoRepository`/`IJobOnProductionFolderResolver`/`IAppSettingsReader`/`IJobOnProductionContextLookup` | disabled |
-| `RepExtFixture` | `tests\BA.Dmo.IntegrationTests\ReparacaoExterna\ReparacaoExternaWebApiTests.cs` | auth/identity/`IRepairRepository`/`IToolPieceResolver`/`IArmazemRepairMovementPort`/`IRepairUnitOfWorkFactory` | disabled |
-| `RepIntFixture` | `tests\BA.Dmo.IntegrationTests\ReparacaoInterna\ReparacaoInternaWebApiTests.cs` | auth/identity/`IReparacaoInternaRepository`/`IJobOnActiveContextLookup`/`IFerramentasPieceLookup`/`IRepairUnitOfWorkFactory` | disabled |
-| `TampoesFixture` | `tests\BA.Dmo.IntegrationTests\Tampoes\TampaoWebApiTests.cs` | auth/identity/`ITampaoRepository`/`ITampoesUnitOfWorkFactory` | disabled |
+| `AfFixture` | `Access\AdminFormAntiforgeryTests.cs` | auth/identity/`IAdminRepository`/`IModuleCatalogMirrorRepository`/`IAdminProvisioningAdapter` | **enforced** |
+| `AdminFixture` | `Access\AdminWebAuthorizationTests.cs` | auth/identity/`IAdminRepository`/`IModuleCatalogMirrorRepository` | disabled |
+| `ResetFixture` | `Access\AdminUserListResetTests.cs` | auth/identity/admin/provisioning/mirror | disabled |
+| `BoquilhasFixture` | `Access\BoquilhasWebAuthorizationTests.cs` | auth/identity/`IBoquilhasRepository`/`IBoquilhasUnitOfWorkFactory` | disabled |
+| `HistoriaFixture` | `Access\HistoriaWebAuthorizationTests.cs` | auth/identity/`IHistoriaRepository`/`IAdminRepository`/`IJobOnRepository` | disabled |
+| `ShellFixture` | `Access\ShellRoutingTests.cs` | auth/identity/`IJobOnRepository`/`IJobOnUserContextRepository`/`IPesoRepository`/`IArmazemRepository`/`IToolIdentityResolver` | disabled |
+| `LabFixture` | `Design\ShellAndCalendarGuardTests.cs` | auth/identity | disabled |
+| `DesignFixture` | `Design\DesignSystemGuardTests.cs` | auth/identity/`IJobOnRepository` | disabled |
+| `FerrFixture` | `Ferramentas\FerramentasWebApiTests.cs` | auth/identity/`IFerramentasRepository` (scoped)/`IFerramentasRuleLookup` (scoped) | disabled |
+| `LandingFixture` | `JobOn\JobOnLandingTests.cs` | auth/identity/`IJobOnRepository` | disabled |
+| `ImageFixture` | `JobOn\JobOnImageWebApiTests.cs` | auth/identity/`IJobOnRepository`/`IArticleReferenceImageRepository` | disabled |
+| `AuthTestFixture` | `Identity\WebAuthSessionTests.cs` | `ISupabaseAuthAdapter`, `IInternalUserRepository` | disabled |
+| `AmbiguityFixture` | `Identity\IdentityAmbiguityLandingTests.cs` | auth/identity | disabled |
+| `PegFixture` | `Pegamentos\PegamentoWebApiTests.cs` | auth/identity/`IPegamentoRepository`/`IJobOnProductionFolderResolver`/`IAppSettingsReader`/`IJobOnProductionContextLookup` | disabled |
+| `RepExtFixture` | `ReparacaoExterna\ReparacaoExternaWebApiTests.cs` | auth/identity/`IRepairRepository`/`IToolPieceResolver`/`IArmazemRepairMovementPort`/`IRepairUnitOfWorkFactory` | disabled |
+| `RepIntFixture` | `ReparacaoInterna\ReparacaoInternaWebApiTests.cs` | auth/identity/`IReparacaoInternaRepository`/`IJobOnActiveContextLookup`/`IFerramentasPieceLookup`/`IRepairUnitOfWorkFactory` | disabled |
+| `TampoesFixture` | `Tampoes\TampaoWebApiTests.cs` | auth/identity/`ITampaoRepository`/`ITampoesUnitOfWorkFactory` | disabled |
 
-### 6.2 ADO.NET / HTTP / infra doubles used as test hosts
+`ShellFixture` is profile-switchable (`UserProfile`: `BoquilhasOnly`, `JobOnResponsible`, `PesoOperador`, `PesoResponsavel`, `PegamentosOnly`, `PesoPlusPegamentos`, `AdminOnly`, `ArmazemOnly`, `ArmazemWithFerramentas`, `ReparacaoInternaOnly`, `TampoesOnly`, `NoInternalUser`, `TemplateInactive`) and is reused by `BA.Dmo.VisualHost`.
 
-- `FakeDbConnection` / `FakeDbTransaction` / `FakeConnectionFactory` — `tests\BA.Dmo.IntegrationTests\Persistence\FakeDbConnection.cs` (lifecycle recording).
-- `DataReaderDbConnection` / `DataReaderDbCommand` / `NoParameterCollection` / `FixedReaderConnectionFactory` — `tests\BA.Dmo.IntegrationTests\Access\DapperAdminRepositoryProjectionTests.cs` (capture `IssuedSql`, `WasDisposed`; in-memory `DataTableReader`).
-- `FakeHttpMessageHandler` — `tests\BA.Dmo.IntegrationTests\Identity\FakeHttpMessageHandler.cs` (scriptable HTTP responses).
-- `FakeMigrationGateway` — `tests\BA.Dmo.IntegrationTests\Migrations\FakeMigrationGateway.cs` (`IMigrationScriptGateway`).
+### 6.2 ADO.NET / HTTP / infra doubles
 
-### 6.3 Collection / `[CollectionDefinition]`
+- `FakeDbConnection` / `FakeDbTransaction` / `FakeConnectionFactory` — `Persistence\FakeDbConnection.cs`.
+- `DataReaderDbConnection` / `DataReaderDbCommand` / `NoParameterCollection` / `FixedReaderConnectionFactory` — `Access\DapperAdminRepositoryProjectionTests.cs` (capture `IssuedSql`, `WasDisposed`).
+- `FakeHttpMessageHandler` — `Identity\FakeHttpMessageHandler.cs`.
+- `FakeMigrationGateway` — `Migrations\FakeMigrationGateway.cs`.
 
-No `[CollectionDefinition]` found. No `[Collection("...")]` usage found. Tests do not rely on named xUnit collections.
+### 6.3 Environment initializer
 
-### 6.4 Parallelization / runner config
+`IntegrationTestEnvironment.cs` — `[ModuleInitializer]` sets `ASPNETCORE_ENVIRONMENT=Testing` and `Logging__EventLog__LogLevel__Default=None` at assembly load, before any test.
 
-No `xunit.runner.json`, `.runsettings`, or assembly-level parallelization/collection configuration files were found in the test projects. No `Directory.Build.targets` or `AssemblyInfo` test-collection attributes present; the only shared build file is `Directory.Build.props` (TFM/compile settings only).
+### 6.4 Collection / parallelization config
+
+No `[CollectionDefinition]`/`[Collection]`, no `xunit.runner.json`, `.runsettings`, or assembly-level parallelization configuration found. The only shared build file is `Directory.Build.props`. xUnit default parallelism therefore applies (no explicit control).
 
 ---
 
 ## 7. Test Doubles
 
-### 7.1 In-memory repository fakes (implement application repository ports)
+### 7.1 In-memory repository fakes (application repository ports)
 
-| Fake | Implements | Path |
+| Fake | Implements | Path (under `BA.Dmo.UnitTests\` unless noted) |
 |---|---|---|
-| `FakeJobOnRepository` | `IJobOnRepository` | `tests\BA.Dmo.UnitTests\Modules\JobOn\FakeJobOnRepository.cs` |
-| `FakeJobOnUserContextRepository` | `IJobOnUserContextRepository` | `tests\BA.Dmo.UnitTests\Modules\JobOn\FakeJobOnUserContextRepository.cs` |
-| `FakePesoRepository` | `IPesoRepository` | `tests\BA.Dmo.UnitTests\Modules\Peso\FakePesoRepository.cs` |
-| `FakeArmazemRepository` | `IArmazemRepository` | `tests\BA.Dmo.UnitTests\Modules\Armazem\FakeArmazemRepository.cs` |
-| `FakeBoquilhasRepository` | `IBoquilhasRepository` | `tests\BA.Dmo.UnitTests\Modules\Boquilhas\BqTestSupport.cs` |
-| `FakeFerramentasRepository` | `IFerramentasRepository` | `tests\BA.Dmo.UnitTests\Modules\Ferramentas\FakeFerramentasRepository.cs` |
-| `FakeHistoriaRepository` | `IHistoriaRepository` | `tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaServiceTests.cs` |
-| `FakePegamentoRepository` | `IPegamentoRepository` | `tests\BA.Dmo.UnitTests\Modules\Pegamentos\FakePegamentoRepository.cs` |
-| `FakeRepairRepository` | `IRepairRepository` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\FakeRepairRepository.cs` |
-| `FakeReparacaoInternaRepository` | `IReparacaoInternaRepository` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaTestSupport.cs` |
-| `FakeTampaoRepository` | `ITampaoRepository` | `tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoTestSupport.cs` |
-| `FakeControloSheetRepository` | `IControloSheetRepository` | `tests\BA.Dmo.UnitTests\Modules\Controlo\ControloTestSupport.cs` |
-| `FakeAdminRepository` | `IAdminRepository` | `tests\BA.Dmo.UnitTests\Shared\Admin\FakeAdminRepository.cs` |
-| `FakeBoquilhasWebRepository` | `IBoquilhasRepository` | `tests\BA.Dmo.IntegrationTests\Access\FakeBoquilhasWebRepository.cs` |
+| `FakeJobOnRepository` | `IJobOnRepository` | `Modules\JobOn\FakeJobOnRepository.cs` |
+| `FakeJobOnUserContextRepository` | `IJobOnUserContextRepository` | `Modules\JobOn\FakeJobOnUserContextRepository.cs` |
+| `FakeArticleReferenceImageRepository` | `IArticleReferenceImageRepository` | `Modules\JobOn\FakeArticleReferenceImageRepository.cs` |
+| `FakePesoRepository` | `IPesoRepository` | `Modules\Peso\FakePesoRepository.cs` |
+| `FakeArmazemRepository` | `IArmazemRepository` | `Modules\Armazem\FakeArmazemRepository.cs` |
+| `FakeBoquilhasRepository` | `IBoquilhasRepository` | `Modules\Boquilhas\BqTestSupport.cs` |
+| `FakeFerramentasRepository` | `IFerramentasRepository` | `Modules\Ferramentas\FakeFerramentasRepository.cs` |
+| `FakeHistoriaRepository` | `IHistoriaRepository` | `Modules\Historia\HistoriaServiceTests.cs` |
+| `FakePegamentoRepository` | `IPegamentoRepository` | `Modules\Pegamentos\FakePegamentoRepository.cs` |
+| `FakeRepairRepository` | `IRepairRepository` | `Modules\ReparacaoExterna\FakeRepairRepository.cs` |
+| `FakeReparacaoInternaRepository` | `IReparacaoInternaRepository` | `Modules\ReparacaoInterna\ReparacaoInternaTestSupport.cs` |
+| `FakeTampaoRepository` | `ITampaoRepository` | `Modules\Tampoes\TampaoTestSupport.cs` |
+| `FakeControloSheetRepository` | `IControloSheetRepository` | `Modules\Controlo\ControloTestSupport.cs` |
+| `FakeAdminRepository` | `IAdminRepository` | `Shared\Admin\FakeAdminRepository.cs` |
+| `FakeBoquilhasWebRepository` | `IBoquilhasRepository` (web) | `BA.Dmo.IntegrationTests\Access\FakeBoquilhasWebRepository.cs` |
 
 ### 7.2 Resolver / lookup / port fakes
 
-| Fake | Implements | Path |
-|---|---|---|
-| `FakeToolIdentityResolver` | `IToolIdentityResolver` | `tests\BA.Dmo.UnitTests\Modules\Armazem\FakeToolIdentityResolver.cs` |
-| `FakeFerramentasIdentityLookup` | `IFerramentasIdentityLookup` | `tests\BA.Dmo.UnitTests\Modules\Armazem\ArmazemTestSupport.cs` |
-| `FakeRuleLookup` | `IFerramentasRuleLookup` | `tests\BA.Dmo.UnitTests\Modules\Ferramentas\FerramentasTestSupport.cs` |
-| `FakeJobOnProductionContextLookup` | `IJobOnProductionContextLookup` | `tests\BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoTestSupport.cs` |
-| `FakeJobOnProductionFolderResolver` | `IJobOnProductionFolderResolver` | `tests\BA.Dmo.UnitTests\Modules\Pegamentos\FakeJobOnProductionFolderResolver.cs` |
-| `FakePegamentoPdfRenderer` | `IPegamentoPdfRenderer` | `tests\BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoTestSupport.cs` |
-| `FakeToolPieceResolver` | `IToolPieceResolver` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\ReparacaoExternaTestSupport.cs` |
-| `FakeArmazemRepairMovementPort` | `IArmazemRepairMovementPort` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\ReparacaoExternaTestSupport.cs` |
-| `FakeJobOnActiveContextLookup` | `IJobOnActiveContextLookup` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaTestSupport.cs` |
-| `FakeFerramentasPieceLookup` | `IFerramentasPieceLookup` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaTestSupport.cs` |
-| `FakeControloProductionContextLookup` | `IControloProductionContextLookup` | `tests\BA.Dmo.UnitTests\Modules\Controlo\ControloTestSupport.cs` |
-| `FakeSettings` | `IAppSettingsReader` | `tests\BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoTestSupport.cs` |
+`FakeToolIdentityResolver` (`IToolIdentityResolver`, Armazém), `FakeFerramentasIdentityLookup`, `FakeRuleLookup` (`IFerramentasRuleLookup`), `FakeJobOnProductionContextLookup`, `FakeJobOnProductionFolderResolver` (`IJobOnProductionFolderResolver`), `FakePegamentoPdfRenderer`, `FakeToolPieceResolver` (`IToolPieceResolver`), `FakeArmazemRepairMovementPort`, `FakeJobOnActiveContextLookup`, `FakeFerramentasPieceLookup`, `FakeControloProductionContextLookup`, `FakeSettings` (`IAppSettingsReader`).
 
 ### 7.3 Unit-of-work factory / `IDbUnitOfWork` no-op doubles
 
-| Fake | Implements | Path |
-|---|---|---|
-| `FakeBqUnitOfWork` / `FakeBqUnitOfWorkFactory` | `IDbUnitOfWork` / `IBoquilhasUnitOfWorkFactory` | `tests\BA.Dmo.UnitTests\Modules\Boquilhas\BqTestSupport.cs` |
-| `FakeControloUow` / `FakeControloUowFactory` | `IDbUnitOfWork` / `IRepairUnitOfWorkFactory` | `tests\BA.Dmo.UnitTests\Modules\Controlo\ControloTestSupport.cs` |
-| `FakeUnitOfWork` / `FakeRepairUnitOfWorkFactory` | `IDbUnitOfWork` / `IRepairUnitOfWorkFactory` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\ReparacaoExternaTestSupport.cs` |
-| `FakeReparacaoInternaUnitOfWork` / `FakeReparacaoInternaUowFactory` | `IDbUnitOfWork` / `IRepairUnitOfWorkFactory` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaTestSupport.cs` |
-| `FakeTampaoUnitOfWork` / `FakeTampoesUnitOfWorkFactory` | `IDbUnitOfWork` / `ITampoesUnitOfWorkFactory` | `tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoTestSupport.cs` |
-| `FakeBqWebUnitOfWork` / `FakeBqWebUnitOfWorkFactory` | `IDbUnitOfWork` / `IBoquilhasUnitOfWorkFactory` | `tests\BA.Dmo.IntegrationTests\Access\BoquilhasWebAuthorizationTests.cs` |
+`FakeBqUnitOfWork`/`FakeBqUnitOfWorkFactory`, `FakeControloUow`/`FakeControloUowFactory`, `FakeUnitOfWork`/`FakeRepairUnitOfWorkFactory` (RepExt), `FakeReparacaoInternaUnitOfWork`/`FakeReparacaoInternaUowFactory`, `FakeTampaoUnitOfWork`/`FakeTampoesUnitOfWorkFactory`, `FakeBqWebUnitOfWork`/`FakeBqWebUnitOfWorkFactory` (Boquilhas WAF).
 
-### 7.4 Fixed clocks / authorship accessors / current-user accessors
+### 7.4 Fixed clocks / authorship / current-user accessors
 
-Per module (names in module `*TestSupport.cs` files and test files):
-
-| Module | Fixed Clock (`IClock`) | Authorship (`IPersistenceAuthorshipAccessor`) | Current-User (`ICurrentUserAccessor`) |
-|---|---|---|---|
-| Armazém | `ArmazemFixedClock` | `ArmazemFakeAuthorship` | `ArmazemCurrentUser` |
-| Boquilhas | `BqFixedClock` | `BqFakeAuthorship` | `BqCurrentUser` |
-| Controlo | `ControloFixedClock` | `ControloFakeAuthorship` | `ControloCurrentUser` |
-| Ferramentas | `FixedClock` | `FakeAuthorshipAccessor` | `FakeCurrentUser` |
-| JobOn | `FixedClock` / `PdfTestClock` / `TestClock` (file-local) | — | `FakeCurrentUserAccessor` / `PdfTestIdentityAccessor` / `LocalFakeCurrentUserAccessor` (nested) |
-| Pegamentos | `FixedClock` | `FakeAuthorshipAccessor` | `PegamentoAuthorizationGate` via `FakeAuthorshipAccessor.Authorized()` |
-| Peso | `FixedClock` (nested) | — | `FakeCurrentUserAccessor` (nested `GrantOperador/GrantResponsavel/GrantNone`) |
-| Reparação Externa | `ReparacaoExternaFixedClock` | `ReparacaoExternaFakeAuthorship` | `ReparacaoExternaCurrentUser` |
-| Reparação Interna | `ReparacaoInternaFixedClock` | `ReparacaoInternaFakeAuthorship` | `ReparacaoInternaCurrentUser` |
-| Tampões | `TampaoFixedClock` | `TampaoFakeAuthorship` | `TampaoCurrentUser` |
-| História | — | — | `HistoriaCurrentUser` |
-| Admin | `FixedClock` (nested) | — | `FakeCurrentUserAccessor` (nested `GrantAdmin/GrantNone`) |
-| Identity | `FixedClock` (nested) | — | — |
+Per-module names in the module `*TestSupport.cs` files: Armazém (`ArmazemFixedClock`/`ArmazemFakeAuthorship`/`ArmazemCurrentUser`), Boquilhas (`Bq*`), Controlo (`Controlo*`), Ferramentas (`FixedClock`/`FakeAuthorshipAccessor`/`FakeCurrentUser`), JobOn (`FixedClock`/`PdfTestClock`/`TestClock`/`LocalFixedClock`, `FakeCurrentUserAccessor`/`PdfTestIdentityAccessor`/`LocalFakeCurrentUserAccessor`), Pegamentos (`FixedClock`/`FakeAuthorshipAccessor`), Peso (`FixedClock` nested + `FakeCurrentUserAccessor` with grant variants), RepExt (`ReparacaoExterna*`), RepInt (`ReparacaoInterna*`), Tampões (`Tampao*`), História (`HistoriaCurrentUser`), Admin/Identity (nested `FakeCurrentUserAccessor`/`FixedClock`).
 
 ### 7.5 Other test doubles
 
-- `NoopPdfRenderer` (`IPdfRenderer`, nested in `PesoServiceTests`), `TestPdfRenderer` (`IJobOnPdfRenderer`, nested in `JobOnPdfTests`), `NullJobOnImageProvider` (nested in `JobOnPdfTests`).
-- `NoopMirror` / `FakeMirrorRepository` (`IModuleCatalogMirrorRepository`) in Admin integration files.
-- `RecordingProvisioningAdapter` / `FakeProvisioning` / `FakeProvisioningAdapter` (`IAdminProvisioningAdapter`) in Admin/Identity tests.
-- `FakeInternalUserRepository` / `FakeIdentityRepository` (`IInternalUserRepository`) in Identity/Admin and all WAF fixtures.
-- `FakeAuthAdapter` / `FakeAuthAdapter` (`ISupabaseAuthAdapter`, with `AuthMode`) in all WAF fixtures + `WebAuthSessionTests`.
-- `JobOnLineCatalog` (canonical six-line constant, in `JobOnUserContextTests.cs`).
+- `NoopPdfRenderer` (`IPdfRenderer`, Peso), `TestPdfRenderer` (`IJobOnPdfRenderer`), `NullJobOnImageProvider`/`StubJobOnImageProvider` (`IJobOnImageProvider`, JobOnPdfTests).
+- `NoopMirror`/`FakeMirrorRepository` (`IModuleCatalogMirrorRepository`), `RecordingProvisioningAdapter`/`FakeProvisioning`/`FakeProvisioningAdapter` (`IAdminProvisioningAdapter`).
+- `FakeInternalUserRepository`/`FakeIdentityRepository` (`IInternalUserRepository`), `FakeAuthAdapter` (`ISupabaseAuthAdapter` with `AuthMode`).
+- `JobOnLineCatalog` (canonical six-line constant), `PegamentoContextBuilder`, `ControloTestBuilder`.
+- File-local integration fakes in `JobOnImageWebApiTests`: `FakeArticleImageRepository`, `FakeJobOnRepository`, `FakeAuthAdapter`, `FakeIdentityRepository`.
+
+> **POTENTIAL OVERLAP — NEEDS AUDIT (evidence):** near-identical nested `FakeIdentityRepository` (`IInternalUserRepository`) implementations are redeclared per WAF file — `FerramentasWebApiTests`, `TampaoWebApiTests`, `PegamentoWebApiTests`, `IdentityAmbiguityLandingTests`, `WebAuthSessionTests`, `ShellAndCalendarGuardTests`, `ReparacaoInternaWebApiTests`, `ReparacaoExternaWebApiTests`, `DesignSystemGuardTests`, `JobOnImageWebApiTests`. Likewise `FakeJobOnRepository` and `IArticleReferenceImageRepository` fakes exist both as UnitTests fakes and as file-local copies inside `JobOnImageWebApiTests`; `FakeBoquilhasWebRepository` (integration) parallels the unit `FakeBoquilhasRepository`. Same pattern, separate copies — no duplication cleanup recommended here, owner decision required.
 
 ---
 
 ## 8. Builders / Test Data Helpers
 
-| Type | Produces | Main members | Path |
+| Type | Produces | Main members | Path (under `BA.Dmo.UnitTests\`) |
 |---|---|---|---|
-| `PegamentoContextBuilder` | `PegamentoProductionContext` | `Complete(jobOnId, revisionId, ...)` building CM/BQ/MF snapshots + nominals | `tests\BA.Dmo.UnitTests\Modules\Pegamentos\PegamentoTestSupport.cs` |
-| `ControloTestBuilder` | `ControloSheetService` + fakes | `Build(user, now)` returns `(service, repo, ctx)` | `tests\BA.Dmo.UnitTests\Modules\Controlo\ControloTestSupport.cs` |
-| `FakeJobOnActiveContextLookup` seed helpers | `InternalRepairContext` / resolutions | `SeedSingle`, `SeedNone`, `SeedAmbiguous`, `Context(...)` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoInterna\ReparacaoInternaTestSupport.cs` |
-| `FakeBoquilhasRepository` seed helpers | `BqLote` / `BqTrace` / `BqRepairer` | `SeedLote`, `SeedActiveTrace`, `SeedRepairer` | `tests\BA.Dmo.UnitTests\Modules\Boquilhas\BqTestSupport.cs` |
-| `FakeTampaoRepository` seed helper | `TampaoConfiguration` | `SeedConfiguration` | `tests\BA.Dmo.UnitTests\Modules\Tampoes\TampaoTestSupport.cs` |
-| `FakeToolPieceResolver` seed helper | `RepairToolIdentity` | `Seed(reference, lot, number, type)` | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\ReparacaoExternaTestSupport.cs` |
-| `FakePesoRepository` seed helpers | `PesoReference`/`PesoLote` | direct collection seeding used by tests | `tests\BA.Dmo.UnitTests\Modules\Peso\FakePesoRepository.cs` |
+| `PegamentoContextBuilder` | `PegamentoProductionContext` | `Complete(jobOnId, revisionId, ...)` | `Modules\Pegamentos\PegamentoTestSupport.cs` |
+| `ControloTestBuilder` | `ControloSheetService` + fakes | `Build(user, now)` | `Modules\Controlo\ControloTestSupport.cs` |
+| `FakeJobOnActiveContextLookup` seed helpers | `InternalRepairContext` | `SeedSingle`, `SeedNone`, `SeedAmbiguous`, `Context(...)` | `Modules\ReparacaoInterna\ReparacaoInternaTestSupport.cs` |
+| `FakeBoquilhasRepository` seed helpers | `BqLote`/`BqTrace`/`BqRepairer` | `SeedLote`, `SeedActiveTrace`, `SeedRepairer` | `Modules\Boquilhas\BqTestSupport.cs` |
+| `FakeTampaoRepository` seed helper | `TampaoConfiguration` | `SeedConfiguration` | `Modules\Tampoes\TampaoTestSupport.cs` |
+| `FakeToolPieceResolver` seed helper | `RepairToolIdentity` | `Seed(reference, lot, number, type)` | `Modules\ReparacaoExterna\ReparacaoExternaTestSupport.cs` |
 
 ---
 
@@ -1164,32 +525,15 @@ Per module (names in module `*TestSupport.cs` files and test files):
 
 ### 9.1 Single database-backed suite (`RemediationGuardTests`)
 
-File: `tests\BA.Dmo.IntegrationTests\Integrity\RemediationGuardTests.cs`
-
-- **Fixture**: test class itself (not a shared web fixture); each test connects directly via Npgsql.
-- **Connection source**: environment variable `BA_DMO_TEST_DATABASE` (Npgsql keyword/value connection string).
-- **Skip behavior**: when `BA_DMO_TEST_DATABASE` is absent, each test calls `SkipIfNoDatabase()` which prints `[SKIP]` and returns before executing (suite stays green with no DB).
-- **Schema precondition**: assumes the target schema is fully migrated (N01–N25).
-- **Isolation**: fresh GUID keys per run; `ON CONFLICT DO NOTHING` for seeded `access_templates`; no destructive teardown.
-- **Helpers within the class**: `Exec` (ExecuteNonQuery), `CaptureSqlState` (returns `PostgresException.SqlState`), `CaptureMessage`, `EnsureTemplateAsync`, `SeedJobWithRevisionAsync`, `SeedPesoControloAsync`.
-- **Assertions**: SQLSTATE equality (`23505`, `23502`, `23514`), trigger/message containment, `pg_trigger`/`pg_indexes`/`pg_policy`/`information_schema` counts.
+File: `Integrity\RemediationGuardTests.cs`. Direct Npgsql connections from env var `BA_DMO_TEST_DATABASE`; absent → each test prints `[SKIP]` and returns. Assumes schema migrated N01–N25 per class doc (family now extends to N31 — see §9.2). Fresh GUID keys, `ON CONFLICT DO NOTHING` seeding, no destructive teardown. Helpers: `Exec`, `CaptureSqlState`, `CaptureMessage`, `EnsureTemplateAsync`, `SeedJobWithRevisionAsync`, `SeedPesoControloAsync`. Asserts SQLSTATE `23505/23502/23514`, trigger text, `pg_trigger`/`pg_indexes`/`pg_policy` counts.
 
 ### 9.2 Migration tests (SQL execution via gateway double — no DB)
 
-Files: `tests\BA.Dmo.IntegrationTests\Migrations\MigrationRunnerTests.cs`, `MigrationDiscoveryTests.cs`, `MigrationChecksumTests.cs`.
-
-- **Temp mechanism**: `Directory.CreateTempSubdirectory("ba_dmo_runner_"/"ba_dmo_migrations_"/"ba_dmo_checksum_")` in constructor; `Dispose()` deletes the directory recursively (`IDisposable`).
-- **Whole-script execution**: `MigrationRunner` executes each migration file byte-for-byte (no statement splitting); recorded only after success with SHA-256 checksum (`MigrationChecksum.ComputeSha256File`).
-- **Skip/failure semantics**: same-checksum applied → skipped; different checksum → `MigrationChecksumMismatchException`; failed script → not recorded and run stops (`MigrationExecutionException`).
-- **Discovery ordering**: canonical N01…N26 ordinal regardless of creation order; rejects files outside family pattern, duplicate versions, missing directory; ignores non-SQL files.
+`Migrations\MigrationRunnerTests.cs`, `MigrationDiscoveryTests.cs`, `MigrationChecksumTests.cs` — temp-directory based (`Directory.CreateTempSubdirectory` + `IDisposable`). Whole-script execution, checksum (`MigrationChecksum.ComputeSha256File`) record-after-success, mismatch fail, failure stops run, canonical ordering, semicolons-in-strings safe. Discovery rejects non-family files, duplicate versions, missing directory, non-SQL files. **Shipped family bound: N01_identity … N31_template_profiles_single_assignment** (`ShippedFreshBuildFamily_IsComplete_N01ThroughN31`), with per-migration closure guards for N28–N31.
 
 ### 9.3 Persistence / connection tests (no live DB)
 
-Files: `tests\BA.Dmo.IntegrationTests\Persistence\DbConnectionFactoryTests.cs`, `DapperUnitOfWorkTests.cs`, `PersistenceMappingsTests.cs`.
-
-- `DbConnectionFactoryTests` uses an unreachable endpoint (`Host=127.0.0.1;Port=9`) to exercise open-failure translation and cancellation without a real database; asserts no credential leakage.
-- `DapperUnitOfWorkTests` verifies transaction lifecycle (begin/commit/rollback/dispose) via `FakeDbConnection` and injected `IDbConnectionFactory`; verifies cancellation prevents commit and rolls back.
-- `PersistenceMappingsTests` verifies Dapper `DefaultTypeMap` snake_case↔PascalCase mapping after `PersistenceMappings.Configure()` (idempotent).
+`Persistence\DbConnectionFactoryTests.cs` (unreachable endpoint `Host=127.0.0.1;Port=9` for failure translation + no credential leaks + cancellation), `DapperUnitOfWorkTests.cs` (transaction lifecycle via `FakeDbConnection`), `PersistenceMappingsTests.cs` (Dapper `DefaultTypeMap` snake_case↔PascalCase, idempotent).
 
 ---
 
@@ -1197,191 +541,115 @@ Files: `tests\BA.Dmo.IntegrationTests\Persistence\DbConnectionFactoryTests.cs`, 
 
 ### 10.1 Test host
 
-- Used: `Microsoft.AspNetCore.Mvc.Testing` → `WebApplicationFactory<Program>` (see §6.1 fixtures).
-- `CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true })`.
-- Services replaced in `ConfigureTestServices`; scoped ports replaced with `AddScoped`, host singletons with `AddSingleton`.
-- Antiforgery: disabled for scripted posts via `RazorPagesOptions.Conventions` (`IgnoreAntiforgeryTokenAttribute`) except `AfFixture` (which enforces the antiforgery pipeline in its test fixture).
+`WebApplicationFactory<Program>` (17 fixtures, §6.1); `CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true })`; services replaced in `ConfigureTestServices` (scoped with `AddScoped`, singletons with `AddSingleton`). Environment preset to `Testing` by `IntegrationTestEnvironment` ModuleInitializer. Antiforgery disabled via `IgnoreAntiforgeryTokenAttribute` except `AfFixture`.
 
 ### 10.2 Form / antiforgery mechanics
 
-- `PostFormAsync` helper fetches the page HTML, extracts `__RequestVerificationToken`, and POSTs the form with the token.
-- `AdminFormAntiforgeryTests` asserts: token rendered; tokenless post rejected 400 and writes nothing; cross-session token rejected 400; anonymous/operator posts denied.
+`PostFormAsync` extract-and-post helper; `AdminFormAntiforgeryTests` asserts token rendered, tokenless/cross-session posts rejected 400 writing nothing, anonymous/operator denial.
 
 ### 10.3 Directly requested HTTP targets (endpoints/routes)
 
-Razor pages: `/login`, `/logout`, `/`, `/no-access`, `/access-denied`, `/jobon`, `/boquilhas`, `/historia`, `/peso`, `/peso/responsavel`, `/pegamentos`, `/ferramentas`, `/armazem`, `/reparacao-interna`, `/reparacao-externa`, `/tampoes`, `/admin`, `/admin/users`, `/admin/users/create`, `/admin/users/edit`, `/admin/templates/edit`, `/admin/applications`, `/admin/audit`, `/design-laboratorio`.
-API routes: `/api/boquilhas/lotes`, `/api/boquilhas/movements`, `/api/boquilhas/discrepancies`, `/api/ferramentas/references`, `/api/ferramentas/lotes/{id}/rules`, `/api/pegamentos/search`, `/api/pegamentos/context/{id}`, `/api/pegamentos/revision/{id}`, `/api/reparacao-externa`, `/api/reparacao-externa/repairers`, `/api/reparacao-externa/historico`, `/api/reparacao-externa/tools`, `/api/reparacao-interna/line-cards`, `/api/reparacao-interna/context`, `/api/reparacao-interna/historico`, `/api/reparacao-interna/{id}/corrigir`, `/api/tampoes/consulta`, `/api/tampoes/movimentos`, `/api/tampoes/opcoes/fields`.
+Razor pages: `/login`, `/logout`, `/`, `/no-access`, `/access-denied`, `/jobon`, `/boquilhas`, `/historia`, `/peso`, `/peso/responsavel`, `/pegamentos`, `/ferramentas`, `/armazem`, `/reparacao-interna`, `/reparacao-externa`, `/tampoes`, `/controlo`, `/admin`, `/admin/users`, `/admin/users/create`, `/admin/users/edit`, `/admin/templates/edit`, `/admin/applications`, `/admin/audit`, `/design-laboratorio`.
+
+API routes: `/api/boquilhas/lotes`, `/api/boquilhas/movements`, `/api/boquilhas/discrepancies`, `/api/ferramentas/references`, `/api/ferramentas/lotes/{id}/rules`, `/api/pegamentos/search`, `/api/pegamentos/context/{id}`, `/api/pegamentos/revision/{id}`, `/api/reparacao-externa*`, `/api/reparacao-interna*`, `/api/tampoes/consulta|movimentos|opcoes/fields`, `/api/jobon/{id}/image/attach`, `/api/jobon/{id}/image/remove`, `/api/armazem/consulta`, `/api/armazem/movimentos` (GET, functional), `/api/armazem/substituir` (asserted **absent** → 404). Armazém mutation endpoints (`/api/armazem/entrada`, `/api/armazem/saida`, `/api/armazem/corrigir-localizacao`, …) are referenced by static source guards only — no functional WAF call (see §17).
 
 ### 10.4 Response assertions
 
-- Status codes: `HttpStatusCode.Redirect` (302), `Forbidden` (403), `Unauthorized`, `BadRequest` (400), `OK` (200), `NoContent`.
-- Redirect location checked against trusted routes (open-redirect negative assertions in `WebAuthSessionTests`).
-- Session cookie presence via `Set-Cookie` header; `HandleCookies=true` for cookie round-trips.
-- Body content checked via `HtmlDecode` for banner/error text and absence of secrets.
-- JSON API bodies decoded with `System.Text.Json` (incl. `JsonStringEnumConverter` in `BoquilhasWebAuthorizationTests`).
+`HttpStatusCode` checks (302/403/400/200/404), trusted redirect-location asserts (open-redirect negatives), `Set-Cookie` session presence with cookie round-trip, `HtmlDecode` body/banner checks, `System.Text.Json` JSON decoding.
 
 ### 10.5 HTTP adapter tests (Supabase)
 
-`SupabaseAuthAdapterTests` / `SupabaseAdminProvisioningAdapterTests` drive the adapters through `FakeHttpMessageHandler` with scripted `HttpResponseMessage`s. They assert: exact request URIs, `apikey`/`Authorization: Bearer` headers, status→`ErrorCategory` mapping, idempotent duplicate handling, paginated email lookup, and absence of secrets in surfaced errors.
+`SupabaseAuthAdapterTests`/`SupabaseAdminProvisioningAdapterTests` drive adapters via `FakeHttpMessageHandler`; assert exact URIs, `apikey`/Bearer headers, status→`ErrorCategory` mapping, idempotent duplicates, pagination, no secret leaks.
+
+### 10.6 Visual host
+
+`BA.Dmo.VisualHost\Program.cs` — Kestrel host over `ShellFixture`, profile + port CLI arguments, test-only login, `await Task.Delay(Timeout.Infinite)`.
 
 ---
 
 ## 11. Assertion / Mocking Patterns
 
-### 11.1 Assertion framework
-
-**xUnit** (classic `Assert.*`) is used throughout both projects. No FluentAssertions/NUnit/MSTest. Common methods: `Assert.Equal`, `Assert.True/False`, `Assert.Single`, `Assert.Empty`, `Assert.Contains`, `Assert.DoesNotContain`, `Assert.StartsWith`, `Assert.EndsWith`, `Assert.NotEqual`, `Assert.All`, `Assert.Throws`, `Assert.ThrowsAsync`, `Assert.NotNull/Null`.
-
-### 11.2 Mocking / substitute library
-
-**None.** No NSubstitute, Moq, or FakeItEasy. All test doubles are hand-written fakes/stubs (see §7) confined to `tests/*`. The only dynamic-object use is `System.Dynamic.ExpandoObject` inside `FakeJobOnRepository.DuplicateAtomicallyAsync` for row-hydration, not mocking.
-
-### 11.3 Exception/assertion contracts
-
-Domain/infrastructure exceptions directly asserted: `ConcurrencyConflictException`, `SchemaMigrationRequiredException`, `AmbiguousIdentityException`, `MigrationChecksumMismatchException`, `MigrationDiscoveryException`, `MigrationExecutionException`, `DatabaseConnectionException`, `ArmazemLocationOccupiedException`.
-
-### 11.4 Result/error-code assertion pattern
-
-Service tests assert `Result.IsSuccess/IsFailure`, then check `result.Error.Category` (e.g. `ErrorCategory.Forbidden`, `ValidationError`, `DomainConflict`, `NotFound`, `BackendUnavailable`, `ConcurrencyConflict`, `Unauthorized`) and/or `result.Error.Code` (e.g. `JOBON_NOT_FOUND`, `PESO_CONTROL_NO_READING`, `BQ_DUPLICATE_LOT`, `FERRAMENTAS_DUPLICATE_REFERENCE`, `REPEXT_TYPE_SCOPE`, `REPINT_OPERATOR_REQUIRED`, `TAMPAO_NEGATIVE_BALANCE`, `ARMZ_LOCATION_CODE`, `ADMIN_SELF_LOCKOUT`, `PEGAMENTO_OUTPUT_ROOT_MISSING`).
+- **xUnit** (`Assert.*`) throughout; no FluentAssertions/NUnit/MSTest.
+- **No mocking library** — all doubles hand-written (see §7). Only dynamic-object use: `ExpandoObject` inside `FakeJobOnRepository.DuplicateAtomicallyAsync` (row hydration, not mocking).
+- Exceptions asserted directly: `ConcurrencyConflictException`, `SchemaMigrationRequiredException`, `AmbiguousIdentityException`, `MigrationChecksumMismatchException`, `MigrationDiscoveryException`, `MigrationExecutionException`, `DatabaseConnectionException`, `ArmazemLocationOccupiedException`.
+- Result/error-code pattern: `result.IsSuccess/IsFailure` + `result.Error.Category` (`Forbidden`, `ValidationError`, `DomainConflict`, `NotFound`, `BackendUnavailable`, `ConcurrencyConflict`, `Unauthorized`) / `Code` (`JOBON_NOT_FOUND`, `PESO_CONTROL_NO_READING`, `BQ_DUPLICATE_LOT`, `FERRAMENTAS_DUPLICATE_REFERENCE`, `REPEXT_TYPE_SCOPE`, `REPINT_OPERATOR_REQUIRED`, `TAMPAO_NEGATIVE_BALANCE`, `ARMZ_LOCATION_CODE`, `ADMIN_SELF_LOCKOUT`, `PEGAMENTO_OUTPUT_ROOT_MISSING`).
 
 ---
 
 ## 12. Parameterized / Conditional Tests
 
-### 12.1 Parameterized tests (`[Theory]`)
+### 12.1 Parameterized tests (`[Theory]` + `[InlineData]` only; no `[MemberData]`/`[ClassData]`)
 
-xUnit `[Theory]` with `[InlineData]` (no `[MemberData]`/`[ClassData]`). Representative uses:
-
-- Dictionary/codec round-trips: `JobOnDomainTests.Codec_*`, `PesoDomainTests`, `WeightCalculatorTests.LookupDensity` (31 rows), `DomainErrorTests`, `CapabilityAndModuleDefinitionTests`, `CanonicalPageCatalogTests.RouteGrammar_*`, `AccessTemplateGrantsParserTests`, `ReparacaoInternaDomainTests.Create_StructurallyInvalid_IsARejection`, `TampaoDomainTests`.
-- Web anonymous-authorization routes: `FerramentasWebApiTests`, `PegamentoWebApiTests`, `ReparacaoExternaWebApiTests`, `ReparacaoInternaWebApiTests`, `TampaoWebApiTests` (per-endpoint `[InlineData]`).
-- CLI mode routing: `CliRoutingTests.OperationalVerbs_AreDistinguished` (5 rows), `NonVerbLeadingArgument_FallsBackToWebStartup` (3 rows).
-- Admin template validation: `AdminTemplateServiceTests.CreateTemplate_InvalidGrants_AreRejected_WithExplicitReport` (3 rows).
-- Antiforgery posts: `AdminFormAntiforgeryTests.TokenlessPost_IsRejected400_AndWritesNothing` (3 rows).
+Codec/dictionary round-trips (`JobOnDomainTests.Codec_*`, `PesoDomainTests`, `WeightCalculatorTests.LookupDensity` 31 rows, `DomainErrorTests`, `CapabilityAndModuleDefinitionTests`, `CanonicalPageCatalogTests.RouteGrammar_*`, `AccessTemplateGrantsParserTests`, `TampaoDomainTests`, `ReparacaoInternaDomainTests.Create_StructurallyInvalid_IsARejection`), per-endpoint anonymous-denial rows (Ferramentas/Pegamentos/RepExt/RepInt/Tampões WAF), CLI routing (`OperationalVerbs_AreDistinguished` ×5, `NonVerbLeadingArgument_FallsBackToWebStartup` ×3), admin template validation (×3), antiforgery tokenless posts (×3), `Scenarios4To6_ControloGrantShowsOneGlobalEntry`, `JobOnLineColorMappingTests` (×6 rows).
 
 ### 12.2 Conditional / skipped tests
 
-`[Fact(Skip = ...)]`, `[Trait]`, `[Category]`, `[Explicit]` and conditional-`Skip` attributes: **none found**.
-
-Environment-guarded behavior:
-
-- `RemediationGuardTests` (database suite): each test checks `BA_DMO_TEST_DATABASE`; when absent the test prints `[SKIP]` and returns (no failure / no throw).
-- `NoDebugBypassGuardTests.AuthPath_Sources_HaveNoDebugBlocks_AndExactlyOneSignInCallSite`: when the web source tree is absent next to the build output (e.g. CI without sources) it returns early as a no-op.
+No `[Fact(Skip=…)]`, `[Trait]`, `[Category]`, `[Explicit]`, or conditional-skip attributes (verified: zero matches). Environment-guarded behavior: `RemediationGuardTests` (skip when `BA_DMO_TEST_DATABASE` absent), `NoDebugBypassGuardTests.AuthPath_Sources_HaveNoDebugBlocks_AndExactlyOneSignInCallSite` (no-op when source tree absent).
 
 ---
 
 ## 13. Target-to-Test Index
 
-Reverse navigation: production target → test class(es) → test project.
-
 | Production Target | Test Class(es) | Test Project |
 |---|---|---|
-| `JobOnService` | `JobOnServiceTests`, `JobOnUserContextTests`, `JobOnPdfTests` | UnitTests |
-| `JobOn` (domain entity) | `JobOnDomainTests` | UnitTests |
-| `JobOnVerificationGenerator` | `JobOnVerificationGeneratorTests` | UnitTests |
-| `JobOnActivityResolver` | `JobOnActivityResolverTests` | UnitTests |
-| `JobOnPdfService` | `JobOnPdfTests` | UnitTests |
-| `PesoService` | `PesoServiceTests` | UnitTests |
-| `PesoControl` | `PesoControlWorkflowTests` | UnitTests |
-| `PesoValidator` / codecs / `WeightCalculator` | `PesoDomainTests`, `WeightCalculatorTests` | UnitTests |
-| `ArmazemService` | `ArmazemServiceTests` | UnitTests |
-| `ArmazemAuthorizationGate` | `ArmazemAuthorizationGateTests` | UnitTests |
-| `WarehouseStockRules` / `WarehouseLocation` | `WarehouseStockRulesTests` | UnitTests |
-| `FerramentasArmazemToolIdentityResolver` | `FerramentasArmazemToolIdentityResolverTests` | UnitTests |
-| `BoquilhasService` | `BoquilhasServiceTests` | UnitTests |
-| `BqAuthorizationGate` | `BqAuthorizationGateTests` | UnitTests |
-| `BqInventoryCalculator` / `BqRules` | `BqInventoryCalculatorTests` | UnitTests |
-| `ControloSheetService` | `ControloSheetServiceTests` | UnitTests |
-| `ControloFolha` | `ControloFolhaTests` | UnitTests |
-| `FerramentasService` | `FerramentasServiceTests`, `FerramentasUtilisationServiceTests` | UnitTests |
-| `Ferramentas` domain types | `FerramentasDomainTests` | UnitTests |
-| `HistoriaService` / `HistoriaAuthorizationGate` | `HistoriaServiceTests`, `HistoriaAuthorizationGateTests` | UnitTests |
-| `PegamentoService` / `PegamentoPdfService` | `PegamentoServiceTests`, `PegamentoPdfTests`, `PegamentoHistoricalRelationshipTests`, `PegamentoDocumentConfirmationTests`, `JobOnProductionFolderResolverTests` | UnitTests |
-| `PegamentoMeasurementCalculator` | `PegamentoMeasurementCalculatorTests` | UnitTests |
-| `ReparacaoExternaService` | `ReparacaoExternaServiceTests`, `RepairerCapabilityTests` | UnitTests |
-| `RepairExitStatusMachine` | `RepairExitStatusMachineTests` | UnitTests |
-| `ReparacaoExternaAuthorizationGate` | `ReparacaoExternaAuthorizationGateTests` | UnitTests |
-| `ReparacaoInternaService` | `ReparacaoInternaServiceTests` | UnitTests |
-| `InternalRepairRecord` / `InternalRepairRules` | `ReparacaoInternaDomainTests` | UnitTests |
-| `ReparacaoInternaProductionProjection` | `ReparacaoInternaProductionProjectionTests` | UnitTests |
-| `TampaoService` | `TampaoServiceTests`, `TampaoMachineTests` | UnitTests |
-| `TampaoConfigurationKey` / `TampaoRules` | `TampaoDomainTests` | UnitTests |
-| `AccessResolver` / `EffectiveAccess` | `AccessResolverTests` | UnitTests |
-| `CurrentUser` / `ICurrentUserAccessor` | `CurrentUserTests` | UnitTests |
-| `ModuleCatalog` / `ModuleDefinition` | `ModuleCatalogTests` | UnitTests |
-| `CanonicalModuleCatalog` | `CanonicalModuleCatalogTests` | UnitTests |
-| `CanonicalPageCatalog` / `PageDefinition` | `CanonicalPageCatalogTests` | UnitTests |
-| `Capability` | `CapabilityAndModuleDefinitionTests` | UnitTests |
-| `CatalogValidator` | `CatalogValidatorTests` | UnitTests |
-| `GrantNormalizer` | `GrantNormalizerTests` | UnitTests |
-| `NavigationService` | `NavigationServiceTests` | UnitTests |
-| `ModuleCatalogMirrorSynchronizer` | `ModuleCatalogMirrorSynchronizerTests` | UnitTests |
-| `AdminUserService` | `AdminUserServiceTests` | UnitTests |
-| `AdminAuditService` / `AdminMirrorService` | `AdminAuditAndMirrorTests` | UnitTests |
-| `AdminTemplateService` | `AdminTemplateServiceTests` | UnitTests |
-| `IdentityResolutionService` | `IdentityResolutionServiceTests` | UnitTests |
-| `AccessTemplateGrantsParser` | `AccessTemplateGrantsParserTests` | UnitTests |
-| `BootstrapAdminService` | `BootstrapAdminServiceTests` | UnitTests |
-| `SystemClock` / `IClock` | `ClockTests` | UnitTests |
-| `Result` | `ResultTests` | UnitTests |
-| `DomainError` / `ErrorCategory` | `DomainErrorTests` | UnitTests |
-| `ConcurrencyGuard` | `ConcurrencyGuardTests` | UnitTests |
-| `PersistenceAuthorship` | `PersistenceAuthorshipTests` | UnitTests |
-| `Program` + /admin Razor pages | `AdminSecurityGuardTests`, `AdminFormAntiforgeryTests`, `AdminWebAuthorizationTests`, `AdminUserListResetTests`, `CatalogCompositionGuardTests` | IntegrationTests |
-| `Program` + module routes / shell | `ShellRoutingTests` | IntegrationTests |
-| `Program` + `/boquilhas` + Boquilhas API | `BoquilhasWebAuthorizationTests` | IntegrationTests |
-| `Program` + `/historia` + `IHistoriaRepository` | `HistoriaWebAuthorizationTests` | IntegrationTests |
+| `JobOnService` | `JobOnServiceTests`, `JobOnUserContextTests`, `JobOnPdfTests`, `JobOnRevisionImmutabilityIntegrationTests` | UnitTests |
+| `JobOn` (domain) / `JobOnVerificationGenerator` / `JobOnActivityResolver` | `JobOnDomainTests`, `JobOnVerificationGeneratorTests`, `JobOnActivityResolverTests` | UnitTests |
+| `JobOnPdfService` / `IJobOnImageProvider` | `JobOnPdfTests` | UnitTests |
+| `JobOnPdfRenderer` | `JobOnPdfRendererTests` (+ `JobOnPdfTests` via service, renderer double) | IntegrationTests / UnitTests |
+| `IArticleReferenceImageRepository` flow | `JobOnServiceTests`, `JobOnImageWebApiTests` (in-memory fakes) | UnitTests + IntegrationTests |
+| `PesoService` / `PesoControl` / weight rules | `PesoServiceTests`, `PesoControlWorkflowTests`, `PesoDomainTests`, `WeightCalculatorTests` | UnitTests |
+| `PesoSingleFilePdfRenderer` | `PesoPdfVisualCheck`, `PesoComparisonGuardTests` (static) | IntegrationTests |
+| `ArmazemService` / rules / resolver | `ArmazemServiceTests`, `WarehouseStockRulesTests`, `ArmazemAuthorizationGateTests`, `FerramentasArmazemToolIdentityResolverTests` | UnitTests |
+| Armazém web surface (GET) | `ShellRoutingTests` (+ `ArmazemRecentMovementsGuardTests`/`ArmazemCreateGuardTests`/`ArmazemCorrectionGuardTests`/`ArmazemBqGuardTests` static) | IntegrationTests |
+| `BoquilhasService` / `BqRules` | `BoquilhasServiceTests`, `BqAuthorizationGateTests`, `BqInventoryCalculatorTests`; web: `BoquilhasWebAuthorizationTests` | UnitTests + IntegrationTests |
+| `ControloSheetService` / `ControloFolha` | `ControloSheetServiceTests`, `ControloFolhaTests` | UnitTests |
+| `DapperControloProductionContextLookup` | `ControloProjectionGuardTests` (static only) | IntegrationTests |
+| `FerramentasService` / domain | `FerramentasServiceTests`, `FerramentasUtilisationServiceTests`, `FerramentasDomainTests`; web: `FerramentasWebApiTests` | UnitTests + IntegrationTests |
+| `HistoriaService` / gate | `HistoriaServiceTests`, `HistoriaAuthorizationGateTests`; web: `HistoriaWebAuthorizationTests` | UnitTests + IntegrationTests |
+| `PegamentoService` / PDF / calculator | `PegamentoServiceTests`, `PegamentoPdfTests`, `PegamentoHistoricalRelationshipTests`, `PegamentoDocumentConfirmationTests`, `JobOnProductionFolderResolverTests`, `PegamentoMeasurementCalculatorTests`; web: `PegamentoWebApiTests`, `PegamentoPdfRendererTests` | UnitTests + IntegrationTests |
+| `ReparacaoExternaService` / machine / gate | `ReparacaoExternaServiceTests`, `RepairExitStatusMachineTests`, `RepairerCapabilityTests`, `ReparacaoExternaAuthorizationGateTests`; web: `ReparacaoExternaWebApiTests` | UnitTests + IntegrationTests |
+| `ReparacaoInternaService` / domain / projection | `ReparacaoInternaServiceTests`, `ReparacaoInternaDomainTests`, `ReparacaoInternaProductionProjectionTests`; web: `ReparacaoInternaWebApiTests` | UnitTests + IntegrationTests |
+| `TampaoService` / domain | `TampaoServiceTests`, `TampaoDomainTests`, `TampaoMachineTests`; web: `TampaoWebApiTests` | UnitTests + IntegrationTests |
+| Access catalog / resolver / nav | `AccessResolverTests`, `CurrentUserTests`, `ModuleCatalogTests`, `CanonicalModuleCatalogTests`, `CanonicalPageCatalogTests`, `CapabilityAndModuleDefinitionTests`, `CatalogValidatorTests`, `GrantNormalizerTests`, `NavigationServiceTests`, `ModuleCatalogMirrorSynchronizerTests` | UnitTests |
+| Admin services | `AdminUserServiceTests`, `AdminAuditAndMirrorTests`, `AdminTemplateServiceTests`; web: `AdminSecurityGuardTests`, `AdminFormAntiforgeryTests`, `AdminWebAuthorizationTests`, `AdminUserListResetTests`, `CatalogCompositionGuardTests` | UnitTests + IntegrationTests |
+| Identity services / adapters / session | `IdentityResolutionServiceTests`, `AccessTemplateGrantsParserTests`, `BootstrapAdminServiceTests`; `SupabaseAuthAdapterTests`, `SupabaseAdminProvisioningAdapterTests`, `IdentitySecurityGuardTests`, `WebAuthSessionTests`, `IdentityAmbiguityLandingTests` | UnitTests + IntegrationTests |
+| Kernel / Persistence unit | `ClockTests`, `ResultTests`, `DomainErrorTests`, `ConcurrencyGuardTests`, `PersistenceAuthorshipTests` | UnitTests |
 | `DapperAdminRepository` | `DapperAdminRepositoryProjectionTests` | IntegrationTests |
-| `/login` + session + `ISupabaseAuthAdapter` | `WebAuthSessionTests`, `IdentityAmbiguityLandingTests` | IntegrationTests |
-| `SupabaseAuthAdapter` | `SupabaseAuthAdapterTests` | IntegrationTests |
-| `SupabaseAdminProvisioningAdapter` | `SupabaseAdminProvisioningAdapterTests` | IntegrationTests |
-| `SessionClaims` / `IAdminProvisioningAdapter` wiring | `IdentitySecurityGuardTests` | IntegrationTests |
-| `/api/ferramentas/*` | `FerramentasWebApiTests` | IntegrationTests |
-| `/api/reparacao-externa/*` | `ReparacaoExternaWebApiTests` | IntegrationTests |
-| `/api/reparacao-interna/*` | `ReparacaoInternaWebApiTests` | IntegrationTests |
-| `/api/tampoes/*` | `TampaoWebApiTests` | IntegrationTests |
-| `/api/pegamentos/*` | `PegamentoWebApiTests` | IntegrationTests |
-| `/jobon` landing + `IJobOnRepository` | `JobOnLandingTests` | IntegrationTests |
-| `JobOnLineColor` | `JobOnLineColorMappingTests` | IntegrationTests |
-| `MigrationRunner` / `MigrationDiscovery` / `MigrationChecksum` / `IMigrationScriptGateway` | `MigrationRunnerTests`, `MigrationDiscoveryTests`, `MigrationChecksumTests`, `MigrationArchitectureGuardTests` | IntegrationTests |
-| N25_remediation.sql schema (PostgreSQL) | `RemediationGuardTests` | IntegrationTests |
-| `DbConnectionFactory` / `DatabaseConnectionSettings` | `DbConnectionFactoryTests` | IntegrationTests |
-| `DapperUnitOfWork` / `IDbConnectionFactory` | `DapperUnitOfWorkTests` | IntegrationTests |
-| `PersistenceMappings` / `DefaultTypeMap` | `PersistenceMappingsTests` | IntegrationTests |
-| Persistence dependency graph / assemblies | `PersistenceArchitectureGuardTests` | IntegrationTests |
-| `PegamentoPdfRenderer` | `PegamentoPdfRendererTests` | IntegrationTests |
-| `PesoSingleFilePdfRenderer` | `PesoPdfVisualCheck` | IntegrationTests |
-| `BootstrapAdminCommand` / `MigrateCommand` / `CliModeResolver` | `BootstrapAdminCliTests`, `CliCommandPlaceholderTests`, `CliRoutingTests`, `MigrateCliTests` | IntegrationTests |
-| Design-system static assets | `DesignSystemGuardTests`, `ShellAndCalendarGuardTests`, `JobOnScriptSafetyGuardTests` | IntegrationTests |
+| Migration engine / family | `MigrationRunnerTests`, `MigrationDiscoveryTests`, `MigrationChecksumTests`, `MigrationArchitectureGuardTests` | IntegrationTests |
+| N25_remediation.sql schema | `RemediationGuardTests` | IntegrationTests |
+| `DbConnectionFactory` / `DapperUnitOfWork` / `PersistenceMappings` / dependency graph | `DbConnectionFactoryTests`, `DapperUnitOfWorkTests`, `PersistenceMappingsTests`, `PersistenceArchitectureGuardTests` | IntegrationTests |
+| CLI commands | `BootstrapAdminCliTests`, `CliCommandContractTests`, `CliRoutingTests`, `MigrateCliTests` | IntegrationTests |
+| Design-system static assets / scripts | `DesignSystemGuardTests`, `ShellAndCalendarGuardTests`, `JobOnScriptSafetyGuardTests` | IntegrationTests |
+| Shell / module routes (WAF) | `ShellRoutingTests` (+ visual reuse via `BA.Dmo.VisualHost`) | IntegrationTests |
 | Production auth path (no debug bypass) | `NoDebugBypassGuardTests` | IntegrationTests |
 
 ---
 
 ## 14. Module / Area Test Index
 
-Filename/class navigation by module folder (as present on disk).
-
 | Module / Area | Test Classes |
 |---|---|
-| Job On | `JobOnServiceTests`, `JobOnDomainTests`, `JobOnPdfTests`, `JobOnVerificationGeneratorTests`, `JobOnActivityResolverTests`, `JobOnUserContextTests`, `JobOnRevisionImmutabilityIntegrationTests` (UnitTests); `JobOnLandingTests`, `JobOnLineColorMappingTests` (IntegrationTests) |
-| Peso | `PesoServiceTests`, `PesoDomainTests`, `WeightCalculatorTests`, `PesoControlWorkflowTests` (UnitTests); `PesoPdfVisualCheck` (IntegrationTests) |
-| Armazém | `ArmazemServiceTests`, `WarehouseStockRulesTests`, `ArmazemAuthorizationGateTests`, `FerramentasArmazemToolIdentityResolverTests` |
-| Boquilhas | `BoquilhasServiceTests`, `BqAuthorizationGateTests`, `BqInventoryCalculatorTests` |
-| Controlo | `ControloSheetServiceTests`, `ControloFolhaTests` |
-| Ferramentas | `FerramentasServiceTests`, `FerramentasDomainTests`, `FerramentasUtilisationServiceTests` |
-| História | `HistoriaServiceTests`, `HistoriaAuthorizationGateTests` |
-| Pegamentos | `PegamentoServiceTests`, `PegamentoPdfTests`, `PegamentoMeasurementCalculatorTests`, `PegamentoHistoricalRelationshipTests`, `PegamentoDocumentConfirmationTests`, `JobOnProductionFolderResolverTests` |
-| Reparação Externa | `ReparacaoExternaServiceTests`, `RepairExitStatusMachineTests`, `RepairerCapabilityTests`, `ReparacaoExternaAuthorizationGateTests` |
-| Reparação Interna | `ReparacaoInternaServiceTests`, `ReparacaoInternaDomainTests`, `ReparacaoInternaProductionProjectionTests` |
-| Tampões | `TampaoServiceTests`, `TampaoDomainTests`, `TampaoMachineTests` |
-| Admin / Access | `AccessResolverTests`, `ModuleCatalogTests`, `CanonicalModuleCatalogTests`, `CanonicalPageCatalogTests`, `CapabilityAndModuleDefinitionTests`, `CatalogValidatorTests`, `GrantNormalizerTests`, `NavigationServiceTests`, `ModuleCatalogMirrorSynchronizerTests`, `CurrentUserTests`; `AdminUserServiceTests`, `AdminAuditAndMirrorTests`, `AdminTemplateServiceTests`; `NoDebugBypassGuardTests` |
-| Identity / Auth | `IdentityResolutionServiceTests`, `AccessTemplateGrantsParserTests`, `BootstrapAdminServiceTests`; `SupabaseAuthAdapterTests`, `SupabaseAdminProvisioningAdapterTests`, `IdentitySecurityGuardTests`, `WebAuthSessionTests`, `IdentityAmbiguityLandingTests` |
+| Job On | `JobOnServiceTests`, `JobOnDomainTests`, `JobOnPdfTests`, `JobOnVerificationGeneratorTests`, `JobOnActivityResolverTests`, `JobOnUserContextTests`, `JobOnRevisionImmutabilityIntegrationTests` (Unit); `JobOnLandingTests`, `JobOnLineColorMappingTests`, `JobOnImageWebApiTests`, `JobOnPdfRendererTests` (Integration) |
+| Peso | `PesoServiceTests`, `PesoDomainTests`, `WeightCalculatorTests`, `PesoControlWorkflowTests` (Unit); `PesoPdfVisualCheck`, `PesoComparisonGuardTests` (Integration) |
+| Armazém | `ArmazemServiceTests`, `WarehouseStockRulesTests`, `ArmazemAuthorizationGateTests`, `FerramentasArmazemToolIdentityResolverTests` (Unit); `ArmazemBqGuardTests`, `ArmazemCorrectionGuardTests`, `ArmazemCreateGuardTests`, `ArmazemRecentMovementsGuardTests` (Integration, static) |
+| Boquilhas | `BoquilhasServiceTests`, `BqAuthorizationGateTests`, `BqInventoryCalculatorTests` (Unit); `BoquilhasWebAuthorizationTests` (Integration) |
+| Controlo | `ControloSheetServiceTests`, `ControloFolhaTests` (Unit); `ControloProjectionGuardTests` (Integration, static) |
+| Ferramentas | `FerramentasServiceTests`, `FerramentasDomainTests`, `FerramentasUtilisationServiceTests` (Unit); `FerramentasWebApiTests` (Integration) |
+| História | `HistoriaServiceTests`, `HistoriaAuthorizationGateTests` (Unit); `HistoriaWebAuthorizationTests` (Integration) |
+| Pegamentos | `PegamentoServiceTests`, `PegamentoPdfTests`, `PegamentoMeasurementCalculatorTests`, `PegamentoHistoricalRelationshipTests`, `PegamentoDocumentConfirmationTests`, `JobOnProductionFolderResolverTests` (Unit); `PegamentoWebApiTests`, `PegamentoPdfRendererTests` (Integration) |
+| Reparação Externa | `ReparacaoExternaServiceTests`, `RepairExitStatusMachineTests`, `RepairerCapabilityTests`, `ReparacaoExternaAuthorizationGateTests` (Unit); `ReparacaoExternaWebApiTests` (Integration) |
+| Reparação Interna | `ReparacaoInternaServiceTests`, `ReparacaoInternaDomainTests`, `ReparacaoInternaProductionProjectionTests` (Unit); `ReparacaoInternaWebApiTests` (Integration) |
+| Tampões | `TampaoServiceTests`, `TampaoDomainTests`, `TampaoMachineTests` (Unit); `TampaoWebApiTests` (Integration) |
+| Admin / Access | `AccessResolverTests`, `ModuleCatalogTests`, `CanonicalModuleCatalogTests`, `CanonicalPageCatalogTests`, `CapabilityAndModuleDefinitionTests`, `CatalogValidatorTests`, `GrantNormalizerTests`, `NavigationServiceTests`, `ModuleCatalogMirrorSynchronizerTests`, `CurrentUserTests`; `AdminUserServiceTests`, `AdminAuditAndMirrorTests`, `AdminTemplateServiceTests` (Unit); `AdminSecurityGuardTests`, `CatalogCompositionGuardTests`, `AdminFormAntiforgeryTests`, `AdminWebAuthorizationTests`, `AdminUserListResetTests`, `ShellRoutingTests` (Integration) |
+| Identity / Auth | `IdentityResolutionServiceTests`, `AccessTemplateGrantsParserTests`, `BootstrapAdminServiceTests` (Unit); `SupabaseAuthAdapterTests`, `SupabaseAdminProvisioningAdapterTests`, `IdentitySecurityGuardTests`, `WebAuthSessionTests`, `IdentityAmbiguityLandingTests` (Integration) |
 | Kernel | `ClockTests`, `ResultTests`, `DomainErrorTests` |
-| Persistence | `ConcurrencyGuardTests`, `PersistenceAuthorshipTests` (UnitTests); `DbConnectionFactoryTests`, `DapperUnitOfWorkTests`, `PersistenceMappingsTests`, `PersistenceArchitectureGuardTests` (IntegrationTests) |
+| Persistence | `ConcurrencyGuardTests`, `PersistenceAuthorshipTests` (Unit); `DbConnectionFactoryTests`, `DapperUnitOfWorkTests`, `PersistenceMappingsTests`, `PersistenceArchitectureGuardTests`, `DapperAdminRepositoryProjectionTests` (Integration) |
 | Migrations | `MigrationRunnerTests`, `MigrationDiscoveryTests`, `MigrationChecksumTests`, `MigrationArchitectureGuardTests` |
 | Database / Integrity | `RemediationGuardTests` |
-| Web / Shell / Design | `ShellRoutingTests`, `BoquilhasWebAuthorizationTests`, `HistoriaWebAuthorizationTests`, `AdminWebAuthorizationTests`, `AdminFormAntiforgeryTests`, `AdminUserListResetTests`, `AdminSecurityGuardTests`, `CatalogCompositionGuardTests`, `FerramentasWebApiTests`, `ReparacaoExternaWebApiTests`, `ReparacaoInternaWebApiTests`, `TampaoWebApiTests`, `PegamentoWebApiTests`, `JobOnLandingTests`; `DesignSystemGuardTests`, `ShellAndCalendarGuardTests`, `JobOnScriptSafetyGuardTests` |
-| CLI | `BootstrapAdminCliTests`, `CliCommandPlaceholderTests`, `CliRoutingTests`, `MigrateCliTests` |
-| PDF / documents | `JobOnPdfTests`, `PegamentoPdfTests`, `PegamentoPdfRendererTests`, `PesoPdfVisualCheck` |
+| Web / Shell / Design | `ShellRoutingTests`, `BoquilhasWebAuthorizationTests`, `HistoriaWebAuthorizationTests`, `AdminWebAuthorizationTests`, `AdminFormAntiforgeryTests`, `AdminUserListResetTests`, `FerramentasWebApiTests`, `ReparacaoExternaWebApiTests`, `ReparacaoInternaWebApiTests`, `TampaoWebApiTests`, `PegamentoWebApiTests`, `JobOnLandingTests`, `JobOnImageWebApiTests` (Integration); `DesignSystemGuardTests`, `ShellAndCalendarGuardTests`, `JobOnScriptSafetyGuardTests`, `ArmazemBqGuardTests`, `ArmazemCorrectionGuardTests`, `ArmazemCreateGuardTests`, `ArmazemRecentMovementsGuardTests`, `PesoComparisonGuardTests` (static) |
+| CLI | `BootstrapAdminCliTests`, `CliCommandContractTests` (`CliCommandPlaceholderTests.cs`), `CliRoutingTests`, `MigrateCliTests` |
+| PDF / documents | `JobOnPdfTests`, `JobOnPdfRendererTests`, `PegamentoPdfTests`, `PegamentoPdfRendererTests`, `PesoPdfVisualCheck` |
+| Visual / manual host | `BA.Dmo.VisualHost\Program.cs` (Kestrel host over `ShellFixture`) |
 
 ---
 
@@ -1389,75 +657,101 @@ Filename/class navigation by module folder (as present on disk).
 
 Counting rules:
 
-- **Test classes** = classes containing at least one `[Fact]` or `[Theory]` method (determined by brace-scope scan of each declared class across all `.cs` files). Fixture/DTO/helper-only classes and generated classes are excluded unless they contain a test method.
-- **Test methods** = occurrences of `[Fact]` + `[Theory]` (each method counted once; `[InlineData]` rows are not separate methods).
-- **Fixtures** = the 16 `WebApplicationFactory<Program>` test-host fixture classes.
-- **Helpers/Test Doubles** = distinct hand-written fake/stub/builder/current-user/clock/authorship/UoW/HTTP/ADO.NET double classes (excluding test classes, DTOs and the single `EffectiveAccessTestExtensions` static extension class).
+- **Test classes** = classes containing at least one `[Fact]`/`[Theory]` (fixture/DTO/helper-only classes excluded).
+- **Test methods** = one per `[Fact]`/`[Theory]` attribute occurrence (`[InlineData]` rows are not separate methods).
+- **Fixtures** = the 17 `WebApplicationFactory<Program>` test-host fixture classes.
+- **Helpers / Test Doubles** = distinct hand-written fake/stub/builder/current-user/clock/authorship/UoW/HTTP/ADO.NET double classes (approximate).
 
 | Project | Source Files | Test Classes | Test Methods | Fixtures/Helpers |
-|---|---|:---:|:---:|:---:|
-| `BA.Dmo.UnitTests` | 80 | 62 | 543 | fakes/helpers/doubles (no web fixtures) |
-| `BA.Dmo.IntegrationTests` | 44 | 40 | 205 | 16 web fixtures + fakes/infra doubles |
-| **Total** | **124** | **102** | **748** | **16 web fixtures + ~115 helpers/doubles** |
+|---|---|---|:---:|:---:|---:|
+| `BA.Dmo.UnitTests` | 81 | 62 | 547 (523 Fact + 24 Theory) | fakes/helpers/doubles (no web fixtures) |
+| `BA.Dmo.IntegrationTests` | 53 | 48 | 248 (238 Fact + 10 Theory) | 17 web fixtures + fakes/infra doubles |
+| `BA.Dmo.VisualHost` | 1 | — (not a test project) | — | 1 executable host |
+| **Total** | **135** | **110** | **795** | **17 web fixtures + ~120 helpers/doubles** |
 
-> Note: test-class split (62 unit / 40 integration) is based on files containing `[Fact]`/`[Theory]` (each test-method file maps to one `*Tests`-named class). Fixtures = the 16 `WebApplicationFactory<Program>` test-host fixtures. Helper/double figures (~115 distinct) count fake/stub/builder/current-user/clock/authorship/UoW/HTTP/ADO.NET/seed double classes across both projects (nested doubles declared inside test files counted once by name; DTOs, the single static extension class, and the 16 web fixtures excluded).
+Helper/double estimate (~120) counts fake/stub/builder/current-user/clock/authorship/UoW/HTTP/ADO.NET/seed classes across both projects (nested doubles counted once per name; DTOs and web fixtures excluded). Figures re-derived this revision from an attribute scan of the current tree.
 
 ---
 
 ## 16. Count Summary by Area
 
 | Area | Test Classes | Test Methods |
-|---|---|:---:|
-| Job On (incl. revision immutability) | 7 | ~90 |
-| Peso | 4 | ~50 |
-| Armazém | 4 | ~25 |
-| Boquilhas | 3 | ~20 |
-| Controlo | 2 | ~12 |
-| Ferramentas | 3 | ~25 |
-| História | 2 | ~9 |
-| Pegamentos | 6 | ~25 |
-| Reparação Externa | 4 | ~30 |
-| Reparação Interna | 3 | ~25 |
-| Tampões | 3 | ~30 |
-| Shared (Access/Admin/Identity/Kernel/Persistence unit) | 25 | ~200 |
-| Integration — Web/Shell/Design | 12 | ~70 |
-| Integration — Identity/Auth | 5 | ~40 |
-| Integration — Migrations | 4 | ~20 |
-| Integration — Persistence/Optim | 5 | ~35 |
+|---|---|---|
+| Job On (unit, incl. revision immutability + image path) | 7 | ~95 |
+| Job On (integration: landing, line-color, images, PDF renderer) | 4 | ~14 |
+| Peso (unit) | 4 | ~50 |
+| Peso (integration: visual check + static comparison guard) | 2 | ~4 |
+| Armazém (unit) | 4 | ~25 |
+| Armazém (integration: static Design guards) | 4 | ~11 |
+| Boquilhas (unit + web) | 4 | ~25 |
+| Controlo (unit + static guard) | 3 | ~13 |
+| Ferramentas (unit + web) | 4 | ~30 |
+| História (unit + web) | 3 | ~13 |
+| Pegamentos (unit + web) | 8 | ~45 |
+| Reparação Externa (unit + web) | 5 | ~35 |
+| Reparação Interna (unit + web) | 4 | ~30 |
+| Tampões (unit + web) | 4 | ~35 |
+| Shared (Access/Admin/Identity/Kernel/Persistence unit) | 21 | ~200 |
+| Integration — Web/Shell/Auth-z (routes, antiforgery, admin, shell) | 8 | ~45 |
+| Integration — Design/static guards | 8 | ~24 |
+| Integration — Identity/Auth (Supabase + session) | 5 | ~40 |
+| Integration — Migrations | 4 | ~23 |
+| Integration — Persistence | 4 | ~27 |
 | Integration — Database/Integrity | 1 | 10 |
-| Integration — CLI | 4 | ~15 |
-| Integration — API endpoints (Ferramentas/RepExt/RepInt/Tampões/Pegamentos/JobOn) | 6 | ~27 |
+| Integration — CLI | 4 | ~12 |
+| Integration — API endpoints (Ferramentas/RepExt/RepInt/Tampões/Pegamentos) | 5 | ~25 |
 
 Area counts are approximate translations of the verified test files/methods; exact totals are the project totals in §15.
 
 ---
 
-## 17. Source Locations
+## 17. COVERAGE GAP — NEEDS REVIEW
 
-All exact paths are listed in §3 (Global Test Inventory), §4 and §5. The two project files are:
+Mandated evidence-based records: production paths with no visible test coverage (or only static text guarding). Nothing below is fixed here and no deletion is implied.
 
-- `D:\BA-DMO-CODEX-CLEAN\tests\BA.Dmo.UnitTests\BA.Dmo.UnitTests.csproj`
-- `D:\BA-DMO-CODEX-CLEAN\tests\BA.Dmo.IntegrationTests\BA.Dmo.IntegrationTests.csproj`
+| # | Production path | Evidence of absence / limited coverage |
+|---|---|---|
+| 1 | `FerramentasRepairToolPieceResolver` — `src\BA.Dmo.Application\Modules\ReparacaoExterna\FerramentasRepairToolPieceResolver.cs` (real `IToolPieceResolver`: CM/MF type mapping, delegation to `IFerramentasPieceLookup`) | **Zero references in the entire test tree** (grep `FerramentasRepairToolPieceResolver` → no match). RepExt unit + WAF tests inject `FakeToolPieceResolver` only. The CM/MF/BQ mapping and resolver delegation are never exercised. |
+| 2 | `DapperArticleReferenceImageRepository` — `src\BA.Dmo.Infrastructure\Access\DapperArticleReferenceImageRepository.cs` (upsert + audit-insert + delete with affected-count guard for `article_reference_images`, N29/N30 migrations) | **Zero references in the test tree** (grep → no match). Image association tests (`JobOnServiceTests`, `JobOnImageWebApiTests`) use in-memory fakes; the Dapper SQL, atomicity and audit-snapshot path is never executed by a test. |
+| 3 | `DapperControloProductionContextLookup` — `src\BA.Dmo.Infrastructure\Access\DapperControloProductionContextLookup.cs` (5-family resumo projection SQL + hydration) | Only `ControloProjectionGuardTests` (static `File.ReadAllText` string asserts on the SQL family list). No functional test executes the lookup against any connection/double; no hydration test. |
+| 4 | Peso web data flows (`/peso`, `/peso/responsavel`, Peso API) | No dedicated WAF/functional test drives Peso flows (approve, comparison, documents, settings). Coverage today: shell-layout GETs in `ShellRoutingTests` (Scenarios 2/3) and `WebAuthSessionTests`, extensive `PesoService*` unit tests, static `PesoComparisonGuardTests`, and `PesoPdfVisualCheck` (renderer only). No Peso WAF fixture with `IPesoRepository` data assertions exists. |
+| 5 | Controlo web surface | No WAF test at all for `/controlo` or any Controlo API/page flow; only `ControloSheetServiceTests`/`ControloFolhaTests` (unit) + static `ControloProjectionGuardTests`. Integration tree has no other Controlo entry. |
+| 6 | Armazém mutation endpoints (`/api/armazem/entrada`, `/api/armazem/saida`, `/api/armazem/corrigir-localizacao`, …) | No functional WAF call; only static source guards (`ArmazemCreateGuardTests`, `ArmazemCorrectionGuardTests` assert Program.cs/armazem.js strings) plus service-level unit tests. `ShellRoutingTests` covers only Armazém **GET** (`/api/armazem/consulta`, `/api/armazem/movimentos`) and asserts `/api/armazem/substituir` → 404. |
 
-Shared build settings: `D:\BA-DMO-CODEX-CLEAN\Directory.Build.props`, `D:\BA-DMO-CODEX-CLEAN\global.json`.
+Notes:
+
+- `PegamentoPdfFilename.Compute` is **covered indirectly** (filename asserted verbatim in `PegamentoPdfTests` and `PegamentoDocumentConfirmationTests`) — not a gap.
+- `ArticleReferenceImageRules` is covered indirectly through service-layer image tests (unsafe-path rejection, reference extraction) — no dedicated unit class, acceptable engagement noted for owner awareness.
+- **POTENTIAL OVERLAP — NEEDS AUDIT:** per-file duplicated nested fakes (see §7.5); distinct but parallel `FakeBoquilhasWebRepository` vs `FakeBoquilhasRepository`, and Unit-vs-file-local `FakeJobOnRepository`/`IArticleReferenceImageRepository` fakes.
+- **UNKNOWN / OWNER DECISION REQUIRED:** nothing else flagged; the rest of the inventory matches the current tree (`CONFIRMED CURRENT`).
+
+---
+
+## 18. Source Locations
+
+All exact paths are listed in §3, §4 and §5. The three project files are:
+
+- `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\BA.Dmo.UnitTests.csproj`
+- `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\BA.Dmo.IntegrationTests.csproj`
+- `AI-CONTEXT\docs\tests\BA.Dmo.VisualHost\BA.Dmo.VisualHost.csproj`
+
+Shared build settings: `D:\BA-DMO\Directory.Build.props` (no `global.json` in the repository). Solution references: `BA-DMO.sln`, `tests` solution folder `{0AB3BF05-4346-4AA6-1389-037BE0695223}` containing the three projects above.
 
 ---
 
 ## Sources Verified
 
-Primary evidence (all current test source, read from disk):
+Primary evidence (all current test source, read/audited from disk this revision):
 
-- `tests\BA.Dmo.UnitTests\` (80 `.cs` files across `Modules\*` and `Shared\*`)
-- `tests\BA.Dmo.IntegrationTests\` (44 `.cs` files across `Access`, `Cli`, `Design`, `Ferramentas`, `Identity`, `Integrity`, `JobOn`, `Migrations`, `Pegamentos`, `Persistence`, `Peso`, `ReparacaoExterna`, `ReparacaoInterna`, `Security`, `Tampoes`)
-- Test `.csproj` files (`BA.Dmo.UnitTests.csproj`, `BA.Dmo.IntegrationTests.csproj`)
-- `Directory.Build.props`, `global.json`
+- `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\` (81 `.cs` files — full class inventory + attribute scan; full reads of new/updated JobOn image + PDF files)
+- `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\` (53 `.cs` files — full class inventory + attribute scan; full reads of all new files: `ControloProjectionGuardTests`, `Design\{ArmazemBq,ArmazemCorrection,ArmazemCreate,ArmazemRecentMovements,PesoComparison}GuardTests`, `JobOn\{JobOnImageWebApiTests,JobOnPdfRendererTests}`, `IntegrationTestEnvironment.cs`, `ShellRoutingTests`)
+- `AI-CONTEXT\docs\tests\BA.Dmo.VisualHost\Program.cs` + `BA.Dmo.VisualHost.csproj`
+- Test `.csproj` files (`BA.Dmo.UnitTests.csproj`, `BA.Dmo.IntegrationTests.csproj`), `Directory.Build.props`; `global.json` — **not present** in the repository (old map's claim removed)
+- `BA-DMO.sln` (tests solution-folder references)
+- Production cross-checks for gap evidence: `src\BA.Dmo.Application\Modules\ReparacaoExterna\FerramentasRepairToolPieceResolver.cs`, `src\BA.Dmo.Infrastructure\Access\DapperArticleReferenceImageRepository.cs`, `DapperControloProductionContextLookup.cs`, `src\BA.Dmo.Application\Modules\JobOn\ArticleReferenceImage.cs`, `src\BA.Dmo.Application\Modules\Pegamentos\PegamentoPdfFilename.cs`, `src\BA.Dmo.Application\Shared\Shell\IShellService.cs`
 
-Project targets referenced in tests:
+Project targets referenced in tests: `src\BA.Dmo.Domain`, `src\BA.Dmo.Application`, `src\BA.Dmo.Infrastructure`, `src\BA.Dmo.Web`.
 
-- `src\BA.Dmo.Domain`, `src\BA.Dmo.Application`, `src\BA.Dmo.Infrastructure`, `src\BA.Dmo.Web`
+Registry reference: [00_INDEX.md](00_INDEX.md). Not used as test evidence: other domain/design maps (01/02), Design/SOT, historical pass logs. Related maps used for cross-references only: [03_MIGRATIONS.md](03_MIGRATIONS.md), [04_DAPPER_INFRASTRUCTURE.md](04_DAPPER_INFRASTRUCTURE.md), [19_APPLICATION.md](19_APPLICATION.md), [20_WEB.md](20_WEB.md), module maps 06–18.
 
-Registry reference: `maps\00_INDEX.md` (mapping contract/registry only).
-
-Not used as test evidence: 01_DOMAIN.md, 02_DATABASE.md, 03_MIGRATIONS.md, 04_DAPPER_INFRASTRUCTURE.md, Design/SOT, historical pass logs.
-
-**Scope disclaimer:** This map is a pure technical inventory of test code and location. It does not use Design/SOT interpretation, does not perform coverage or gap analysis, and does not judge test quality.
+**Scope disclaimer:** inventory + location, with evidence-based `COVERAGE GAP — NEEDS REVIEW` records (§17). No coverage-quality judgment beyond those records; no fixes or deletions are proposed.

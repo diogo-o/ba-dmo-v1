@@ -22,6 +22,7 @@ Status: COMPLETE
 - [15. External Technical References](#15-external-technical-references)
 - [16. Target-to-Layer Index](#16-target-to-layer-index)
 - [17. Sources Verified](#17-sources-verified)
+- [18. Map Cross-References](#18-map-cross-references)
 - [Counts](#counts)
 
 ## 1. Scope
@@ -39,7 +40,7 @@ Technical inventory of Ferramentas-specific objects across Domain, Application, 
 | Migrations | Ferramentas objects created/altered in N04, N12, N19, N25 | `database\migrations\` |
 | Web | Index, Criar, Ficha Razor Pages (CS/HTML 7 files); minimal API endpoints in `Program.cs` | `src\BA.Dmo.Web\Pages\Ferramentas\`, `src\BA.Dmo.Web\Program.cs` |
 | Static Assets | `ferramentas.js`, `ferramentas-layout.css` | `src\BA.Dmo.Web\wwwroot\scripts\`, `wwwroot\styles\modules\` |
-| Tests | `FerramentasDomainTests`, `FerramentasServiceTests`, `FerramentasUtilisationServiceTests` (unit); `FerramentasWebApiTests` (integration) | `tests\BA.Dmo.UnitTests\Modules\Ferramentas\`, `tests\BA.Dmo.IntegrationTests\Ferramentas\` |
+| Tests | `FerramentasDomainTests`, `FerramentasServiceTests`, `FerramentasUtilisationServiceTests` (unit); `FerramentasWebApiTests` (integration) | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Ferramentas\`, `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Ferramentas\` |
 
 ### 2.1 Layer Coverage
 
@@ -50,7 +51,7 @@ Technical inventory of Ferramentas-specific objects across Domain, Application, 
 | Infrastructure | YES | `src\BA.Dmo.Infrastructure\Access\DapperFerramentas*` |
 | Web | YES | `src\BA.Dmo.Web\Pages\Ferramentas\`; `src\BA.Dmo.Web\Program.cs`; `Authorization\ModuleAuthorizationHandler.cs` |
 | Database | YES | `database\migrations\N04_ferramentas.sql`, `N19_tool_usage.sql`, `N25_remediation.sql` |
-| Tests | YES | `tests\BA.Dmo.UnitTests\Modules\Ferramentas\`, `tests\BA.Dmo.IntegrationTests\Ferramentas\` |
+| Tests | YES | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Ferramentas\`, `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Ferramentas\` |
 
 This is technical navigation only; it does not explain workflow.
 
@@ -76,6 +77,8 @@ Namespace `BA.Dmo.Domain.Modules.Ferramentas`. All files under `src\BA.Dmo.Domai
 | `ToolUtilisationStatus` | record (history + latest) | `History:IReadOnlyList<ToolUtilisationReading>`, `Latest`, `PercentUsed:decimal?` | `ToolUtilisationReading.cs` |
 
 Domain factory methods return `Result<T, DomainError>`. Validation error codes observed: `FERRAMENTAS_REFCODE_REQUIRED`, `FERRAMENTAS_LOTE_REQUIRED`, `FERRAMENTAS_LINES_REQUIRED`, `FERRAMENTAS_QTY_INVALID`, `FERRAMENTAS_PIECE_SEQUENCE_INVALID`, `FERRAMENTAS_PIECE_NUMBER_REQUIRED`, `FERRAMENTAS_CONDITION_REASON_REQUIRED`, `FERRAMENTAS_RULE_TEXT_REQUIRED`.
+
+Use-case-level codes (returned by `FerramentasService`, defined in source, not in domain factories): `FERRAMENTAS_DUPLICATE_REFERENCE`, `FERRAMENTAS_DUPLICATE_LOTE`, `FERRAMENTAS_PIECE_NOT_FOUND`, `FERRAMENTAS_NOT_FOUND`, `FERRAMENTAS_FORBIDDEN` (gate), `FERRAMENTAS_UTIL_CUMUL_NEGATIVE`, `FERRAMENTAS_UTIL_SAP_RANGE`, `FERRAMENTAS_UTIL_PERCENT_RANGE` (R003 utilisation).
 
 ## 4. Application Objects
 
@@ -121,6 +124,8 @@ Port projection records:
 | `FerramentasIdentityHit` | `ToolReferenceId`, `ToolLoteId`, `Type:FerramentasToolType`, `Reference`, `Lot`, `TechnicalName` | `IFerramentasIdentityLookup.cs` |
 | `FerramentasPieceHit` | `PhysicalPieceId`, `ToolLoteId`, `ToolReferenceId`, `Type:FerramentasToolType`, `Reference`, `Lot`, `Number`, `TechnicalName` | `IFerramentasPieceLookup.cs` |
 
+> **NEEDS REVIEW — ORPHAN CANDIDATE:** `IFerramentasRepository.CopyCheckRuleAsync(Guid sourceRuleId, Guid targetLoteId)` and its Dapper implementation (`DapperFerramentasRepository.CopyCheckRuleAsync`, `src\BA.Dmo.Infrastructure\Access\DapperFerramentasRepository.cs` line 383) have NO caller anywhere under `src\`. `FerramentasService.CreateLoteFromBaseAsync` implements rule-copying inline (loop over `GetCheckRulesByLoteAsync` + `AddCheckRuleAsync`, `FerramentasService.cs` lines 134–142). The port method appears redundant with the service's inline copy path. Evidence: grep of `src\` finds only the interface declaration and the Dapper implementation. Owner decision required (no deletion recommended).
+
 ## 6. Authorization / Catalog Objects
 
 Literal source identifiers (module and capability ids from `CanonicalModuleCatalog`, policy names from `ModuleAuthorizationHandler`, module catalog entry):
@@ -132,6 +137,7 @@ Literal source identifiers (module and capability ids from `CanonicalModuleCatal
 | `ModulePolicies.Ferramentas` | `"BaDmo.Module.ferramentas"` | `src\BA.Dmo.Web\Authorization\ModuleAuthorizationHandler.cs` |
 | `CapabilityPolicies.FerramentasConfigure` | `"BaDmo.Capability.ferramentas.configure"` | `src\BA.Dmo.Web\Authorization\ModuleAuthorizationHandler.cs` |
 | `FerramentasModuleCatalog.ModuleId` | `"ferramentas"` | `src\BA.Dmo.Domain\Modules\Ferramentas\FerramentasModuleCatalog.cs` |
+| `CanonicalPageCatalog.FerramentasListaPageId` | `"ferramentas.lista"`; page route `/ferramentas`, `requiredCapabilityId: null`, display order 40 | `src\BA.Dmo.Application\Shared\Access\CanonicalPageCatalog.cs` |
 | Module definition (kind Module, order 40, route `/ferramentas`, capability `ferramentas.configure`) | — | `CanonicalModuleCatalog.Build()` |
 
 Gate behavior: `FerramentasAuthorizationGate.Require()` requires the `ferramentas` module grant; rule-configuration use cases pass `CanonicalModuleCatalog.FerramentasConfigureCapabilityId` to require `ferramentas.configure`. Endpoints using module policy vs capability policy are listed in section 10.
@@ -194,24 +200,24 @@ All three pages render `ferramentas-layout.css` and load `ferramentas.js`; pages
 
 | Route | Method | Handler target | Authorization | Program.cs line |
 |---|---|---|---|---|
-| `/api/ferramentas/references` | GET | `ListReferencesAsync` | `ModulePolicies.Ferramentas` | 687 |
-| `/api/ferramentas/references/{referenceId:guid}` | GET | `GetReferenceDetailAsync` | `ModulePolicies.Ferramentas` | 698 |
-| `/api/ferramentas/reference` | POST | `CreateReferenceWithFirstLoteAsync` | `ModulePolicies.Ferramentas` | 707 |
-| `/api/ferramentas/references/{referenceId:guid}` | PUT | `EditReferenceAsync` | `ModulePolicies.Ferramentas` | 716 |
-| `/api/ferramentas/references/{referenceId:guid}/lotes` | GET | `ListLotesByReferenceAsync` | `ModulePolicies.Ferramentas` | 727 |
-| `/api/ferramentas/lotes/{loteId:guid}/duplicate` | POST | `CreateLoteFromBaseAsync` | `ModulePolicies.Ferramentas` | 736 |
-| `/api/ferramentas/lotes/{loteId:guid}` | PUT | `EditLoteAsync` | `ModulePolicies.Ferramentas` | 745 |
-| `/api/ferramentas/lotes/{loteId:guid}/pieces` | GET | `ListPiecesByLoteAsync` | `ModulePolicies.Ferramentas` | 756 |
-| `/api/ferramentas/lotes/{loteId:guid}/pieces` | POST | `RegisterPieceAsync` | `ModulePolicies.Ferramentas` | 764 |
-| `/api/ferramentas/lotes/{loteId:guid}/condition` | POST | `SetConditionAsync` | `ModulePolicies.Ferramentas` | 773 |
-| `/api/ferramentas/lotes/{loteId:guid}/rules` | GET | `ListCheckRulesByLoteAsync` | `ModulePolicies.Ferramentas` | 782 |
-| `/api/ferramentas/lotes/{loteId:guid}/rules` | POST | `AddCheckRuleAsync` | `CapabilityPolicies.FerramentasConfigure` | 790 |
-| `/api/ferramentas/rules/{ruleId:guid}` | PUT | `UpdateCheckRuleAsync` | `CapabilityPolicies.FerramentasConfigure` | 798 |
-| `/api/ferramentas/rules/{ruleId:guid}/toggle` | POST | `ToggleCheckRuleAsync` | `CapabilityPolicies.FerramentasConfigure` | 806 |
-| `/api/ferramentas/rules/{ruleId:guid}` | DELETE | `DeleteCheckRuleAsync` | `CapabilityPolicies.FerramentasConfigure` | 814 |
-| `/api/ferramentas/lotes/{loteId:guid}/rules/active` | GET | `ResolveActiveRulesAsync` | `ModulePolicies.Ferramentas` | 823 |
-| `/api/ferramentas/lotes/{loteId:guid}/utilizacao` | POST | `RecordUtilisationReadingAsync` | `ModulePolicies.Ferramentas` | 1609 |
-| `/api/ferramentas/lotes/{loteId:guid}/utilizacao` | GET | `GetUtilisationAsync` | `ModulePolicies.Ferramentas` | 1618 |
+| `/api/ferramentas/references` | GET | `ListReferencesAsync` | `ModulePolicies.Ferramentas` | 703 |
+| `/api/ferramentas/references/{referenceId:guid}` | GET | `GetReferenceDetailAsync` | `ModulePolicies.Ferramentas` | 714 |
+| `/api/ferramentas/reference` | POST | `CreateReferenceWithFirstLoteAsync` | `ModulePolicies.Ferramentas` | 723 |
+| `/api/ferramentas/references/{referenceId:guid}` | PUT | `EditReferenceAsync` | `ModulePolicies.Ferramentas` | 732 |
+| `/api/ferramentas/references/{referenceId:guid}/lotes` | GET | `ListLotesByReferenceAsync` | `ModulePolicies.Ferramentas` | 743 |
+| `/api/ferramentas/lotes/{loteId:guid}/duplicate` | POST | `CreateLoteFromBaseAsync` | `ModulePolicies.Ferramentas` | 752 |
+| `/api/ferramentas/lotes/{loteId:guid}` | PUT | `EditLoteAsync` | `ModulePolicies.Ferramentas` | 761 |
+| `/api/ferramentas/lotes/{loteId:guid}/pieces` | GET | `ListPiecesByLoteAsync` | `ModulePolicies.Ferramentas` | 772 |
+| `/api/ferramentas/lotes/{loteId:guid}/pieces` | POST | `RegisterPieceAsync` | `ModulePolicies.Ferramentas` | 780 |
+| `/api/ferramentas/lotes/{loteId:guid}/condition` | POST | `SetConditionAsync` | `ModulePolicies.Ferramentas` | 789 |
+| `/api/ferramentas/lotes/{loteId:guid}/rules` | GET | `ListCheckRulesByLoteAsync` | `ModulePolicies.Ferramentas` | 798 |
+| `/api/ferramentas/lotes/{loteId:guid}/rules` | POST | `AddCheckRuleAsync` | `CapabilityPolicies.FerramentasConfigure` | 806 |
+| `/api/ferramentas/rules/{ruleId:guid}` | PUT | `UpdateCheckRuleAsync` | `CapabilityPolicies.FerramentasConfigure` | 814 |
+| `/api/ferramentas/rules/{ruleId:guid}/toggle` | POST | `ToggleCheckRuleAsync` | `CapabilityPolicies.FerramentasConfigure` | 822 |
+| `/api/ferramentas/rules/{ruleId:guid}` | DELETE | `DeleteCheckRuleAsync` | `CapabilityPolicies.FerramentasConfigure` | 830 |
+| `/api/ferramentas/lotes/{loteId:guid}/rules/active` | GET | `ResolveActiveRulesAsync` | `ModulePolicies.Ferramentas` | 839 |
+| `/api/ferramentas/lotes/{loteId:guid}/utilizacao` | POST | `RecordUtilisationReadingAsync` | `ModulePolicies.Ferramentas` | 1610 |
+| `/api/ferramentas/lotes/{loteId:guid}/utilizacao` | GET | `GetUtilisationAsync` | `ModulePolicies.Ferramentas` | 1619 |
 
 ### Route Index
 
@@ -224,7 +230,7 @@ All three pages render `ferramentas-layout.css` and load `ferramentas.js`; pages
 
 ### DI Registration (`Program.cs`)
 
-`FerramentasService`, `FerramentasAuthorizationGate` scoped; `IFerramentasRepository → DapperFerramentasRepository`, `IFerramentasRuleLookup → DapperFerramentasRuleLookup`, `IFerramentasIdentityLookup → DapperFerramentasIdentityLookup`, `IFerramentasPieceLookup → DapperFerramentasPieceLookup`; cross-module `IToolIdentityResolver → FerramentasArmazemToolIdentityResolver`, `IToolPieceResolver → FerramentasRepairToolPieceResolver` (Program.cs lines 202–228).
+`FerramentasService`, `FerramentasAuthorizationGate` scoped; `IFerramentasRepository → DapperFerramentasRepository`, `IFerramentasRuleLookup → DapperFerramentasRuleLookup`, `IFerramentasIdentityLookup → DapperFerramentasIdentityLookup`, `IFerramentasPieceLookup → DapperFerramentasPieceLookup`; cross-module `IToolIdentityResolver → FerramentasArmazemToolIdentityResolver`, `IToolPieceResolver → FerramentasRepairToolPieceResolver` (Program.cs lines 211–234: Ferramentas 211–215, Armazém 220–224, Reparação Externa piece-lookup/resolver 229–230).
 
 ## 11. Static Assets
 
@@ -233,11 +239,11 @@ All three pages render `ferramentas-layout.css` and load `ferramentas.js`; pages
 | `ferramentas.js` | CM/MF tab switching; reference search/load; reference row render + selection; create (`/ferramentas/criar`); rule load/render/edit/toggle/save; utilisation guards via `#canConfigure` | `/api/ferramentas/references`, `/api/ferramentas/reference`, `/api/ferramentas/references/{id}`, `/api/ferramentas/lotes/{id}/rules`, `/api/ferramentas/rules/{id}` (+ `/toggle`) | `src\BA.Dmo.Web\wwwroot\scripts\ferramentas.js` |
 | `ferramentas-layout.css` | Ferramentas page layout: `.ferramentas-page`, `.ferramentas-tabs`, `.ferramentas-view`, `.ferramentas-filters`, `.ferramentas-create-grid`, `.ferramentas-machine-grid/.machine-choice`, `.ferramentas-context-grid`, `.ferramentas-rule-editor`; responsive breakpoints | — | `src\BA.Dmo.Web\wwwroot\styles\modules\ferramentas-layout.css` |
 
-No Ferramentas navigation wiring found in shared layout/navigation partials (`_Layout.cshtml`, `_Navigation.cshtml`).
+No hard-coded Ferramentas navigation link exists in the shared layout/navigation partials (`_Layout.cshtml`, `_Navigation.cshtml`, `_Header.cshtml`, `_AdminNav.cshtml`): the `/ferramentas` entry is rendered by the shell at runtime — `RequestShellService` (`src\BA.Dmo.Web\Shell\RequestShellService.cs`) → `INavigationService.Build(identity.Access, path)` over `CanonicalPageCatalog` (`FerramentasListaPageId`, display order 40) ∩ resolved grants.
 
 ## 12. Tests
 
-### Unit Tests — `tests\BA.Dmo.UnitTests\Modules\Ferramentas\`
+### Unit Tests — `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Ferramentas\`
 
 | Test Class | Kind | Direct Target | Main Groups | Path |
 |---|---|---|---|---|
@@ -245,7 +251,7 @@ No Ferramentas navigation wiring found in shared layout/navigation partials (`_L
 | `FerramentasServiceTests` | Unit (xunit) | `FerramentasService` | atomic reference+lote; processo-on-lote; duplicate-reference block; duplicate-lote config-only; rule configure gate; piece register + condition; list mapping; rule lookup | `FerramentasServiceTests.cs` |
 | `FerramentasUtilisationServiceTests` | Unit (xunit) | `FerramentasService` | append-only history; manual percent (no formula); invalid percent reject; negative cumulative reject | `FerramentasUtilisationServiceTests.cs` |
 
-### Integration Tests — `tests\BA.Dmo.IntegrationTests\Ferramentas\`
+### Integration Tests — `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Ferramentas\`
 
 | Test Class | Kind | Direct Target | Main Groups | Path |
 |---|---|---|---|---|
@@ -253,7 +259,7 @@ No Ferramentas navigation wiring found in shared layout/navigation partials (`_L
 
 ## 13. Test Doubles / Helpers
 
-Ferramentas-scope test support under `tests\BA.Dmo.UnitTests\Modules\Ferramentas\`:
+Ferramentas-scope test support under `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Ferramentas\`:
 
 | File | Doubles/Helpers | Role |
 |---|---|---|
@@ -309,7 +315,7 @@ Source-visible references from other modules/tables into Ferramentas objects. Re
 | `IFerramentasIdentityLookup` | `FerramentasArmazemToolIdentityResolver` (Armazem) | application port (read-only) |
 | `IFerramentasPieceLookup` | `FerramentasRepairToolPieceResolver` (Reparação Externa) | application port (read-only) |
 | `FerramentasToolType` | `FerramentasToolType.BQ` enum literal; `FerramentasToolTypeCodec.ToStorage/FromStorage` map `"BQ"`; `tool_references` CHECK `ck_tool_references_type` allows `'BQ'` | enum/storage/reference literal |
-| `FerramentasArmazemToolIdentityResolver` | `FerramentasArmazemToolIdentityResolverTests` (`tests\BA.Dmo.UnitTests\Modules\Armazem\`) | test class targeting Ferramentas port adapter |
+| `FerramentasArmazemToolIdentityResolver` | `FerramentasArmazemToolIdentityResolverTests` (`AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Armazem\`) | test class targeting Ferramentas port adapter |
 
 ## 16. Target-to-Layer Index
 
@@ -326,26 +332,44 @@ Source-visible references from other modules/tables into Ferramentas objects. Re
 | Index, Criar, Ficha Razor Pages + partial | Web | `src\BA.Dmo.Web\Pages\Ferramentas\` |
 | `IndexModel`, `CriarModel`, `FichaModel`, `FerramentasListModel` | Web | `src\BA.Dmo.Web\Pages\Ferramentas\*.cshtml.cs` |
 | `ferramentas.js`, `ferramentas-layout.css` | Static Assets | `src\BA.Dmo.Web\wwwroot\scripts\`, `wwwroot\styles\modules\` |
-| Ferramentas unit/integration test classes + support | Tests | `tests\BA.Dmo.UnitTests\Modules\Ferramentas\`, `tests\BA.Dmo.IntegrationTests\Ferramentas\` |
+| Ferramentas unit/integration test classes + support | Tests | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Ferramentas\`, `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Ferramentas\` |
 
 ## 17. Sources Verified
 
 - `src\BA.Dmo.Domain\Modules\Ferramentas\` (8 files)
 - `src\BA.Dmo.Application\Modules\Ferramentas\` (7 files)
 - `src\BA.Dmo.Application\Modules\Armazem\FerramentasArmazemToolIdentityResolver.cs` (external reference source)
-- `src\BA.Dmo.Application\Modules\ReparacaoExterna\FerramentasRepairToolPieceResolver.cs` (external reference source)
-- `src\BA.Dmo.Application\Shared\Access\CanonicalModuleCatalog.cs`
+- `src\BA.Dmo.Application\Modules\ReparacaoExterna\FerramentasRepairToolPieceResolver.cs` (external reference source; consumes `IFerramentasPieceLookup`)
+- `src\BA.Dmo.Application\Modules\ReparacaoExterna\ReparacaoExternaService.cs` (`IArmazemRepairMovementPort` consumer — cross-module edge)
+- `src\BA.Dmo.Application\Shared\Access\CanonicalModuleCatalog.cs`, `CanonicalPageCatalog.cs` (module/page ids, orders, capability)
 - `src\BA.Dmo.Infrastructure\Access\DapperFerramentas{PieceLookup,IdentityLookup,RuleLookup,Repository}.cs`
-- `src\BA.Dmo.Web\Program.cs` (DI + minimal API)
-- `src\BA.Dmo.Web\Authorization\ModuleAuthorizationHandler.cs`
+- `src\BA.Dmo.Web\Program.cs` (DI 211–234; minimal API 703–845, 1610–1625)
+- `src\BA.Dmo.Web\Authorization\ModuleAuthorizationHandler.cs` (module/capability policies)
 - `src\BA.Dmo.Web\Pages\Ferramentas\*.cshtml` / `*.cshtml.cs`
+- `src\BA.Dmo.Web\Pages\Shared\_Layout.cshtml`, `_Navigation.cshtml`, `_Header.cshtml`, `_AdminNav.cshtml` (shell-driven navigation; no hard-coded module links)
+- `src\BA.Dmo.Web\Shell\RequestShellService.cs` (navigation derivation)
 - `src\BA.Dmo.Web\wwwroot\scripts\ferramentas.js`, `wwwroot\styles\modules\ferramentas-layout.css`
 - `database\migrations\N04_ferramentas.sql`, `N12_rls.sql`, `N19_tool_usage.sql`, `N25_remediation.sql`
 - `database\migrations\N05_jobon.sql`, `N08_reparacoes.sql`, `N09_armazem.sql`, `N23_controlo_folha.sql` (FK reference points)
-- `tests\BA.Dmo.UnitTests\Modules\Ferramentas\*`, `tests\BA.Dmo.UnitTests\Modules\Armazem\FerramentasArmazemToolIdentityResolverTests.cs`
-- `tests\BA.Dmo.IntegrationTests\Ferramentas\FerramentasWebApiTests.cs`
+- `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Ferramentas\*` (5 files), `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Armazem\FerramentasArmazemToolIdentityResolverTests.cs`, `ArmazemTestSupport.cs` (fake of the Ferramentas identity lookup)
+- `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Ferramentas\FerramentasWebApiTests.cs`
 
-Design/SOT not used as evidence. Source-inspection only.
+Design/SOT not used as evidence. Source-inspection only. All Program.cs line numbers verified against current HEAD (`Program.cs` currently 1631 lines).
+
+## 18. Map Cross-References
+
+| Map | Relation to MAP-08 |
+|---|---|
+| [00_INDEX.md](00_INDEX.md) | map index / navigation entry (`MAP-08`) |
+| [01_DOMAIN.md](01_DOMAIN.md) | domain-layer overview; `BA.Dmo.Domain.Modules.Ferramentas` types |
+| [02_DATABASE.md](02_DATABASE.md) | database objects; Ferramentas tables (`tool_references`, `tool_lotes`, `physical_pieces`, `tool_check_rules`, `tool_check_occurrences`, `tool_usage_records`) |
+| [03_MIGRATIONS.md](03_MIGRATIONS.md) | migration family; N04/N12/N19/N25 touchpoints |
+| [04_DAPPER_INFRASTRUCTURE.md](04_DAPPER_INFRASTRUCTURE.md) | Dapper infrastructure; `DapperFerramentas*` access classes |
+| [05_TESTS.md](05_TESTS.md) | test tree (`AI-CONTEXT\docs\tests\`); Ferramentas unit/integration tests |
+| [09_ARMAZEM.md](09_ARMAZEM.md) | Armazém ↔ Ferramentas: `IToolIdentityResolver → FerramentasArmazemToolIdentityResolver → IFerramentasIdentityLookup`; `warehouse_stock.tool_lote_id → tool_lotes` (N09 FK) |
+| [12_REPARACAO_EXTERNA.md](12_REPARACAO_EXTERNA.md) | Reparação Externa ↔ Ferramentas: `IToolPieceResolver → FerramentasRepairToolPieceResolver → IFerramentasPieceLookup`; `repair_exit_items.physical_piece_id → physical_pieces` (N08 FK); repair physical movements via Armazém-owned `IArmazemRepairMovementPort` (U-15 consumes `IFerramentasPieceLookup`) |
+| [19_APPLICATION.md](19_APPLICATION.md) | application layer; `FerramentasService`, ports, gates |
+| [20_WEB.md](20_WEB.md) | web layer; Razor pages, `/api/ferramentas/*` endpoints, assets |
 
 ## Counts
 

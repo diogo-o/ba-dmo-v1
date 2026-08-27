@@ -29,6 +29,15 @@ Index route: `/reparacao-externa`
 - 18. Sources Verified
 - Counts
 
+## Cross-References
+
+- `maps\00_INDEX.md` (module order 7, status COMPLETE; MAP-12)
+- `maps\01_DOMAIN.md` (Reparação Externa domain folder/types, §13)
+- `maps\02_DATABASE.md` (DB objects), `maps\03_MIGRATIONS.md` (N08/N09/N12/N18/N20/N25 touchpoints), `maps\04_DAPPER_INFRASTRUCTURE.md` (Dapper adapters)
+- `maps\05_TESTS.md` (test layout), `maps\19_APPLICATION.md` (service/ports), `maps\20_WEB.md` (page/routes/static assets)
+- `maps\08_FERRAMENTAS.md` (tool-piece resolver: `IToolPieceResolver`/`FerramentasRepairToolPieceResolver` over `IFerramentasPieceLookup`, Ferramentas `physical_pieces`/`tool_lotes`)
+- `maps\09_ARMAZEM.md` (repair movements: `IArmazemRepairMovementPort` → `warehouse_stock`/`warehouse_movements`, FK `repair_exit_id`)
+
 ## 1. Scope
 
 Reparação Externa is one canonical top-level module (INDEX order 7). The module's source contains: exit lists (`repair_exits`), exit items (`repair_exit_items`), repairers, line repairer defaults, the repair status machine, and a single page surface with six tab sections. Repair types present: CM, MF, BQ. Application service accepts CM and MF; BQ is not handled by the service (`REPEXT_TYPE_SCOPE`).
@@ -44,7 +53,7 @@ Shared repair infrastructure (`repairers`, `line_repairer_defaults`, `repair_eve
 | Infrastructure | `src\BA.Dmo.Infrastructure\Access\` (RE-specific: DapperRepairRepository; shared dependency: DapperRepairUnitOfWorkFactory) | 1 RE-specific (+1 shared) |
 | Web pages | `src\BA.Dmo.Web\Pages\ReparacaoExterna\` | 4 |
 | Static assets | `wwwroot\scripts\reparacao-externa.js`, `wwwroot\styles\modules\reparacao-externa-layout.css` | 2 |
-| Tests | `tests\...\ReparacaoExterna\` | 7 |
+| Tests | `AI-CONTEXT\docs\tests\...\ReparacaoExterna\` | 7 |
 
 ### 2.1 Layer Coverage
 
@@ -55,7 +64,7 @@ Shared repair infrastructure (`repairers`, `line_repairer_defaults`, `repair_eve
 | Infrastructure | YES | `src\BA.Dmo.Infrastructure\Access\DapperRepairRepository.cs` (shared `DapperRepairUnitOfWorkFactory` as dependency) |
 | Web | YES | `src\BA.Dmo.Web\Pages\ReparacaoExterna\`; `src\BA.Dmo.Web\Program.cs`; `Authorization\ModuleAuthorizationHandler.cs` |
 | Database | YES | `database\migrations\N08_reparacoes.sql`, `N09_armazem.sql`, `N25_remediation.sql` |
-| Tests | YES | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\`, `tests\BA.Dmo.IntegrationTests\ReparacaoExterna\` |
+| Tests | YES | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\`, `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\ReparacaoExterna\` |
 
 This is technical navigation only; it does not explain workflow.
 
@@ -188,7 +197,7 @@ Shared repair DB objects (not counted as RE-specific): `repairers`, `line_repair
 `repair_events` is created in `N08_reparacoes.sql` with `repair_scope IN ('interna','externa')` — it serves both repair scopes. It is a shared dependency of Reparação Externa. Reparação Externa writes it mechanically via `DapperRepairRepository.InsertRepairEventAsync(... repair_scope='externa' ...)`. The table, `ix_repair_events_exit_item`, `ix_repair_events_internal` and `trg_repair_events_append_only` are shared, not counted in the RE-specific DB object total.
 
 ### RLS
-`N12_rls.sql` enables RLS and creates a single technical policy `ba_dmo_app_access` (`FOR ALL ... USING (true)`) on both RE tables (`repair_exits`, `repair_exit_items`) and on shared repair tables (`repairers`, `line_repairer_defaults`, `repair_events`, `internal_repair_records`). No per-module/per-user policy exists; RLS is a shared technical layer.
+`N12_rls.sql` enables RLS and creates a single technical policy `ba_dmo_app_access` (`FOR ALL ... USING (true)`) on both RE tables (`repair_exits`, `repair_exit_items`) and on shared repair tables (`repairers`, `line_repairer_defaults`, `repair_events`, `internal_repair_records`). `repairer_repair_types` (created in N20, after N12) receives RLS + `ba_dmo_app_access` in `N25_remediation.sql` §2 (post-N12 late table). No per-module/per-user policy exists; RLS is a shared technical layer.
 
 ## 10. Migration Touchpoints
 
@@ -203,7 +212,7 @@ Reparação Externa migration touchpoints (distinct files directly touching RE-s
 
 Reparação Externa migration touchpoints: **4 distinct migration files**
 
-Shared repair-object migrations (not RE-specific): `N20_repairer_repair_types.sql` (creates `repairer_repair_types`), `N18_bq_repairer.sql` (adds `bq_movements.noted_repairer_id → repairers`, Boquilhas module).
+Shared repair-object migrations (not RE-specific): `N20_repairer_repair_types.sql` (creates `repairer_repair_types`; RLS + policy added later by N25 §2), `N18_bq_repairer.sql` (adds `bq_movements.noted_repairer_id → repairers`, Boquilhas module).
 
 ## 11. Web / Routes
 
@@ -250,17 +259,17 @@ Shared static consumers/references: the page uses shared `dmo-*` components (`.d
 
 | Test class | Kind | Direct target | Main method groups | Location |
 |---|---|---|---|---|
-| `ReparacaoExternaAuthorizationGateTests` | unit | `ReparacaoExternaAuthorizationGate.Require()` | module-grant success; no-identity fail-closed; no-module fail-closed | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\ReparacaoExternaAuthorizationGateTests.cs` |
-| `RepairExitStatusMachineTests` | unit | `RepairExitStatusMachine.ConfirmPickup/ConfirmReturn` | pickup on closed cycle; first pickup→ARetirar; all picked→Enviado; pickup after return rejected; partial→RetornoParcial; all→Concluido; return on cancelled rejected | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\RepairExitStatusMachineTests.cs` |
-| `ReparacaoExternaServiceTests` | unit | `ReparacaoExternaService` | authorization fail-closed; BQ scope rejection; repairer snapshot; duplicate-in-open-exit; add/remove guards; atomic pickup/return with Armazém; partial/all return; position validation; deactivate-repairer; inactive line default | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\ReparacaoExternaServiceTests.cs` |
-| `RepairerCapabilityTests` | unit | `ReparacaoExternaService` repairer-type capability | multi-type support; invalid type rejection; update types; list types; capability separate from line default | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\RepairerCapabilityTests.cs` |
-| `ReparacaoExternaWebApiTests` | integration (WebApplicationFactory) | `/api/reparacao-externa/*` endpoints + module-policy guards | anonymous denied→login; authorized admitted; user without module denied→access-denied | `tests\BA.Dmo.IntegrationTests\ReparacaoExterna\ReparacaoExternaWebApiTests.cs` |
+| `ReparacaoExternaAuthorizationGateTests` | unit | `ReparacaoExternaAuthorizationGate.Require()` | module-grant success; no-identity fail-closed; no-module fail-closed | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\ReparacaoExternaAuthorizationGateTests.cs` |
+| `RepairExitStatusMachineTests` | unit | `RepairExitStatusMachine.ConfirmPickup/ConfirmReturn` | pickup on closed cycle; first pickup→ARetirar; all picked→Enviado; pickup after return rejected; partial→RetornoParcial; all→Concluido; return on cancelled rejected | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\RepairExitStatusMachineTests.cs` |
+| `ReparacaoExternaServiceTests` | unit | `ReparacaoExternaService` | authorization fail-closed; BQ scope rejection; repairer snapshot; duplicate-in-open-exit; add/remove guards; atomic pickup/return with Armazém; partial/all return; position validation; deactivate-repairer; inactive line default | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\ReparacaoExternaServiceTests.cs` |
+| `RepairerCapabilityTests` | unit | `ReparacaoExternaService` repairer-type capability | multi-type support; invalid type rejection; update types; list types; capability separate from line default | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\RepairerCapabilityTests.cs` |
+| `ReparacaoExternaWebApiTests` | integration (WebApplicationFactory) | `/api/reparacao-externa/*` endpoints + module-policy guards | anonymous denied→login; authorized admitted; user without module denied→access-denied | `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\ReparacaoExterna\ReparacaoExternaWebApiTests.cs` |
 
 Test class count: **5**.
 
 ## 14. Test Doubles / Helpers
 
-Dedicated support files (under `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\`):
+Dedicated support files (under `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\`):
 
 | File | Contents |
 |---|---|
@@ -343,11 +352,11 @@ One edge per relationship (module-internal edges):
 | Page + partial + model | Web pages | `src\BA.Dmo.Web\Pages\ReparacaoExterna\` |
 | API endpoints + module policy | Shared web wiring | `src\BA.Dmo.Web\Program.cs` |
 | `reparacao-externa.js` / `.css` | Static assets | `wwwroot\scripts\...` / `wwwroot\styles\modules\...` |
-| Reparação Externa tests | Tests | `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\`, `tests\BA.Dmo.IntegrationTests\ReparacaoExterna\` |
+| Reparação Externa tests | Tests | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\`, `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\ReparacaoExterna\` |
 
 ## 18. Sources Verified
 
-- `maps\00_INDEX.md` (structural contract; Reparação Externa order 7, status COMPLETE)
+- `maps\00_INDEX.md` (structural contract; Reparação Externa order 7, status COMPLETE; MAP-12)
 - `src\BA.Dmo.Domain\Modules\ReparacaoExterna\` (10 files)
 - `src\BA.Dmo.Application\Modules\ReparacaoExterna\` (6 files)
 - `src\BA.Dmo.Application\Shared\Persistence\IRepairUnitOfWorkFactory.cs`
@@ -362,7 +371,8 @@ One edge per relationship (module-internal edges):
 - `src\BA.Dmo.Web\wwwroot\scripts\reparacao-externa.js`, `wwwroot\styles\modules\reparacao-externa-layout.css`
 - `database\migrations\N08_reparacoes.sql`, N09, N12, N18, N20, N25
 - `database\consolidated_clean_install.sql`
-- `tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\` (6 files), `tests\BA.Dmo.IntegrationTests\ReparacaoExterna\` (1 file)
+- `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\ReparacaoExterna\` (6 files), `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\ReparacaoExterna\` (1 file)
+- Cross-referenced: `maps\08_FERRAMENTAS.md` (piece lookup), `maps\09_ARMAZEM.md` (repair movement port)
 
 ## Counts
 

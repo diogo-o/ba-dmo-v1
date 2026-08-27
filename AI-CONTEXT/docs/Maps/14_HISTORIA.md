@@ -3,6 +3,8 @@
 MAP ID: MAP-14
 Status: COMPLETE
 
+Related maps: `00_INDEX.md` (registry) · `01_DOMAIN.md` · `02_DATABASE.md` · `03_MIGRATIONS.md` · `04_DAPPER_INFRASTRUCTURE.md` · `05_TESTS.md` · `19_APPLICATION.md` · `20_WEB.md` · `06_JOB_ON.md` (largest origin of audited facts) · `16_USERS_ACCESS.md` (TD-24 module/capability grants that define the visible scope).
+
 ## Navigation Index
 
 - [1. Scope](#1-scope)
@@ -43,7 +45,7 @@ The map covers only what exists in source: objects, locations, members, routes, 
 | Web pages | 2 | `src\BA.Dmo.Web\Pages\Historia\` |
 | Web endpoints | 2 | `src\BA.Dmo.Web\Program.cs` |
 | Static assets | 0 dedicated (shared CSS selectors) | `src\BA.Dmo.Web\wwwroot\styles\dmo-components.css` |
-| Tests | 3 classes + doubles | `tests\...\Modules\Historia\`, `tests\...\Access\` |
+| Tests | 3 classes + doubles | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Historia\`, `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Access\` |
 
 ### 2.1 Layer Coverage
 
@@ -54,13 +56,13 @@ The map covers only what exists in source: objects, locations, members, routes, 
 | Infrastructure | YES | `src\BA.Dmo.Infrastructure\Access\DapperHistoriaRepository.cs` |
 | Web | YES | `src\BA.Dmo.Web\Pages\Historia\`; `src\BA.Dmo.Web\Program.cs`; `Authorization\ModuleAuthorizationHandler.cs` |
 | Database | NO | — (reads shared `audit_events`; no História-specific DB object) |
-| Tests | YES | `tests\BA.Dmo.UnitTests\Modules\Historia\`, `tests\BA.Dmo.IntegrationTests\Access\` |
+| Tests | YES | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Historia\`, `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Access\` |
 
 This is technical navigation only; it does not explain workflow. `Present = NO` is a valid, source-verified value.
 
 ## 3. Domain Objects
 
-No dedicated História Domain object exists. The Domain project (`src\BA.Dmo.Domain\Modules\`) contains no `Historia` folder. História consumes only shared Domain kernel/access types (see section 16).
+No dedicated História Domain object exists — current source fact, re-verified 2026-08-27: `src\BA.Dmo.Domain\Modules\` contains NO `Historia` folder (only `Armazem`, `Boquilhas`, `Controlo`, `Ferramentas`, `JobOn`, `Pegamentos`, `Peso`, `ReparacaoExterna`, `ReparacaoInterna`, `Tampoes`). História consumes only shared Domain kernel/access types (see section 16).
 
 ## 4. Application Objects
 
@@ -120,13 +122,13 @@ All under `src\BA.Dmo.Application\Modules\Historia\`.
 ## 6. Authorization / Catalog Objects
 
 - Module id: `historia` (`HistoriaModuleCatalog.ModuleId`, `CanonicalModuleCatalog.HistoriaModuleId`).
-- Canonical module entry: `new ModuleDefinition(HistoriaModuleId, "História", ModuleKind.Module, 90, "/historia")` in `CanonicalModuleCatalog.Build()` (`src\BA.Dmo.Application\Shared\Access\CanonicalModuleCatalog.cs`).
-- Page id: `historia.consulta` (`CanonicalPageCatalog.HistoriaConsultaPageId`), page entry `new PageDefinition(HistoriaConsultaPageId, HistoriaModuleId, "/historia", requiredCapabilityId: null, displayOrder: 90)` in `CanonicalPageCatalog.Build()` (`src\BA.Dmo.Application\Shared\Access\CanonicalPageCatalog.cs`).
-- Capabilities: none on the História module entry itself (`requiredCapabilityId: null`; module entry has no capability list). The gate checks the shared `audit.view` capability (`CanonicalCapabilities.AuditView` in `src\BA.Dmo.Application\Modules\Admin\AdminUserService.cs`) to include admin events.
-- Web policy: `ModulePolicies.Historia = "BaDmo.Module.historia"` (`src\BA.Dmo.Web\Authorization\ModuleAuthorizationHandler.cs`).
+- Canonical module entry: `new ModuleDefinition(HistoriaModuleId, "História", ModuleKind.Module, 90, "/historia", isAssignable: false)` in `CanonicalModuleCatalog.Build()` (`src\BA.Dmo.Application\Shared\Access\CanonicalModuleCatalog.cs`, lines 123-125). Note: catalog numeric order is `90`; the 9th slot in the 10-module canonical registry is História (00_INDEX.md). No capabilities, non-assignable (GLM-HIST-02).
+- Page id: `historia.consulta` (`CanonicalPageCatalog.HistoriaConsultaPageId`), page entry `new PageDefinition(HistoriaConsultaPageId, HistoriaModuleId, "/historia", requiredCapabilityId: null, displayOrder: 90)` in `CanonicalPageCatalog.Build()` (`src\BA.Dmo.Application\Shared\Access\CanonicalPageCatalog.cs`, line 75).
+- Capabilities: none on the História module entry itself (`requiredCapabilityId: null`; module entry has no capability list). The gate checks the shared `audit.view` capability (`CanonicalCapabilities.AuditView` in `src\BA.Dmo.Application\Modules\Admin\AdminUserService.cs`, line 595) to include admin events.
+- Web policy: `ModulePolicies.Historia = "BaDmo.Module.historia"` (`src\BA.Dmo.Web\Authorization\ModuleAuthorizationHandler.cs`, line 63).
 - Policy enforcement:
   - Razor page `@attribute [Authorize(Policy = ModulePolicies.Historia)]` — `Index.cshtml`.
-  - `app.MapGet("/api/historia", ...).RequireAuthorization(ModulePolicies.Historia)` and `app.MapGet("/api/historia/events", ...).RequireAuthorization(ModulePolicies.Historia)` — `Program.cs` lines 1415 / 1432.
+  - `app.MapGet("/api/historia", ...).RequireAuthorization(ModulePolicies.Historia)` and `app.MapGet("/api/historia/events", ...).RequireAuthorization(ModulePolicies.Historia)` — `Program.cs` lines 1412 / 1428.
   - Server-side re-check: `HistoriaAuthorizationGate.Require()`.
 
 ## 7. User Surfaces
@@ -139,7 +141,7 @@ All under `src\BA.Dmo.Application\Modules\Historia\`.
 - File: `src\BA.Dmo.Infrastructure\Access\DapperHistoriaRepository.cs`
 - Type: `public sealed class DapperHistoriaRepository : IHistoriaRepository`
 - Constructor dependency: `IDbConnectionFactory _connectionFactory`
-- Read adapter: implements the read-only port. Reads only the shared `audit_events` table.
+- Read adapter: implements the read-only port. Reads EXACTLY ONE table — the shared `audit_events` (both `QueryAsync` and `QueryFlatAsync`); no JOINs against `job_on`/`job_on_*`, repairs, or any other module domain table. Cross-module coverage arrives exclusively through the persisted audit-fact columns (`module_id`, `entity_type`, `entity_id`, `entity_label_snapshot`, `job_on_id`, `revision_id`). História is a read-only history surface: it never writes to `audit_events` nor to any module table.
 - SQL-bearing class members:
   - `private const string RowColumns` — column projection for `HistoriaEntryRow` (occurred_at_utc, year, actor_user_id, actor_name_snapshot, module_id, action_code, entity_type, entity_id, entity_label_snapshot, result, reason, job_on_id, revision_id, before_summary::text, after_summary::text).
   - `BuildWhere(...)` — builds the `WHERE` clause + `DynamicParameters`: module visibility (`module_id = ANY(@VisibleModules)`, adding `admin` when `includeAdminWithAuditView`, else `__none__`); free-text `Query` with `ILIKE` over entity_label_snapshot / entity_id / entity_type / actor_name_snapshot / action_code; `EntityType`, `EntityId`, `ModuleId`, `ActionCode`, `Actor`, `Result` exact/filters; `FromUtc`/`ToUtc` range on `occurred_at_utc`.
@@ -151,6 +153,8 @@ All under `src\BA.Dmo.Application\Modules\Historia\`.
 ## 9. Database Objects
 
 História-specific DB objects: **0**. História creates no dedicated tables, indexes or triggers; it is a read-only consumer of the shared canonical audit table.
+
+Classification: **CONFIRMED CURRENT** — the read-only history surface matches current source (only `audit_events` reads; no História-specific DB objects; no writes).
 
 Shared/external DB dependency:
 
@@ -176,12 +180,13 @@ Shared/external migration references (navigation only):
 | Route | HTTP | Technical Entry Point | Authorization | File |
 |---|---|---|---|---|
 | `/historia` | GET | `BA.Dmo.Web.Pages.Historia.IndexModel.OnGetAsync` (Razor page) | `ModulePolicies.Historia` attribute + `HistoriaAuthorizationGate` | `src\BA.Dmo.Web\Pages\Historia\Index.cshtml` / `Index.cshtml.cs` |
-| `/api/historia` | GET | `app.MapGet("/api/historia", ...)` → `HistoriaService.QueryAsync` | `.RequireAuthorization(ModulePolicies.Historia)` | `src\BA.Dmo.Web\Program.cs` (lines 1402-1415) |
-| `/api/historia/events` | GET | `app.MapGet("/api/historia/events", ...)` → `HistoriaService.QueryFlatAsync` | `.RequireAuthorization(ModulePolicies.Historia)` | `src\BA.Dmo.Web\Program.cs` (lines 1418-1432) |
+| `/api/historia` | GET | `app.MapGet("/api/historia", ...)` → `HistoriaService.QueryAsync` | `.RequireAuthorization(ModulePolicies.Historia)` | `src\BA.Dmo.Web\Program.cs` (lines 1412-1425) |
+| `/api/historia/events` | GET | `app.MapGet("/api/historia/events", ...)` → `HistoriaService.QueryFlatAsync` | `.RequireAuthorization(ModulePolicies.Historia)` | `src\BA.Dmo.Web\Program.cs` (lines 1428-1442) |
 
-DI registrations (`src\BA.Dmo.Web\Program.cs`):
-- `builder.Services.AddScoped<IHistoriaRepository, DapperHistoriaRepository>();` (line 256)
-- `builder.Services.AddScoped<HistoriaService>();` (line 258)
+DI registrations (`src\BA.Dmo.Web\Program.cs`, lines 262-264):
+- `builder.Services.AddScoped<IHistoriaRepository, DapperHistoriaRepository>();` (line 262)
+- `builder.Services.AddScoped<HistoriaAuthorizationGate>();` (line 263)
+- `builder.Services.AddScoped<HistoriaService>();` (line 264)
 
 ### Razor page details (`Index.cshtml` / `Index.cshtml.cs`)
 - Page route: `@page "/historia"`, model `IndexModel`.
@@ -193,7 +198,7 @@ DI registrations (`src\BA.Dmo.Web\Program.cs`):
 
 Dedicated História static asset files: **0**. There is no `historia.js` or `historia.css` in `wwwroot\scripts` or `wwwroot\styles`.
 
-Shared CSS selectors (in `src\BA.Dmo.Web\wwwroot\styles\dmo-components.css`, lines 779-854): `.historia-group-list`, `.historia-group__head`, `.historia-group__entity`, `.historia-entry summary`, `.historia-entry[open] summary`, `.historia-entry__detail`, `.historia-entry__meta`, `.historia-entry__meta dt/dd`, `.historia-entry__snapshot`. The razor uses generic shared classes (`dmo-*`).
+Shared CSS selectors (in `src\BA.Dmo.Web\wwwroot\styles\dmo-components.css`, lines 831-890): `.historia-group-list` (831), `.historia-group__head` (837), `.historia-group__entity` (845), `.historia-entry summary` (849), `.historia-entry[open] summary` (857), `.historia-entry__detail` (861), `.historia-entry__meta` (869), `.historia-entry__meta dt/dd` (876/884), `.historia-entry__snapshot` (890). The razor uses generic shared classes (`dmo-*`).
 
 No dedicated JavaScript for História; the page is server-rendered Razor. Shared JS/CSS wiring (`dmo-foundation.css`, `dmo-components.css`, etc.) is referenced by the shared layout and is not História-specific.
 
@@ -201,9 +206,9 @@ No dedicated JavaScript for História; the page is server-rendered Razor. Shared
 
 | Test class | Kind | Direct target | Main method groups | Location |
 |---|---|---|---|---|
-| `HistoriaServiceTests` | Unit (xUnit) | `HistoriaService` | `QueryAsync_AuthorizesAndForwardsScopeToRepository`, `QueryAsync_WithAuditView_OrdersChronologicallyStableAndGroupsByEntity`, `QueryAsync_InvalidPageSize_IsValidationError`, `QueryAsync_WithoutHistoriaModule_IsForbidden` | `tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaServiceTests.cs` |
-| `HistoriaAuthorizationGateTests` | Unit (xUnit) | `HistoriaAuthorizationGate` | `Require_WithHistoriaAndOrigins_ResolvesGrantedOriginsOnly`, `Require_WithAuditView_IncludesAdmin`, `Require_WithNoOriginModules_IsAuthorizedWithEmptyScope`, `Require_WithoutHistoriaModule_IsForbidden`, `Require_WithNoIdentity_IsForbidden` | `tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaAuthorizationGateTests.cs` |
-| `HistoriaWebAuthorizationTests` | Integration (WebApplicationFactory) | Page `/historia` + authorization wiring | `Unauth_HistoriaPage_RedirectsToLogin`, `WithoutHistoriaModule_IsDenied`, `WithHistoria_OnlyGrantedOriginModulesReachTheProjection`, `WithHistoria_AdminEventsExcludedWithoutAuditView` | `tests\BA.Dmo.IntegrationTests\Access\HistoriaWebAuthorizationTests.cs` |
+| `HistoriaServiceTests` | Unit (xUnit) | `HistoriaService` | `QueryAsync_AuthorizesAndForwardsScopeToRepository`, `QueryAsync_WithAuditView_OrdersChronologicallyStableAndGroupsByEntity`, `QueryAsync_InvalidPageSize_IsValidationError`, `QueryAsync_WithoutHistoriaModule_IsForbidden` | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaServiceTests.cs` |
+| `HistoriaAuthorizationGateTests` | Unit (xUnit) | `HistoriaAuthorizationGate` | `Require_WithHistoriaAndOrigins_ResolvesGrantedOriginsOnly`, `Require_WithAuditView_IncludesAdmin`, `Require_WithNoOriginModules_IsAuthorizedWithEmptyScope`, `Require_WithoutHistoriaModule_IsForbidden`, `Require_WithNoIdentity_IsForbidden` | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaAuthorizationGateTests.cs` |
+| `HistoriaWebAuthorizationTests` | Integration (WebApplicationFactory) | Page `/historia` + authorization wiring | `Unauth_HistoriaPage_RedirectsToLogin`, `WithoutHistoriaModule_IsDenied`, `WithHistoria_OnlyGrantedOriginModulesReachTheProjection`, `WithHistoria_AdminEventsExcludedWithoutAuditView` | `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Access\HistoriaWebAuthorizationTests.cs` |
 
 Note: other test files reference module-level `History`/`BqHistoryFilter` concepts (e.g. Boquilhas, ReparaçãoInterna, Armazém) that are not História test classes; they are out of this map's scope.
 
@@ -211,10 +216,10 @@ Note: other test files reference module-level `History`/`BqHistoryFilter` concep
 
 | File | Double / helper | Implements / role |
 |---|---|---|
-| `tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaServiceTests.cs` | `FakeHistoriaRepository` | In-file fake of `IHistoriaRepository` (records `LastVisibleModules`, `LastIncludeAdmin`, returns configured `Result` or empty). |
-| `tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaAuthorizationGateTests.cs` | `HistoriaCurrentUser` | In-file fake `ICurrentUserAccessor` builder (`WithModules`, `WithModulesAndCapabilities`, `WithoutHistoriaModule`, `None`); nested `FakeUser`. |
-| `tests\BA.Dmo.IntegrationTests\Access\HistoriaWebAuthorizationTests.cs` | `FakeHistoriaReadRepository` | In-file fake of `IHistoriaRepository` (serves only visible module groups; records scope). |
-| `tests\BA.Dmo.IntegrationTests\Access\HistoriaWebAuthorizationTests.cs` | `HistoriaFixture` | In-file `WebApplicationFactory<Program>` (`IClassFixture`); replaces `IHistoriaRepository` and identity/auth/admin/jobon collaborators. Contains nested `FakeAuthAdapter`, `FakeIdentityRepository`, `FakeAdminRepo`, `FakeJobOnRepo`. |
+| `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaServiceTests.cs` | `FakeHistoriaRepository` | In-file fake of `IHistoriaRepository` (records `LastVisibleModules`, `LastIncludeAdmin`, returns configured `Result` or empty). |
+| `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaAuthorizationGateTests.cs` | `HistoriaCurrentUser` | In-file fake `ICurrentUserAccessor` builder (`WithModules`, `WithModulesAndCapabilities`, `WithoutHistoriaModule`, `None`); nested `FakeUser`. |
+| `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Access\HistoriaWebAuthorizationTests.cs` | `FakeHistoriaReadRepository` | In-file fake of `IHistoriaRepository` (serves only visible module groups; records scope). |
+| `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Access\HistoriaWebAuthorizationTests.cs` | `HistoriaFixture` | In-file `WebApplicationFactory<Program>` (`IClassFixture`); replaces `IHistoriaRepository` and identity/auth/admin/jobon collaborators. Contains nested `FakeAuthAdapter`, `FakeIdentityRepository`, `FakeAdminRepo`, `FakeJobOnRepo`. |
 
 ## 15. Direct História References
 
@@ -261,12 +266,15 @@ Note: other test files reference module-level `History`/`BqHistoryFilter` concep
 | `/api/historia`, `/api/historia/events` endpoints | Web | `src\BA.Dmo.Web\Program.cs` |
 | `ModulePolicies.Historia` | Web (Authorization) | `src\BA.Dmo.Web\Authorization\ModuleAuthorizationHandler.cs` |
 | `audit_events` (shared, read-only) | Database | `database\migrations\N01_identity.sql` |
-| `HistoriaServiceTests` / `FakeHistoriaRepository` | Tests | `tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaServiceTests.cs` |
-| `HistoriaAuthorizationGateTests` / `HistoriaCurrentUser` | Tests | `tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaAuthorizationGateTests.cs` |
-| `HistoriaWebAuthorizationTests` / `HistoriaFixture` / `FakeHistoriaReadRepository` | Tests | `tests\BA.Dmo.IntegrationTests\Access\HistoriaWebAuthorizationTests.cs` |
+| `HistoriaServiceTests` / `FakeHistoriaRepository` | Tests | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaServiceTests.cs` |
+| `HistoriaAuthorizationGateTests` / `HistoriaCurrentUser` | Tests | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaAuthorizationGateTests.cs` |
+| `HistoriaWebAuthorizationTests` / `HistoriaFixture` / `FakeHistoriaReadRepository` | Tests | `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Access\HistoriaWebAuthorizationTests.cs` |
 
 ## 18. Sources Verified
 
+Reconciled IN PLACE at HEAD `8478308` (2026-08-27): História remains a read-only transversal surface over `audit_events`; no dedicated Domain module (folder absence re-confirmed); `DapperHistoriaRepository` reads EXACTLY ONE table (`audit_events`, no cross-module table JOINs); `Program.cs` line refs and DI registrations refreshed; `dmo-components.css` selector lines refreshed; test paths moved to `AI-CONTEXT\docs\tests\`.
+
+Files inspected for this pass:
 - `src\BA.Dmo.Application\Modules\Historia\HistoriaService.cs`
 - `src\BA.Dmo.Application\Modules\Historia\IHistoriaRepository.cs`
 - `src\BA.Dmo.Application\Modules\Historia\HistoriaModels.cs`
@@ -281,13 +289,14 @@ Note: other test files reference module-level `History`/`BqHistoryFilter` concep
 - `src\BA.Dmo.Application\Shared\Access\CanonicalPageCatalog.cs`
 - `src\BA.Dmo.Application\Modules\Admin\AdminUserService.cs` (`CanonicalCapabilities`)
 - `src\BA.Dmo.Domain\Shared\Access\CurrentUser.cs`
+- `src\BA.Dmo.Domain\Modules\` (folder listing — no `Historia` folder)
 - `database\migrations\N01_identity.sql`
 - `database\migrations\N12_rls.sql`
 - `database\migrations\N25_remediation.sql`
 - `src\BA.Dmo.Web\wwwroot\styles\dmo-components.css`
-- `tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaServiceTests.cs`
-- `tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaAuthorizationGateTests.cs`
-- `tests\BA.Dmo.IntegrationTests\Access\HistoriaWebAuthorizationTests.cs`
+- `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaServiceTests.cs`
+- `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Modules\Historia\HistoriaAuthorizationGateTests.cs`
+- `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Access\HistoriaWebAuthorizationTests.cs`
 
 ## Counts
 

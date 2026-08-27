@@ -1,5 +1,53 @@
 # BA DMO — Technical Mapping Index
 
+## Repository Identity
+
+| Item | Value |
+|---|---|
+| Repository | `D:\BA-DMO` (git worktree root) |
+| Solution | `BA-DMO.sln` |
+| Branch | `main` |
+| HEAD | `847830824262bc42aadfc9a34d9c4d9bdc058baf` — "Render one persistent Admin navigation" (2026-08-27 16:27:58 +0100) |
+| Target framework | `net10.0` for every project (`Directory.Build.props`), `LangVersion latest`, nullable enabled, `pt-PT` neutral language |
+| Container | `Dockerfile` — SDK 10.0 build of `src\BA.Dmo.Web`, `aspnet:10.0` runtime, `ASPNETCORE_URLS=http://0.0.0.0:10000` |
+
+### Solution / project overview
+
+| Project | Path | Role |
+|---|---|---|
+| `BA.Dmo.Domain` | `src\BA.Dmo.Domain\` | Domain entities, value objects, rules, shared kernel + access catalogs |
+| `BA.Dmo.Application` | `src\BA.Dmo.Application\` | Application services, ports/contracts, gates, models; shared Access/Identity/Persistence/Shell |
+| `BA.Dmo.Infrastructure` | `src\BA.Dmo.Infrastructure\` | Dapper repositories/lookups, unit-of-work factories, auth adapters, PDF renderers, migration runner |
+| `BA.Dmo.Web` | `src\BA.Dmo.Web\` | Razor Pages, PageModels, minimal API endpoints (`Program.cs`), shell/identity/authorization, CLI commands, static assets |
+| `BA.Dmo.UnitTests` | `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\` | Domain + Application unit tests |
+| `BA.Dmo.IntegrationTests` | `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\` | Web + Infrastructure contract/guard tests |
+| `BA.Dmo.VisualHost` | `AI-CONTEXT\docs\tests\BA.Dmo.VisualHost\` | Visual host harness (`Program.cs`) |
+
+> **Test root note:** the test projects physically live under `AI-CONTEXT\docs\tests\` (registered in `BA-DMO.sln` under the `tests` solution folder). Maps in this folder use that actual root — do not reintroduce a repo-root `tests\` path.
+
+### Current layer structure
+
+```
+D:\BA-DMO
+├── BA-DMO.sln
+├── Directory.Build.props  (net10.0, nullable, pt-PT)
+├── Dockerfile
+├── database\
+│   ├── migrations\N01_identity.sql … N31_template_profiles_single_assignment.sql
+│   └── consolidated_clean_install.sql
+├── src\
+│   ├── BA.Dmo.Domain\        (Modules\* + Shared\Access + Shared\Kernel)
+│   ├── BA.Dmo.Application\   (Modules\* incl. Admin + Historia; Shared\{Access,Identity,Persistence,Shell})
+│   ├── BA.Dmo.Infrastructure\(Access Dapper\*, Auth\*, Identity\*, Persistence\{Migrations, unit-of-work})
+│   └── BA.Dmo.Web\           (Pages\{Admin,Auth,modules…,Shared}, Shell\, Identity\, Authorization\, Cli\, wwwroot\{styles,scripts,assets})
+└── AI-CONTEXT\
+    └── docs\
+        ├── Maps\             (this folder — 00_INDEX … 20_WEB)
+        └── tests\            (BA.Dmo.{UnitTests,IntegrationTests,VisualHost})
+```
+
+Module folders in source: `Armazem`, `Boquilhas`, `Controlo`, `Ferramentas`, `JobOn`, `Pegamentos`, `Peso`, `ReparacaoExterna`, `ReparacaoInterna`, `Tampoes` (Domain); Application adds `Admin` and `Historia` (no Domain module exists for Admin or História — see 01_DOMAIN.md, 14_HISTORIA.md, 15_ADMIN.md).
+
 ## Purpose
 
 This folder (`maps\`) contains BA DMO technical maps.
@@ -59,6 +107,8 @@ The following are **transversal / system surfaces**, NOT canonical functional mo
 - Design Laboratório
 - Login
 
+> **Access-catalog note (source-grounded):** `src\BA.Dmo.Application\Shared\Access\CanonicalModuleCatalog.cs` registers 12 module entries, of which 10 are the canonical modules above and two — `peso` and `pegamentos` — are non-assignable technical entries kept as children of the single Controlo area (`AreaChildren[controlo] = [peso, pegamentos]`). `historia` is also registered as non-assignable in that catalog. Assignability rules live in 16_USERS_ACCESS.md; the registry here keeps the 10-module canonical list.
+
 ### Internal-Area Rule
 
 Entries listed under `Internal Areas` are technical areas contained inside the canonical module. They do NOT:
@@ -107,6 +157,8 @@ Canonical module names/order are registry metadata only; technical map contents 
 | 8 | Tampões | — | Shared | `13_TAMPOES.md` | COMPLETE |
 | 9 | História | — | Shared | `14_HISTORIA.md` | COMPLETE |
 | 10 | Admin | — | Admin | `15_ADMIN.md` | COMPLETE |
+
+Statuses refreshed 2026-08-27 at HEAD `8478308` (see Execution Log).
 
 ### Controlo — Canonical Structure
 
@@ -216,11 +268,60 @@ Scope pointers:
 
 - **01_DOMAIN.md** — domain folders, types, entities, aggregate roots, value objects, enums/states, identifiers, methods/rules/invariants, direct Domain references, exact Domain source locations.
 - **02_DATABASE.md** — tables, columns, PKs, FKs, UNIQUE/CHECK constraints, indexes, functions, triggers, direct database relationships, exact SQL locations.
-- **03_MIGRATIONS.md** — migration files, order, objects/statements introduced or altered by each migration, constraints/indexes/functions/triggers contained in migrations, exact migration file locations. No application behavior.
+- **03_MIGRATIONS.md** — migration files (`database\migrations\N01…N31`), order, objects/statements introduced or altered by each migration, constraints/indexes/functions/triggers contained in migrations, `schema_migrations` bookkeeping mechanism, exact migration file locations. No application behavior.
 - **04_DAPPER_INFRASTRUCTURE.md** — repository implementations, Dapper classes, embedded SQL, connection/transaction helpers, hydration/mapping code, relevant methods, exact Infrastructure locations. No full business workflow.
-- **05_TESTS.md** — test projects/folders, test classes, fixtures, helpers, test infrastructure, key test methods/categories, direct target under test where visible, exact test locations. No coverage-gap analysis.
+- **05_TESTS.md** — test projects/folders (`AI-CONTEXT\docs\tests\`), test classes, fixtures, helpers, test infrastructure, key test methods/categories, direct target under test where visible, exact test locations. No coverage-gap analysis.
 - **19_APPLICATION.md** — Application project inventory, shared Application, module application objects, services, interfaces/ports/contracts, models/DTOs/projections, validators/parsers/gates, exact locations, direct Application references.
 - **20_WEB.md** — Razor Pages, PageModels, routes/endpoints, authorization/identity/session Web objects, shared shell/navigation, static assets, module Web areas, exact locations, direct Web references.
+
+## Quick Routing Table
+
+| Need to inspect/change | Start with |
+|---|---|
+| Identity/access/templates | `16_USERS_ACCESS.md` |
+| Admin | `15_ADMIN.md` |
+| Login/session/auth adapter | `18_LOGIN.md` |
+| Migrations | `03_MIGRATIONS.md` |
+| Current DB model | `02_DATABASE.md` |
+| Dapper persistence | `04_DAPPER_INFRASTRUCTURE.md` |
+| Domain types/rules | `01_DOMAIN.md` |
+| Application services/ports | `19_APPLICATION.md` |
+| Web/layout/navigation | `20_WEB.md` |
+| Tests | `05_TESTS.md` |
+| Job On / História | `06_JOB_ON.md` / `14_HISTORIA.md` |
+| Controlo (Peso · Pegamentos) | `07_CONTROLO.md` |
+| Ferramentas / Armazém | `08_FERRAMENTAS.md` / `09_ARMAZEM.md` |
+| Boquilhas / Reparação Interna | `10_BOQUILHAS.md` / `11_REPARACAO_INTERNA.md` |
+| Reparação Externa / Tampões | `12_REPARACAO_EXTERNA.md` / `13_TAMPOES.md` |
+| Design system surface | `17_DESIGN_LABORATORIO.md` |
+
+## Map Links & Descriptions
+
+Every map below links to the shared technical layers (01–05, 19, 20) and to the related module/surface maps; this INDEX is the top-level entry point.
+
+| Map | Short description |
+|---|---|
+| `00_INDEX.md` | Map-of-maps: identity, taxonomy, registries, routing, cross-links, execution log |
+| `01_DOMAIN.md` | Domain layer: entities, value objects, enums/states, rules, shared kernel/access catalogs, ownership by module |
+| `02_DATABASE.md` | Final DB model from the migration chain: every table, constraints, indexes, triggers, RLS, Dapper consumers |
+| `03_MIGRATIONS.md` | Migration family N01–N31 + consolidated install; per-migration DDL/DML; runner/bookkeeping (`schema_migrations`, SHA-256) |
+| `04_DAPPER_INFRASTRUCTURE.md` | Every Dapper repository/lookup/unit-of-work/PDF renderer: tables read/written, transactions, consumers |
+| `05_TESTS.md` | Test inventory: UnitTests, IntegrationTests, VisualHost; coverage areas per module |
+| `06_JOB_ON.md` | Job On vertical slice (incl. revisions, verification, PDF, reference images, user-current context) |
+| `07_CONTROLO.md` | Controlo vertical slice incl. Peso and Pegamentos internal areas (folha de controlo, peso, pegamentos, PDFs) |
+| `08_FERRAMENTAS.md` | Ferramentas vertical slice (references, lotes, check rules, usage records) |
+| `09_ARMAZEM.md` | Armazém vertical slice (locations, stock, movements; Operador/Responsável surfaces) |
+| `10_BOQUILHAS.md` | Boquilhas vertical slice (lotes, traces, movements, discrepancies, repairers) |
+| `11_REPARACAO_INTERNA.md` | Reparação Interna vertical slice (records, context, CM/MF-only, Job On active-context dependency) |
+| `12_REPARACAO_EXTERNA.md` | Reparação Externa vertical slice (repairers, exits, tool-piece resolution, Armazém movements) |
+| `13_TAMPOES.md` | Tampões vertical slice (configurations, fields, balances, movements, machines) |
+| `14_HISTORIA.md` | História vertical slice (cross-module history surface; no dedicated Domain module) |
+| `15_ADMIN.md` | Admin vertical slice (landing, Utilizadores, Templates, Aplicações, Auditoria; template↔profile↔modules) |
+| `16_USERS_ACCESS.md` | Access architecture end-to-end (identity → template → profile → modules → capabilities → shell → URL auth); single-template model |
+| `17_DESIGN_LABORATORIO.md` | Design system surface (`/design-laboratorio` laboratory page + design guard tests) |
+| `18_LOGIN.md` | Login surface (route, auth adapter, session/cookie, identity resolution, redirects, failure states) |
+| `19_APPLICATION.md` | Application contracts/services/ports/models/gates by module and shared area |
+| `20_WEB.md` | Web structure: Razor Pages, layout, shell/Admin navigation authorities, endpoints, static assets |
 
 ## Mapping Sequence
 
@@ -319,30 +420,45 @@ Clarification:
 
 If a canonical module map already has a Layer Summary that contains the same layer/location information, it may be normalized to satisfy the contract without duplicating unnecessary tables.
 
+## Classification Labels
+
+When a map encounters a suspicious structure, it uses ONLY these labels (with evidence):
+
+- CONFIRMED CURRENT
+- INTENTIONAL NORMALIZATION
+- POTENTIAL OVERLAP — NEEDS AUDIT
+- SCHEMA DRIFT — NEEDS AUDIT
+- MIGRATION DRIFT — NEEDS AUDIT
+- LEGACY CANDIDATE — NEEDS AUDIT
+- ORPHAN CANDIDATE — NEEDS AUDIT
+- UNKNOWN / OWNER DECISION REQUIRED
+
+Problems discovered during mapping are recorded in the relevant map as `NEEDS REVIEW` (with evidence). This task never implements fixes.
+
 ## Execution Log
 
 | Map | Status | Last verified |
 |---|---|---|
-| 01_DOMAIN.md | COMPLETE | 2026-08-23 — MAP-01 final verified |
-| 02_DATABASE.md | COMPLETE | 2026-08-23 — MAP-02 final verified |
-| 03_MIGRATIONS.md | COMPLETE | 2026-08-23 — MAP-03 final verified |
-| 04_DAPPER_INFRASTRUCTURE.md | COMPLETE | 2026-08-23 — MAP-04 final verified |
-| 05_TESTS.md | COMPLETE | 2026-08-23 — MAP-05 final verified |
-| 06_JOB_ON.md | COMPLETE | 2026-08-23 — MAP-06 final verified |
-| 07_CONTROLO.md | COMPLETE | 2026-08-23 — MAP-07 final verified |
-| 08_FERRAMENTAS.md | COMPLETE | 2026-08-23 — MAP-08 final verified |
-| 09_ARMAZEM.md | COMPLETE | 2026-08-23 — MAP-09 final verified |
-| 10_BOQUILHAS.md | COMPLETE | 2026-08-23 — MAP-10 final verified |
-| 11_REPARACAO_INTERNA.md | COMPLETE | 2026-08-23 — MAP-11 final verified |
-| 12_REPARACAO_EXTERNA.md | COMPLETE | 2026-08-23 — MAP-12 final verified |
-| 13_TAMPOES.md | COMPLETE | 2026-08-23 — MAP-13 final verified |
-| 14_HISTORIA.md | COMPLETE | 2026-08-23 — MAP-14 final verified |
-| 15_ADMIN.md | COMPLETE | 2026-08-23 — MAP-15 final verified |
-| 16_USERS_ACCESS.md | COMPLETE | 2026-08-23 — MAP-16 final verified |
-| 17_DESIGN_LABORATORIO.md | COMPLETE | 2026-08-23 — MAP-17 final verified |
-| 18_LOGIN.md | COMPLETE | 2026-08-23 — MAP-18 final verified |
-| 19_APPLICATION.md | COMPLETE | 2026-08-23 — MAP-19 final verified |
-| 20_WEB.md | COMPLETE | 2026-08-23 — MAP-20 final verified |
+| 01_DOMAIN.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 02_DATABASE.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 03_MIGRATIONS.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 04_DAPPER_INFRASTRUCTURE.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 05_TESTS.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 06_JOB_ON.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 07_CONTROLO.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 08_FERRAMENTAS.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 09_ARMAZEM.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 10_BOQUILHAS.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 11_REPARACAO_INTERNA.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 12_REPARACAO_EXTERNA.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 13_TAMPOES.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 14_HISTORIA.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 15_ADMIN.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 16_USERS_ACCESS.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 17_DESIGN_LABORATORIO.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 18_LOGIN.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 19_APPLICATION.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
+| 20_WEB.md | COMPLETE | 2026-08-27 — reconciled at HEAD 8478308 |
 
 Index history:
 
@@ -365,20 +481,21 @@ Index history:
 - MAP-19 — APPLICATION transversal technical map completed and final verified.
 - MAP-20 — WEB transversal technical map completed and final verified.
 - INDEX taxonomy normalized: 10 canonical functional modules separated from 3 transversal/system surfaces.
+- 2026-08-27 — REFRESH PASS at HEAD `8478308`: all maps re-reconciled IN PLACE against current source. Key reconciliation points: migrations N28–N31 added (reparação interna CM/MF-only, JobOn reference images, covering index, template profiles single assignment); Admin/Access template-profile + single-assignment model (N31, `access_template_profiles`, one effective template per user); persistent Admin navigation (`_AdminNav` rendered once from `_Layout`); test-root paths corrected to `AI-CONTEXT\docs\tests\`; test inventory refreshed (UnitTests/IntegrationTests/VisualHost); Dapper/Application/Domain/Web inventories re-verified and `Sources Verified` sections updated. No source/database/test code modified.
 
 ## Current Pointer
 
 Global technical layers:
 
-COMPLETE (Domain, Database, Migrations, Dapper/Infrastructure, Tests, Application, Web)
+COMPLETE (Domain, Database, Migrations, Dapper/Infrastructure, Tests, Application, Web) — reconciled 2026-08-27
 
 Canonical functional modules:
 
-COMPLETE (Job On, Controlo, Ferramentas, Armazém, Boquilhas, Reparação Interna, Reparação Externa, Tampões, História, Admin)
+COMPLETE (Job On, Controlo, Ferramentas, Armazém, Boquilhas, Reparação Interna, Reparação Externa, Tampões, História, Admin) — reconciled 2026-08-27
 
 Transversal / system surfaces:
 
-COMPLETE (Users / Access, Design Laboratório, Login)
+COMPLETE (Users / Access, Design Laboratório, Login) — reconciled 2026-08-27
 
 Last completed technical maps:
 

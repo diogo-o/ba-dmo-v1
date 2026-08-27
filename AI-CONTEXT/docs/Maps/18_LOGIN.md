@@ -1,7 +1,7 @@
 # BA DMO — Login Technical Map
 
 MAP ID: MAP-18
-Status: COMPLETE
+Status: COMPLETE (reconciled at HEAD 8478308 "Render one persistent Admin navigation")
 
 ## Navigation Index
 
@@ -34,11 +34,12 @@ Scope covered:
 - Login form/handler mechanics local to the page;
 - direct session/cookie references Login makes to the shared web session infrastructure (`SessionClaims`, `HttpContext.SignInAsync`/`SignOutAsync`, `Program.cs` cookie options);
 - auth/session application ports consumed directly by Login (`ISupabaseAuthAdapter`, `IdentityResolutionService`);
-- the shared auth-provider adapter runtime reference (`SupabaseAuthAdapter`);
-- the shared shell/auth routes Login redirects to (`/no-access`, `/login`, and indirectly `/access-denied`);
-- the shared static assets the Login page renders with.
+- the shared auth-provider adapter runtime reference (`SupabaseAuthAdapter`) and its CURRENT error classification (429 rate-limit vs 401/403 key vs other 4xx credentials vs 5xx provider);
+- the shared shell/auth routes Login redirects to (`/no-access` incl. `?indisponivel=1`, `/login`, and indirectly `/access-denied`);
+- the shared static assets the Login page renders with;
+- the post-login destination semantics under the CURRENT single-template access model (functional user → Job On landing `/jobon`; Admin profile → `/admin`; ambiguous/inactive resolution → `/no-access`).
 
-It does NOT absorb the shared Users / Access architecture (MAP-16), the Admin module (MAP-15), or the Design Laboratório surface (MAP-17). Shared Users / Access objects are referenced only where Login directly consumes them.
+It does NOT absorb the shared Users / Access architecture ([16_USERS_ACCESS.md](16_USERS_ACCESS.md), MAP-16), the Admin module ([15_ADMIN.md](15_ADMIN.md), MAP-15), or the Design Laboratório surface (MAP-17). Shared Users / Access objects are referenced only where Login directly consumes them.
 
 ## 2. Layer Summary
 
@@ -56,21 +57,21 @@ It does NOT absorb the shared Users / Access architecture (MAP-16), the Admin mo
 
 No dedicated Login Domain type found.
 
-`src\BA.Dmo.Domain\Modules\` contains no `Login` folder, and greps for `Login`/`login`/`LoginModel` across `src\BA.Dmo.Domain` returned no Login-specific domain type. No Login entity, record, value object, enum, state, identifier, error or validation helper exists in current Domain source. The shared `CurrentUser`, `DomainError`, `Result<T, DomainError>` and `ErrorCategory` used around the Login path are shared Domain kernel/access objects (mapped in MAP-16), not Login-specific.
+`src\BA.Dmo.Domain\Modules\` contains no `Login` folder, and greps for `Login`/`login`/`LoginModel` across `src\BA.Dmo.Domain` returned no Login-specific domain type. No Login entity, record, value object, enum, state, identifier, error or validation helper exists in current Domain source. The shared `CurrentUser`, `DomainError`, `Result<T, DomainError>` and `ErrorCategory` used around the Login path are shared Domain kernel/access objects (mapped in [16_USERS_ACCESS.md](16_USERS_ACCESS.md)), not Login-specific.
 
 ## 4. Application Objects
 
 No dedicated Login Application type found.
 
-`src\BA.Dmo.Application\Modules\` contains no `Login` folder. No Login service, command/query, request/result model, validator, application abstraction, error/result mapping or landing/redirect abstraction exists. Login directly consumes the following shared Application Identity/Access ports (all mapped in MAP-16 as shared; referenced here only as Login direct dependencies):
+`src\BA.Dmo.Application\Modules\` contains no `Login` folder. No Login service, command/query, request/result model, validator, application abstraction, error/result mapping or landing/redirect abstraction exists. Login directly consumes the following shared Application Identity/Access ports (all mapped in [16_USERS_ACCESS.md](16_USERS_ACCESS.md) as shared; referenced here only as Login direct dependencies):
 
 | Shared Application object | File | What Login consumes |
 |---|---|---|
 | `ISupabaseAuthAdapter.SignInWithPasswordAsync` → `Result<AuthUser, DomainError>` | `Shared\Identity\SupabaseAuthPorts.cs` | credential verification in `LoginModel.OnPostAsync` |
 | `AuthUser` (record `AuthUserId`, `Email`) | `Shared\Identity\SupabaseAuthPorts.cs` | `signIn.Value.AuthUserId` read for the session claim |
-| `IdentityResolutionService.ResolveAsync(Guid)` → `Result<ResolvedIdentity, DomainError>` | `Shared\Identity\IdentityResolutionService.cs` | post-login destination resolution in `LoginModel.OnPostAsync` |
+| `IdentityResolutionService.ResolveAsync(Guid)` → `Result<ResolvedIdentity, DomainError>` | `Shared\Identity\IdentityResolutionService.cs` | post-login destination resolution in `LoginModel.OnPostAsync`; CURRENT single-template model with `ACCESS_TEMPLATE_AMBIGUOUS` / `FUNCTIONAL_PROFILE_INVALID` failures (MAP-16 §8) |
 | `ResolvedIdentity.FirstPage` (`FirstPageResolution`) | `Shared\Identity\IdentityResolutionService.cs` | `resolution.Value.FirstPage.Page` navigation in `LoginModel.OnPostAsync` |
-| `FirstPageResolution` / `FirstPageOutcome` / `AccessResolver.ResolveFirstPage` | `Shared\Access\AccessResolver.cs` | produces `FirstPage.Page` (route) consumed by Login |
+| `FirstPageResolution` / `FirstPageOutcome` / `AccessResolver.ResolveFirstPage` | `Shared\Access\AccessResolver.cs` | produces `FirstPage.Page` (route) consumed by Login; admin profile → `FallbackCanonicalOrder` `/admin` |
 | `DomainError`, `ErrorCategory` (`.BackendUnavailable`) | Domain `Shared\Kernel` | error-branch selection in `LoginModel.OnPostAsync` |
 
 Dedicated Application objects = **0**; the ports above are mapped as shared dependencies.
@@ -79,16 +80,23 @@ Dedicated Application objects = **0**; the ports above are mapped as shared depe
 
 No dedicated Login Infrastructure object found.
 
-Login's runtime auth provider implementation is the shared `SupabaseAuthAdapter` (`src\BA.Dmo.Infrastructure\Auth\SupabaseAuthAdapter.cs`), already classified as a shared Users / Access Infrastructure object in MAP-16. Login does not define its own adapter, settings, HttpClient or endpoint configuration.
+Login's runtime auth provider implementation is the shared `SupabaseAuthAdapter` (`src\BA.Dmo.Infrastructure\Auth\SupabaseAuthAdapter.cs`), already classified as a shared Users / Access Infrastructure object in [16_USERS_ACCESS.md](16_USERS_ACCESS.md). Login does not define its own adapter, settings, HttpClient or endpoint configuration.
 
 ### Shared / external infrastructure reference (consumed by Login runtime)
 
 | Object | Kind | Path | Classification |
 |---|---|---|---|
 | `SupabaseAuthAdapter` | sealed class, implements `ISupabaseAuthAdapter` | `src\BA.Dmo.Infrastructure\Auth\SupabaseAuthAdapter.cs` | shared Infrastructure (MAP-16), registered singleton in `Program.cs` for the Login path |
-| `SupabaseSettings` | static config class (`BA_DMO_SUPABASE_URL`, `BA_DMO_SUPABASE_ANON_KEY`) | `src\BA.Dmo.Infrastructure\Auth\SupabaseSettings.cs` | shared Infrastructure config; `Program.cs` uses `ResolveUrl`/`ResolveAnonKey` when constructing the registered `SupabaseAuthAdapter` |
+| `SupabaseSettings` | static config class (`BA_DMO_SUPABASE_URL`, `BA_DMO_SUPABASE_ANON_KEY`, `BA_DMO_SUPABASE_SERVICE_ROLE_KEY`, bootstrap vars) | `src\BA.Dmo.Infrastructure\Auth\SupabaseSettings.cs` | shared Infrastructure config; `Program.cs` uses `ResolveUrl`/`ResolveAnonKey` when constructing the registered `SupabaseAuthAdapter` |
 
-`SupabaseAuthAdapter` calls the Supabase Auth REST anon endpoint `POST /auth/v1/token?grant_type=password`; it is the shared provider adapter, not Login-specific. Dedicated Infrastructure Login files = **0**.
+`SupabaseAuthAdapter` calls the Supabase Auth REST anon endpoint `POST /auth/v1/token?grant_type=password` and classifies the provider response CURRENTLY as (source, lines 33–138):
+- missing URL/anon key → `DomainError.BackendUnavailable("AUTH_PROVIDER_MISCONFIGURED", ...)` (the password is not even tested);
+- HTTP 429 → `BackendUnavailable("AUTH_PROVIDER_UNAVAILABLE")` (rate limiting — transient provider condition, NOT bad credentials);
+- HTTP 401/403 → `BackendUnavailable("AUTH_PROVIDER_MISCONFIGURED")` (the apikey was rejected — present but wrong/rotated);
+- other 4xx → `DomainError.Unauthorized("INVALID_CREDENTIALS", ...)` (credentials/authorization problem);
+- 5xx/other → `BackendUnavailable("AUTH_PROVIDER_UNAVAILABLE")`; transport failure → `BackendUnavailable("AUTH_PROVIDER_UNAVAILABLE", ...)`.
+
+Dedicated Infrastructure Login files = **0**.
 
 ## 6. Database Objects
 
@@ -96,12 +104,14 @@ Login-specific DB objects: **0**.
 
 Greps for `login` across `database\migrations\*.sql` and `database\consolidated_clean_install.sql` returned no Login table. No table, index, trigger or constraint is created or altered for Login.
 
-Shared / external DB references relevant for navigation only (not Login-dedicated):
+Shared / external DB references relevant for navigation only (not Login-dedicated) — CURRENT post-N27/N31 resolution chain:
 
 | Reference | Source | Why relevant to Login |
 |---|---|---|
-| `internal_users` (with `auth_user_id`) | `N01_identity.sql` (+ N25) | the internal identity resolved after credential acceptance via `IdentityResolutionService` |
-| `access_templates` | `N01_identity.sql` | grant source in `IdentityResolutionService` resolution |
+| `internal_users` (with `auth_user_id` NOT NULL + UNIQUE, `profile_title` NOT NULL + CHECK) | `N01_identity.sql` (+ N25 §1.1, N27) | the internal identity resolved after credential acceptance via `IdentityResolutionService` |
+| `internal_user_access_templates` (junction) | `N27_access_convergence.sql` (+ N31 single-assignment UNIQUE index) | joined by `DapperInternalUserRepository.FindByAuthUserIdSql` (`internal_users LEFT JOIN internal_user_access_templates LEFT JOIN access_templates`); single active template enforcement |
+| `access_templates` | `N01_identity.sql` | grant/module source in `IdentityResolutionService` resolution |
+| `access_template_profiles` | `N31_template_profiles_single_assignment.sql` | NOT read at resolution (profile comes from `internal_users.profile_title`, which N31 keeps in sync); indirect relevance only |
 | Supabase `auth.users` | external (Supabase Auth) | external provider identity; no local FK; linked logically by `internal_users.auth_user_id` |
 
 None of these is a Login-specific DB object.
@@ -110,7 +120,7 @@ None of these is a Login-specific DB object.
 
 Distinct Login migration files: **0**.
 
-None of the migrations under `database\migrations\` (N01–N26) directly creates or alters a Login-specific DB object. N01/N25/N26 create/alter shared identity tables (`internal_users`, `access_templates`) that participate in post-auth identity resolution, but they are shared Users / Access objects (MAP-16/MAP-03), not Login-specific.
+None of the migrations under `database\migrations\` (N01–N31) directly creates or alters a Login-specific DB object. N01/N25/N26/N27/N31 create/alter shared identity tables (`internal_users`, `access_templates`, `internal_user_access_templates`, `access_template_profiles`) that participate in post-auth identity resolution, but they are shared Users / Access objects (MAP-16/MAP-03), not Login-specific.
 
 ## 8. User Surface
 
@@ -149,12 +159,13 @@ Dedicated API / endpoint files: **0**. There is no `/api/login` route; Login is 
 
 ### Login.cshtml form structure (`@page "/login"`)
 
-- Bound view property: `Model.Email` (`[BindProperty] string? Email`) re-rendered in `name="email"` input on failed POST. Password is intentionally not bound — it is only the handler argument `password`, never stored or rendered.
-- Form fields: `input[name=email]` (`type=email`, `autocomplete=username`), `input[name=password]` (`type=password`, `autocomplete=current-password`, `password-wrap` with `data-dmo-password-toggle="password"` toggling button), submit button `data-dmo-login-submit`.
+- Bound view property: `Model.Email` (`[BindProperty] string? Email`) re-rendered in `name="email"` input on failed POST. Password is intentionally not bound — it is only the handler argument `password`, never stored or rendered (no `value` attribute; comment in `Login.cshtml` lines 52–53).
+- Form fields: `input[name=email]` (`type=email`, `autocomplete=username`, `required`), `input[name=password]` (`type=password`, `autocomplete=current-password`, `required`, `password-wrap` with `data-dmo-password-toggle="password"` toggling button), submit button `data-dmo-login-submit`.
 - `@Html.AntiForgeryToken()` present.
 - Error slot: `<div class="dmo-form-message" role="alert">@Model.ErrorMessage</div>` rendered only when `Model.ErrorMessage` is non-blank.
 - Embedded inline `<script>` (DOMContentLoaded) disables the submit trigger and shows "A entrar…" on submit; not a dedicated static file.
 - `data-dmo-login` marker consumed by the shared `dmo-interactions.js`.
+- Uses `Layout = null` (auth surface outside the application shell) and renders the shared `dmo-*.css` (5 files).
 
 ### LoginModel `OnGet()`
 - No logic; renders the sign-in form.
@@ -166,10 +177,12 @@ Dedicated API / endpoint files: **0**. There is no `/api/login` route; Login is 
 - On success (`signIn.Value.AuthUserId`): constructs `new ClaimsIdentity([new Claim(SessionClaims.AuthUserIdClaimType, signIn.Value.AuthUserId.ToString())], SessionClaims.AuthenticationScheme)`; calls `HttpContext.SignInAsync(SessionClaims.AuthenticationScheme, new ClaimsPrincipal(identity), new AuthenticationProperties { IsPersistent = true, AllowRefresh = true })`.
 - Calls `_resolutionService.ResolveAsync(signIn.Value.AuthUserId, HttpContext.RequestAborted)`.
 - If `resolution.IsSuccess` and `resolution.Value.FirstPage.Page is not null` → `return Redirect(resolution.Value.FirstPage.Page.Route)`.
+  - **CURRENT landing behavior (single-template model):** a functional user (Operador/Responsável with jobon) lands on `/jobon` (`FirstPageOutcome.Landing`); an Admin profile (no jobon.view by owner decision) lands on `/admin` (`FirstPageOutcome.FallbackCanonicalOrder` → `admin.gestao`); verified by `AdminWebAuthorizationTests.AdminCapability_AllowsAdminPages_AndLoginLandsOnAdmin` and `AdminGrants_LandOnAdmin_InsteadOfJobOn` (MAP-16 §17).
 - If `resolution.IsFailure`:
   - logs the resolution error server-side;
   - if `resolution.Error.Category == ErrorCategory.BackendUnavailable` → `return Redirect("/no-access?indisponivel=1")`.
 - Fall-through → `return Redirect("/no-access")`.
+  - CURRENT failures that land on plain `/no-access`: inactive user/template (`INTERNAL_USER_INACTIVE`, `ACCESS_TEMPLATE_INACTIVE`), more than one active template (`ACCESS_TEMPLATE_AMBIGUOUS`), invalid profile (`FUNCTIONAL_PROFILE_INVALID`), ambiguous internal identity (`IDENTITY_AMBIGUOUS`), or a resolved identity without any authorized first page — all `Unauthorized` category, never `indisponivel=1`.
 
 ### LogoutModel `OnGet()` / `OnPostAsync()`
 - `OnGet` renders the confirmation form.
@@ -189,7 +202,7 @@ Dedicated API / endpoint files: **0**. There is no `/api/login` route; Login is 
 - `AuthenticationScheme = "BaDmo.Session"`
 - `AuthUserIdClaimType = "ba_dmo.auth_user_id"`
 
-`Program.cs` cookie authentication options (`AddCookie(SessionClaims.AuthenticationScheme, ...)`, lines 77–89):
+`Program.cs` cookie authentication options (`AddCookie(SessionClaims.AuthenticationScheme, ...)`, lines 83–95):
 - `LoginPath = "/login"`
 - `LogoutPath = "/logout"`
 - `AccessDeniedPath = "/access-denied"`
@@ -199,7 +212,7 @@ Dedicated API / endpoint files: **0**. There is no `/api/login` route; Login is 
 - `Cookie.SameSite = SameSiteMode.Lax`
 - `Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest`
 
-Related shared wiring used around the Login path: the fallback authorization policy requiring `AuthenticatedSessionRequirement` (`Program.cs` lines 90–95); `ISupabaseAuthAdapter` registered singleton as `new SupabaseAuthAdapter(new HttpClient(), ...)` with `SupabaseSettings.ResolveUrl`/`ResolveAnonKey` (`Program.cs` lines 151–154); `IdentityResolutionService` registered scoped (line 148). These are shared composition-root wiring (MAP-16), referenced here as the session/auth foundation Login runs within.
+Related shared wiring used around the Login path: the fallback authorization policy requiring `AuthenticatedSessionRequirement` (`Program.cs` lines 98–101); `ISupabaseAuthAdapter` registered singleton as `new SupabaseAuthAdapter(new HttpClient(), ...)` with `SupabaseSettings.ResolveUrl`/`ResolveAnonKey` (`Program.cs` lines 157–160); `IdentityResolutionService` registered scoped (line 154). These are shared composition-root wiring (MAP-16), referenced here as the session/auth foundation Login runs within. `AuthenticatedSessionHandler` (`src\BA.Dmo.Web\Authorization\AuthenticatedSessionHandler.cs`) is the singleton requirement handler: a request is only authorized when `context.User.Identity?.IsAuthenticated == true` AND the `ba_dmo.auth_user_id` claim exists — the cookie carries only the auth user id; grants are re-resolved server-side per request via `RequestCurrentUserAccessor`/`RequestShellService` (MAP-16 §9/§10).
 
 ## 12. Static Assets
 
@@ -221,32 +234,34 @@ Shared static asset files: **7**. All are shared design-system (MAP-17) / brand 
 
 ## 13. Tests
 
-Test classes whose direct target is the Login authentication surface (login/logout page handling, session cookie, post-login landing, sign-in call-site):
+Test classes whose direct target is the Login authentication surface (login/logout page handling, session cookie, post-login landing, sign-in call-site). Test files live under `AI-CONTEXT\docs\tests\` (there is no `tests\` directory at the repository root):
 
 | Test class | File | Direct target |
 |---|---|---|
-| `WebAuthSessionTests` | `tests\BA.Dmo.IntegrationTests\Identity\WebAuthSessionTests.cs` | `/login` GET public, POST sign-in → `/jobon`/`/admin` landing with session cookie, failed login stays on form + preserves email + no password render, provider-outage message, `/no-access` (plain + `?indisponivel=1`) post-login, `/logout` → `/login`, ReturnUrl non-use |
-| `IdentityAmbiguityLandingTests` | `tests\BA.Dmo.IntegrationTests\Identity\IdentityAmbiguityLandingTests.cs` | `/login` POST landing on plain `/no-access` (never `?indisponivel=1`) for an ambiguous identity; real repository failure → `?indisponivel=1` |
-| `NoDebugBypassGuardTests` | `tests\BA.Dmo.IntegrationTests\Security\NoDebugBypassGuardTests.cs` | source/composition guard; asserts exactly one `.SignInAsync(` call site, pinned to `Pages\Auth\Login.cshtml.cs`, and no `#if DEBUG` auth path (scans `Program.cs`, `Pages\Auth\*.cs`, `Cli\*.cs`) |
+| `WebAuthSessionTests` | `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Identity\WebAuthSessionTests.cs` | `/login` GET public, POST sign-in → `/jobon`/`/admin` landing with session cookie, failed login stays on form + preserves email + no password render, provider-outage message, `/no-access` (plain + `?indisponivel=1`) post-login, `/logout` → `/login`, ReturnUrl non-use |
+| `IdentityAmbiguityLandingTests` | `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Identity\IdentityAmbiguityLandingTests.cs` | `/login` POST landing on plain `/no-access` (never `?indisponivel=1`) for an ambiguous identity; real repository failure → `?indisponivel=1` |
+| `NoDebugBypassGuardTests` | `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Security\NoDebugBypassGuardTests.cs` | source/composition guard; asserts exactly one `.SignInAsync(` call site, pinned to `Pages\Auth\Login.cshtml.cs`, and no `#if DEBUG` auth path (scans `Program.cs`, `Pages\Auth\*.cs`, `Cli\*.cs`) |
+
+Related current-model coverage that exercises the Login landing contract without decoding the page itself: `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Access\AdminWebAuthorizationTests.cs` (`AdminCapability_AllowsAdminPages_AndLoginLandsOnAdmin`, `AdminWithOnlyAdminGerir_LoginRedirectsToAdmin`) verifies `/login` POST → 302 `/admin` for the Admin profile; `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Shared\Identity\IdentityResolutionServiceTests.cs` verifies the resolution-side failures (`ACCESS_TEMPLATE_AMBIGUOUS`, `FUNCTIONAL_PROFILE_INVALID`, `IDENTITY_AMBIGUOUS`) that Login maps to `/no-access`.
 
 Test classes (direct Login target): **3**.
 
-Note: `WebAuthSessionTests` and `IdentityAmbiguityLandingTests` are also counted in `maps\16_USERS_ACCESS.md` (MAP-16) as shared session/identity contract tests by their session-identity classification. For 18_LOGIN.md they are counted by direct `/login` page target; the reference-type classification is per-map and does not double-count a Login dedicated object.
+Note: `WebAuthSessionTests` and `IdentityAmbiguityLandingTests` are also counted in [16_USERS_ACCESS.md](16_USERS_ACCESS.md) (MAP-16) as shared session/identity contract tests by their session-identity classification. For 18_LOGIN.md they are counted by direct `/login` page target; the reference-type classification is per-map and does not double-count a Login dedicated object.
 
-Other integration tests (`DesignSystemGuardTests`, `ShellAndCalendarGuardTests`, `AdminWebAuthorizationTests`, `AdminFormAntiforgeryTests`, `AdminUserListResetTests`, module `*WebApiTests`, `ShellRoutingTests`, `JobOnLandingTests`) use `/login` as a fixture log-in helper, but their direct target is another module or the shared shell/design surface — not Login. No Login-specific Unit test exists in `tests\BA.Dmo.UnitTests\`.
+Other integration tests (`DesignSystemGuardTests`, `ShellAndCalendarGuardTests`, `AdminWebAuthorizationTests`, `AdminFormAntiforgeryTests`, `AdminUserListResetTests`, module `*WebApiTests`, `ShellRoutingTests`, `JobOnLandingTests`) use `/login` as a fixture log-in helper, but their direct target is another module or the shared shell/design surface — not Login. No Login-specific Unit test exists in `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\`.
 
 ## 14. Test Doubles / Helpers
 
 ### Dedicated test support files
 
-Dedicated test support files: **0**. No separate fake/fixture file is dedicated to Login; the doubles used by the Login-targeting tests are embedded in-file.
+Dedicated test support files: **0**. No separate fake/fixture file is dedicated to Login; the doubles used by the Login-targeting tests are embedded in-file. (Shared `FakeHttpMessageHandler.cs` in `BA.Dmo.IntegrationTests\Identity\` targets the Supabase auth adapter, not Login.)
 
 ### In-file test fixture files (2)
 
 | File | Embedded doubles / fixtures |
 |---|---|
-| `tests\BA.Dmo.IntegrationTests\Identity\WebAuthSessionTests.cs` | `AuthTestFixture : WebApplicationFactory<Program>`; in-file `FakeAuthAdapter : ISupabaseAuthAdapter`; `FakeIdentityRepository : IInternalUserRepository` |
-| `tests\BA.Dmo.IntegrationTests\Identity\IdentityAmbiguityLandingTests.cs` | `AmbiguityFixture : WebApplicationFactory<Program>`; in-file `FakeAuthAdapter : ISupabaseAuthAdapter`; `FakeIdentityRepository : IInternalUserRepository` |
+| `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Identity\WebAuthSessionTests.cs` | `AuthTestFixture : WebApplicationFactory<Program>`; in-file `FakeAuthAdapter : ISupabaseAuthAdapter`; `FakeIdentityRepository : IInternalUserRepository` |
+| `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Identity\IdentityAmbiguityLandingTests.cs` | `AmbiguityFixture : WebApplicationFactory<Program>`; in-file `FakeAuthAdapter : ISupabaseAuthAdapter`; `FakeIdentityRepository : IInternalUserRepository` |
 
 `NoDebugBypassGuardTests` uses no WebApplicationFactory fixture (source-inspection guard) and is not an in-file fixture file.
 
@@ -267,7 +282,7 @@ One edge per source-proven relationship:
 - `LoginModel.OnPostAsync` → `SessionClaims.AuthUserIdClaimType`, `SessionClaims.AuthenticationScheme`
 - `LoginModel.OnPostAsync` → `HttpContext.SignInAsync`
 - `LoginModel.OnPostAsync` → `_resolutionService.ResolveAsync`
-- `LoginModel.OnPostAsync` → `ResolvedIdentity.FirstPage.Page.Route` (redirect)
+- `LoginModel.OnPostAsync` → `ResolvedIdentity.FirstPage.Page.Route` (redirect — `/jobon` functional / `/admin` Admin profile)
 - `LoginModel.OnPostAsync` → `Redirect("/no-access")`, `Redirect("/no-access?indisponivel=1")`
 - `LogoutModel.OnPostAsync` → `HttpContext.SignOutAsync(SessionClaims.AuthenticationScheme)`
 - `LogoutModel.OnPostAsync` → `Redirect("/login")`
@@ -282,9 +297,9 @@ One edge per source-proven relationship:
 | Login Object | External Technical Reference | Reference Type |
 |---|---|---|
 | `LoginModel` | `ISupabaseAuthAdapter` (`Shared\Identity\SupabaseAuthPorts.cs`) | shared application identity dependency |
-| `LoginModel` | `SupabaseAuthAdapter` (`Infrastructure\Auth\SupabaseAuthAdapter.cs`) | shared infrastructure implementation (runtime for the port) |
+| `LoginModel` | `SupabaseAuthAdapter` (`Infrastructure\Auth\SupabaseAuthAdapter.cs`) | shared infrastructure implementation (runtime for the port; current error classification §5) |
 | `LoginModel` | `SupabaseSettings` (`BA_DMO_SUPABASE_URL` / `BA_DMO_SUPABASE_ANON_KEY`) | shared infrastructure configuration |
-| `LoginModel` | `IdentityResolutionService` / `ResolvedIdentity` / `FirstPageResolution` (`Shared\Identity`, `Shared\Access`) | shared identity dependency |
+| `LoginModel` | `IdentityResolutionService` / `ResolvedIdentity` / `FirstPageResolution` (`Shared\Identity`, `Shared\Access`) | shared identity dependency; single-template semantics (MAP-16 §8) |
 | `LoginModel` | `AuthUser` / `DomainError` / `ErrorCategory` (`Shared\Identity`, Domain `Shared\Kernel`) | shared domain dependency |
 | `LoginModel` | `SessionClaims` (`Web\Identity\SessionClaims.cs`) | shared web identity dependency |
 | `LoginModel` / `LogoutModel` | `HttpContext.SignInAsync` / `SignOutAsync`, `ClaimsIdentity`/`ClaimsPrincipal` (Microsoft.AspNetCore) | framework auth dependency |
@@ -296,6 +311,7 @@ One edge per source-proven relationship:
 | `Login.cshtml` brand logo | shared `wwwroot\assets\ba-logo.png` | shared static dependency |
 | `Login.cshtml` password toggle | shared `wwwroot\scripts\dmo-interactions.js` | shared static dependency |
 | `ISupabaseAuthAdapter` sign-in | Supabase Auth REST `POST /auth/v1/token?grant_type=password` | external provider dependency |
+| Post-login resolution DB reads | `internal_users` + `internal_user_access_templates` + `access_templates` (junction join; N25/N27/N31 schema) | shared DB dependency (MAP-16 §11/§12) |
 
 ## 17. Target-to-Layer Index
 
@@ -309,37 +325,42 @@ One edge per source-proven relationship:
 | `IdentityResolutionService` / `ResolvedIdentity` | Application Shared Identity | `src\BA.Dmo.Application\Shared\Identity\IdentityResolutionService.cs` |
 | `FirstPageResolution` / `AccessResolver.ResolveFirstPage` | Application Shared Access | `src\BA.Dmo.Application\Shared\Access\AccessResolver.cs` |
 | `SessionClaims` | Web Identity | `src\BA.Dmo.Web\Identity\SessionClaims.cs` |
-| Cookie auth options (`/login`, `/logout`, `/access-denied`, 8h, HttpOnly, SameSite=Lax) | Web composition root | `src\BA.Dmo.Web\Program.cs` (lines 77–89) |
-| `ISupabaseAuthAdapter` singleton / `IdentityResolutionService` scoped | Web composition root | `src\BA.Dmo.Web\Program.cs` (lines 148, 151–154) |
+| Cookie auth options (`/login`, `/logout`, `/access-denied`, 8h, HttpOnly, SameSite=Lax) | Web composition root | `src\BA.Dmo.Web\Program.cs` (lines 83–95) |
+| `ISupabaseAuthAdapter` singleton / `IdentityResolutionService` scoped | Web composition root | `src\BA.Dmo.Web\Program.cs` (lines 154, 157–160) |
 | `SupabaseAuthAdapter` | Infrastructure Auth (shared) | `src\BA.Dmo.Infrastructure\Auth\SupabaseAuthAdapter.cs` |
 | `SupabaseSettings` | Infrastructure Auth (shared) | `src\BA.Dmo.Infrastructure\Auth\SupabaseSettings.cs` |
 | Shared auth/shell pages (`/access-denied`, `/no-access`, `/`) | Web Pages (shared) | `src\BA.Dmo.Web\Pages\AccessDenied.*`, `NoAccess.*`, `Index.*` |
 | Shared `dmo-*.css` (5), `ba-logo.png`, `dmo-interactions.js` | Web shared static | `src\BA.Dmo.Web\wwwroot\` |
-| `WebAuthSessionTests`, `IdentityAmbiguityLandingTests` | Tests | `tests\BA.Dmo.IntegrationTests\Identity\` |
-| `NoDebugBypassGuardTests` | Tests | `tests\BA.Dmo.IntegrationTests\Security\` |
+| `WebAuthSessionTests`, `IdentityAmbiguityLandingTests` | Tests | `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Identity\` |
+| `NoDebugBypassGuardTests` | Tests | `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Security\` |
 | Domain / Application / Infrastructure dedicated Login objects | — | none in current source |
 
 ## 18. Sources Verified
 
-- `maps\00_INDEX.md` (binding contract; Login row, surface order 18, COMPLETE; User Surface Shared)
-- `maps\16_USERS_ACCESS.md` (MAP-16 boundary)
-- `maps\15_ADMIN.md` (MAP-15 boundary)
-- `maps\17_DESIGN_LABORATORIO.md` (MAP-17 boundary)
+- [00_INDEX.md](00_INDEX.md) (binding contract; Login row, surface order 18, COMPLETE; User Surface Shared)
+- [01_DOMAIN.md](01_DOMAIN.md), [02_DATABASE.md](02_DATABASE.md), [03_MIGRATIONS.md](03_MIGRATIONS.md), [04_DAPPER_INFRASTRUCTURE.md](04_DAPPER_INFRASTRUCTURE.md), [05_TESTS.md](05_TESTS.md), [19_APPLICATION.md](19_APPLICATION.md), [20_WEB.md](20_WEB.md) (cross-map navigation)
+- [16_USERS_ACCESS.md](16_USERS_ACCESS.md) (MAP-16 boundary)
+- [15_ADMIN.md](15_ADMIN.md) (MAP-15 boundary)
+- [17_DESIGN_LABORATORIO.md](17_DESIGN_LABORATORIO.md) (MAP-17 boundary)
 - `src\BA.Dmo.Web\Pages\Auth\Login.cshtml`, `Login.cshtml.cs`, `Logout.cshtml`, `Logout.cshtml.cs`
 - `src\BA.Dmo.Web\Pages\Index.cshtml`, `Index.cshtml.cs`, `AccessDenied.cshtml`, `AccessDenied.cshtml.cs`, `NoAccess.cshtml`, `NoAccess.cshtml.cs`
 - `src\BA.Dmo.Web\Identity\SessionClaims.cs`
 - `src\BA.Dmo.Web\Program.cs` (cookie options, session/policy, `ISupabaseAuthAdapter`/`IdentityResolutionService` registration; module endpoints scanned, none for login)
+- `src\BA.Dmo.Web\Authorization\AuthenticatedSessionHandler.cs`
 - `src\BA.Dmo.Web\Pages\Shared\_Layout.cshtml` (shared static set)
 - `src\BA.Dmo.Application\Shared\Identity\SupabaseAuthPorts.cs`, `IdentityResolutionService.cs`
-- `src\BA.Dmo.Application\Shared\Access\AccessResolver.cs` (`FirstPageResolution`/`FirstPageOutcome`)
-- `src\BA.Dmo.Infrastructure\Auth\SupabaseAuthAdapter.cs`, `SupabaseSettings.cs`
+- `src\BA.Dmo.Application\Shared\Access\AccessResolver.cs` (`FirstPageResolution`/`FirstPageOutcome`, profile-driven landing)
+- `src\BA.Dmo.Infrastructure\Auth\SupabaseAuthAdapter.cs`, `SupabaseSettings.cs` (current provider error classification)
+- `src\BA.Dmo.Infrastructure\Identity\DapperInternalUserRepository.cs` (junction join SQL feeding resolution)
 - `src\BA.Dmo.Domain\Modules\` and `src\BA.Dmo.Application\Modules\` (directory listing; no `Login` folder)
-- Global source greps for `Login|login|LoginModel|/login|/logout|SignInAsync` across `src\`, `tests\`, `database\`
-- `database\migrations\*.sql` and `database\consolidated_clean_install.sql` (grepped for `login`; no match)
+- Global source greps for `Login|login|LoginModel|/login|/logout|SignInAsync` across `src\`, `AI-CONTEXT\docs\tests\`, `database\`
+- `database\migrations\*.sql` and `database\consolidated_clean_install.sql` (grepped for `login`; no match) and `database\migrations\N27_access_convergence.sql`, `N31_template_profiles_single_assignment.sql` (resolution-chain schema)
 - `src\BA.Dmo.Web\wwwroot\` (styles/scripts/assets directory scan; no login-specific static file)
-- `tests\BA.Dmo.IntegrationTests\Identity\WebAuthSessionTests.cs`, `IdentityAmbiguityLandingTests.cs`
-- `tests\BA.Dmo.IntegrationTests\Security\NoDebugBypassGuardTests.cs`
-- `tests\BA.Dmo.UnitTests\` (grepped for `Login|/login`; no Login-targeting unit test)
+- `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Identity\WebAuthSessionTests.cs`, `IdentityAmbiguityLandingTests.cs`
+- `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Access\AdminWebAuthorizationTests.cs` (admin landing contract)
+- `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\Shared\Identity\IdentityResolutionServiceTests.cs` (landing/failure semantics feed Login redirects)
+- `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Security\NoDebugBypassGuardTests.cs`
+- `AI-CONTEXT\docs\tests\BA.Dmo.UnitTests\` (grepped for `Login|/login`; no Login-targeting unit test)
 
 ## Counts
 
@@ -357,7 +378,7 @@ One edge per source-proven relationship:
 - Login-specific DB indexes: **0**
 - Login-specific DB triggers: **0**
 - Login-specific DB objects: **0** (0 tables + 0 indexes + 0 triggers)
-- Shared / external DB dependencies: **3** (navigational: `internal_users`, `access_templates`, external Supabase `auth.users`)
+- Shared / external DB dependencies: **4** (navigational: `internal_users`, `internal_user_access_templates`, `access_templates`; external Supabase `auth.users` — no local FK; `access_template_profiles` noted as indirect-only)
 - Distinct Login migration files: **0**
 - Module IDs: **0** (Login is not a canonical catalog module)
 - Capability IDs: **0**

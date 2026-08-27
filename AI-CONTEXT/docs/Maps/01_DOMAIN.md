@@ -47,6 +47,12 @@ Answer: *"Which Domain type am I looking for, what is it, what does it contain, 
 - `01_DOMAIN.md` is a global transversal inventory of the single Domain project: types, identifiers, relationships, module placement, and cross-module references visible in Domain source.
 - It is technical navigation only. Functional flow, persistence, repository, and test behaviour belong to their own layer maps.
 
+### Related maps (relative links, same folder)
+
+- Registry: [00_INDEX.md](00_INDEX.md)
+- Technical layers: [02_DATABASE.md](02_DATABASE.md) · [03_MIGRATIONS.md](03_MIGRATIONS.md) · [04_DAPPER_INFRASTRUCTURE.md](04_DAPPER_INFRASTRUCTURE.md) · [05_TESTS.md](05_TESTS.md) · [19_APPLICATION.md](19_APPLICATION.md) · [20_WEB.md](20_WEB.md)
+- Module maps: [06_JOB_ON.md](06_JOB_ON.md) · [07_CONTROLO.md](07_CONTROLO.md) · [08_FERRAMENTAS.md](08_FERRAMENTAS.md) · [09_ARMAZEM.md](09_ARMAZEM.md) · [10_BOQUILHAS.md](10_BOQUILHAS.md) · [11_REPARACAO_INTERNA.md](11_REPARACAO_INTERNA.md) · [12_REPARACAO_EXTERNA.md](12_REPARACAO_EXTERNA.md) · [13_TAMPOES.md](13_TAMPOES.md) · [14_HISTORIA.md](14_HISTORIA.md) · [15_ADMIN.md](15_ADMIN.md)
+
 ---
 
 ## 2. Domain Project Structure
@@ -67,13 +73,13 @@ src\BA.Dmo.Domain\
 │  ├─ ReparacaoInterna\           (6 files)
 │  └─ Tampoes\                    (11 files)
 └─ Shared\
-   ├─ Access\                     (7 files — module catalog / identity / grants)
+   ├─ Access\                     (8 files — module catalog / identity / profiles / grants)
    └─ Kernel\                     (5 files — Result, DomainError, Clock)
 ```
 
 `bin\` and `obj\` are build output (ignored). `Properties\AssemblyInfo.cs` declares `InternalsVisibleTo` for Infrastructure and UnitTests.
 
-**Source-file count (Domain):** **95** `.cs` source files under `src\BA.Dmo.Domain\`, excluding `bin\`, `obj\` and `Properties\AssemblyInfo.cs` (the folder also contains the project file `BA.Dmo.Domain.csproj`). Module files: 83; Shared files: 12.
+**Source-file count (Domain):** **96** `.cs` source files under `src\BA.Dmo.Domain\`, excluding `bin\`, `obj\` and `Properties\AssemblyInfo.cs` (the folder also contains the project file `BA.Dmo.Domain.csproj`). Module files: 83; Shared files: 13. *(+1 vs the previous map's 95: `Shared\Access\FunctionalProfile.cs`, see §4 and [Sources Verified](#sources-verified).)*
 
 ---
 
@@ -87,11 +93,11 @@ src\BA.Dmo.Domain\
 | Armazém | `Modules\Armazem\` | `WarehouseLocation`, `WarehouseMovement`, `WarehouseStock`, `WarehouseToolIdentity`, `WarehouseStockRules`, `WarehouseMovementDirection(+Codec)`, `WarehouseToolDomain`, `ArmazemLocationOccupiedException`, `ArmazemModuleCatalog` |
 | Boquilhas | `Modules\Boquilhas\` | `BqLote`, `BqTrace`, `BqMovement`, `BqSaldos`, `BqDiscrepancy`, `BqLifecycleEvent`, `BqRepairer`, `BqLineRepairerDefault`, `BqUtilisationReading`, `BqCloseSnapshot`, enums/codecs, `BqRules`, `BqInventoryCalculator`, `BoquilhasModuleCatalog` |
 | Reparação Interna | `Modules\ReparacaoInterna\` | `InternalRepairRecord`, `InternalRepairContext`, `InternalRepairContextResolution(+Candidate)`, `InternalRepairResolutionKind`, `InternalRepairToolType(+Codec)`, `InternalRepairRules`, `ReparacaoInternaProductionProjection`, `ReparacaoInternaModuleCatalog`, `Unit` |
-| Peso | `Modules\Peso\` | `PesoControl`, `PesoLeitura`, `PesoReference`, `PesoControloAnterior`, `PesoComparisonCmDecision`, `PesoValidationError`, `PesoControlState(+Codec)`, `PesoCmDecision(+Codec)`, `PesoRecordType(+Codec)`, `PesoProcesso(+Codec)`, `PesoValidator`, `ReportPathValidator`, `WeightCalculator`, `PesoModuleCatalog`, `PesoLoteRules` |
+| Peso | `Modules\Peso\` | `PesoControl`, `PesoLeitura`, `PesoReference`, `PesoControloAnterior`, `PesoComparisonCmDecision`, `PesoComparisonCmSnapshot`, `PesoComparisonSnapshot`, `PesoComparisonDecisionSnapshot`, `PesoValidationError`, `PesoControlState(+Codec)`, `PesoCmDecision(+Codec)`, `PesoRecordType(+Codec)`, `PesoProcesso(+Codec)`, `PesoValidator`, `ReportPathValidator`, `WeightCalculator`, `PesoModuleCatalog`, `PesoLoteRules` |
 | Pegamentos | `Modules\Pegamentos\` | `PegamentoControlo`, `PegamentoMedicao`, `PegamentoDocumento`, `PegamentoProductionContext`, `PegamentoToolSnapshot`, `PegamentoComponentKey`, `PegamentoControloStatus`, `PegamentoToleranceStatus`, `PegamentoMeasurementCalculator`, `PegamentoModuleCatalog` |
 | Reparação Externa | `Modules\ReparacaoExterna\` | `RepairExit`, `RepairExitItem`, `Repairer`, `RepairerSnapshot`, `LineRepairerDefault`, `RepairExitStatus(+Codec)`, `RepairType(+Codec)`, `RepairExitRules`, `RepairExitStatusMachine`, `ReparacaoExternaModuleCatalog` |
 | Tampões | `Modules\Tampoes\` | `TampaoConfiguration`, `TampaoConfigurationNote`, `TampaoConfigurationKey`, `TampaoPlano`, `TampaoSaldo`, `TampaoMovement`, `TampaoFieldDef`, `TampaoFieldValue`, `TampaoMachine`, `TampaoMachineEvent`, `TampaoMovementType(+Codec)`, `TampaoBalanceKind(+Codec)`, `TampaoRules`, `TampoesModuleCatalog` |
-| Shared / Access | `Shared\Access\` | `ModuleCatalog`, `ModuleDefinition`, `ModuleKind`, `Capability`, `CurrentUser`, `ICurrentUserAccessor`, `JobonModuleCatalog` |
+| Shared / Access | `Shared\Access\` | `ModuleCatalog`, `ModuleDefinition`, `ModuleKind`, `Capability`, `CurrentUser`, `FunctionalProfile(+Names)`, `ICurrentUserAccessor`, `JobonModuleCatalog` |
 | Shared / Kernel | `Shared\Kernel\` | `Result<TSuccess,TError>` (+`Result` factories), `DomainError`, `ErrorCategory`, `IClock`, `SystemClock` |
 
 ---
@@ -114,9 +120,10 @@ Declares access/identity Domain concepts (Admin / Users / Access / Login surface
 - `Capability.cs` → `"{moduleId}.{ação}"` record; `ModuleSegment` parse.
 - `CurrentUser.cs` → user identity projection (`InternalUserId` + granted Modules/Capabilities).
 - `ICurrentUserAccessor.cs` → per-request access point to `CurrentUser?`.
-- `JobonModuleCatalog.cs` → Job On module id (`jobon`) + capability ids (`jobon.view/.edit/.configure/.confirmar`) + family constants (MP/MF/BQ/PU/CAL/AN/ARR/PI/CS/TP/FO).
+- `FunctionalProfile.cs` → ENUM `FunctionalProfile` (`Admin` / `OperatorController` / `Responsible`) + static `FunctionalProfileNames` (canonical display names `Admin` / `Operador / Controlador` / `Responsável`; `TryParse` + `DisplayName` extension). Declared as "The three and only three functional profiles in BA DMO". **CONFIRMED CURRENT — ADDED since the previous map:** absent from this map's prior verification; introduced by commit `91e049f` (2026-08-27, "Complete BA DMO restructuring and UI convergence"). USED BY `Application\Modules\Admin\AdminUserService.cs`, `Application\Shared\Access\AccessResolver.cs`, `Web\Pages\Admin\TemplateProfileStore.cs`, `Web\Pages\Admin\Templates\Edit.cshtml.cs` (Admin user/template-profile surface). Related ADMIN map: [15_ADMIN.md](15_ADMIN.md).
+- `JobonModuleCatalog.cs` → Job On module id (`jobon`) + capability ids (`jobon.view/.edit/.configure/.confirmar`) + family constants (MP/MF/BQ/PU/CAL/AN/ARR/PI/CS/TP/FO). A Domain-side copy of the canonical Job On catalog constants; USED BY `Application\Modules\JobOn\JobOnService.cs`, `Application\Modules\JobOn\JobOnPdfService.cs`.
 
-Per-module catalog constants live in each module's `*ModuleCatalog.cs` (see module sections); these mirror the shared catalog.
+Per-module catalog constants live in each module's `*ModuleCatalog.cs` (see module sections); these mirror the shared catalog. The Domain project declares **no** `admin` / `historia` module catalogs — those ids live in the application layer: the canonical registry `CanonicalModuleCatalog` (`Application\Shared\Access\CanonicalModuleCatalog.cs`, builds the `ModuleCatalog` instance with all module ids incl. `historia`/`admin`) and `HistoriaModuleCatalog` (`Application\Modules\Historia\HistoriaModuleCatalog.cs`, História module + origin-module ids). See [19_APPLICATION.md](19_APPLICATION.md).
 
 ---
 
@@ -402,8 +409,9 @@ Path: `src\BA.Dmo.Domain\Modules\Peso\`
   - Role: aggregate root. Identity `PesoControloId`; `PesoReferenceId`, `PesoLoteId`, `RecordType`, `MoldNumber`, `NeckringNumber`, `ProductionCode`, `Line`, `Lote`, `ControlDate`, `JobOnId` + `JobOnRevisionId`, snapshot fields as named in Domain code: `CmSnapshotJson`, `MeasurementsSnapshotJson`, `ApprovalLogJson`, `PreviousControlJson`, `ComparisonDecisionsJson`; `Status`, `Revision`, approving audit, `Leituras`, `PesoNominal`, `Processo`, `ConstanteGlassUsada`, derived `PesoMedio`/`CapacidadeMedia`. Methods: `Submit`, `Approve`, `Reject`, `Reopen`, `IsDeletable`. The `...Json` suffix is the Domain property name only. Also record `PesoControloAnterior`.
   - File: `Modules\Peso\PesoControl.cs`
 
-- `PesoLeitura` / `PesoComparisonCmDecision`
-  - Role: records — `PesoLeitura` (append-only reading: `CmNumber`, `PesoEmAgua`, computed `PesoVidro`) and `PesoComparisonCmDecision` (per-CM keeper/aside decision).
+- `PesoLeitura` / `PesoComparisonCmDecision` / `PesoComparisonCmSnapshot` / `PesoComparisonSnapshot` / `PesoComparisonDecisionSnapshot`
+  - Role: records — `PesoLeitura` (append-only reading: `CmNumber`, `PesoEmAgua`, computed `PesoVidro`) and `PesoComparisonCmDecision` (per-CM keeper/aside decision), plus the comparison-snapshot chain: `PesoComparisonCmSnapshot` (explicit current-CM ↔ previous-CM glass-weight association; `CurrentGlassWeight`/`PreviousGlassWeight`/`Difference`/`DifferencePercent`), `PesoComparisonSnapshot` (immutable identity+value snapshot persisted in `peso_controlos.previous_control`; pins `CurrentJobOnId`/`CurrentJobOnRevisionId` and `PreviousJobOnId`/`PreviousJobOnRevisionId` — reference text is never used as identity; carries `Rows: PesoComparisonCmSnapshot[]`), `PesoComparisonDecisionSnapshot` (Responsável decisions + mandatory `Justification` bound to every current CM).
+  - **CONFIRMED CURRENT — ADDED since the previous map** (introduced by commit `91e049f`, 2026-08-27): the three `PesoComparison*Snapshot` records were absent from the previous verification. USED BY `Application\Modules\Peso\PesoService.cs` (comparison record type, `PesoRecordType.Comparacao`).
   - File: `Modules\Peso\PesoLeitura.cs`
 
 - `PesoReference` / `PesoValidationError` / `PesoValidator` / `ReportPathValidator`
@@ -588,7 +596,7 @@ Path: `src\BA.Dmo.Domain\Modules\Tampoes\`
 
 ## 15. Modules / Surfaces With No Dedicated Domain Types
 
-Checked against the current Domain tree for every canonical functional module (10) and transversal/system surface (3) declared in `maps\00_INDEX.md`:
+Checked against the current Domain tree for every canonical functional module (10) and transversal/system surface (3) declared in [00_INDEX.md](00_INDEX.md):
 
 | Module / Surface | Category | Dedicated Domain folder/types? | Notes |
 |---|---|---|---|
@@ -600,13 +608,13 @@ Checked against the current Domain tree for every canonical functional module (1
 | Reparação Interna | Canonical functional module | YES | `Modules\ReparacaoInterna\` |
 | Reparação Externa | Canonical functional module | YES | `Modules\ReparacaoExterna\` |
 | Tampões | Canonical functional module | YES | `Modules\Tampoes\` |
-| História | Canonical functional module | **NO DEDICATED DOMAIN TYPES FOUND** | No `audit`/event Domain entity exists in the Domain project; no `Modules\Historia\`. |
-| Admin | Canonical functional module | **NO DEDICATED DOMAIN TYPES FOUND** | Access/identity surface is served by `Shared\Access\` (ModuleCatalog, CurrentUser, Capability, …) and module `*ModuleCatalog` constants. No `Modules\Admin\`. |
-| Users / Access | Transversal / system surface | **NO DEDICATED DOMAIN TYPES FOUND** | Identity/grants served by `Shared\Access\`. No `Modules\UsersAccess\`. NOT a canonical functional module. |
-| Design Laboratório | Transversal / system surface | **NO DEDICATED DOMAIN TYPES FOUND** | No `Modules\DesignLaboratorio\`. NOT a canonical functional module. |
-| Login | Transversal / system surface | **NO DEDICATED DOMAIN TYPES FOUND** | Identity/auth surface served by `Shared\Access\` (CurrentUser/ICurrentUserAccessor). No `Modules\Login\`. NOT a canonical functional module. |
+| História | Canonical functional module | **NO DEDICATED DOMAIN TYPES FOUND** | No `audit`/event Domain entity exists in the Domain project; no `Modules\Historia\`. Mapped in [14_HISTORIA.md](14_HISTORIA.md); its module constants live in `src\BA.Dmo.Application\Modules\Historia\HistoriaModuleCatalog.cs` (**Application, not Domain**). |
+| Admin | Canonical functional module | **NO DEDICATED DOMAIN TYPES FOUND** | Access/identity surface is served by `Shared\Access\` (ModuleCatalog, CurrentUser, Capability, FunctionalProfile, …) and module `*ModuleCatalog` constants. No `Modules\Admin\`. Mapped in [15_ADMIN.md](15_ADMIN.md). |
+| Users / Access | Transversal / system surface | **NO DEDICATED DOMAIN TYPES FOUND** | Identity/grants served by `Shared\Access\`. No `Modules\UsersAccess\`. NOT a canonical functional module. Mapped in [16_USERS_ACCESS.md](16_USERS_ACCESS.md). |
+| Design Laboratório | Transversal / system surface | **NO DEDICATED DOMAIN TYPES FOUND** | No `Modules\DesignLaboratorio\`. NOT a canonical functional module. Mapped in [17_DESIGN_LABORATORIO.md](17_DESIGN_LABORATORIO.md). |
+| Login | Transversal / system surface | **NO DEDICATED DOMAIN TYPES FOUND** | Identity/auth surface served by `Shared\Access\` (CurrentUser/ICurrentUserAccessor). No `Modules\Login\`. NOT a canonical functional module. Mapped in [18_LOGIN.md](18_LOGIN.md). |
 
-The table covers the 10 canonical functional modules plus the 3 transversal/system surfaces (Users / Access, Design Laboratório, Login); the surfaces are NOT canonical functional modules.
+The table covers the 10 canonical functional modules plus the 3 transversal/system surfaces (Users / Access, Design Laboratório, Login); the surfaces are NOT canonical functional modules. Per the binding INDEX, **História (#9) and Admin (#10) are canonical modules with no Domain module** — the consequence is documented by their module maps [14_HISTORIA.md](14_HISTORIA.md) and [15_ADMIN.md](15_ADMIN.md) (and the application layers: História/Admin constants in Application, not Domain).
 
 **Controlo internal areas with dedicated Domain types:** In the Domain project source, the Controlo internal
 areas **Peso** and **Pegamentos** each have their own dedicated Domain module folder and types —
@@ -756,6 +764,7 @@ Global navigation table of value objects, enums and state types (codecs co-locat
 | `PesoProcesso` | ENUM | Peso | `PesoProcesso.cs` |
 | `PesoValidationError` | VALUE (record) | Peso | `PesoReference.cs` |
 | `PesoControloAnterior` | VALUE (record) | Peso | `PesoControl.cs` |
+| `PesoComparisonCmSnapshot` / `PesoComparisonSnapshot` / `PesoComparisonDecisionSnapshot` | VALUE (records) | Peso | `PesoLeitura.cs` |
 | `PegamentoComponentKey` | ENUM | Pegamentos | `PegamentoComponentKey.cs` |
 | `PegamentoControloStatus` | STATE (enum) | Pegamentos | `PegamentoControlo.cs` |
 | `PegamentoToleranceStatus` | ENUM | Pegamentos | `PegamentoControlo.cs` |
@@ -768,6 +777,7 @@ Global navigation table of value objects, enums and state types (codecs co-locat
 | `DomainError` | VALUE (record) | Shared Kernel | `Shared\Kernel\DomainError.cs` |
 | `Result<TSuccess,TError>` | VALUE (struct) | Shared Kernel | `Shared\Kernel\Result.cs` |
 | `ModuleKind` | ENUM | Shared Access | `Shared\Access\ModuleKind.cs` |
+| `FunctionalProfile` (+ `FunctionalProfileNames` static helper) | ENUM | Shared Access | `Shared\Access\FunctionalProfile.cs` |
 | `ModuleDefinition` / `Capability` / `CurrentUser` | VALUE (records) | Shared Access | `Shared\Access\ModuleDefinition.cs` / `Capability.cs` / `CurrentUser.cs` |
 
 ---
@@ -809,7 +819,28 @@ Direct references visible in Domain source between modules.
 **Controlo / Peso / Pegamentos → Job On snapshots**
 - Controlo: `ControloFolha.JobOnRevisionId`; snapshot fields on `ControloFolhaItem`. File: `Modules\Controlo\ControloFolha.cs`, `ControloFolhaItem.cs`.
 - Peso: `PesoControl.JobOnRevisionId`; `CmSnapshotJson`. File: `Modules\Peso\PesoControl.cs`.
+- Peso comparison: `PesoComparisonSnapshot` pins `CurrentJobOnId`/`CurrentJobOnRevisionId` and `PreviousJobOnId`/`PreviousJobOnRevisionId` (both Job On identities immutable in the snapshot). File: `Modules\Peso\PesoLeitura.cs`.
 - Pegamentos: `PegamentoControlo.JobOnRevisionId`; `CmSnapshot` / `BqSnapshot` / `MfSnapshot`. File: `Modules\Pegamentos\PegamentoControlo.cs`.
+
+---
+
+## Application / Web Consumers (selected)
+
+Whole-word usage of Domain main types across `src\BA.Dmo.Application\` + `src\BA.Dmo.Web\` (grep at HEAD `8478308`; file counts are approximate usage evidence, not exhaustiveness):
+
+| Domain type | Application/Web files (count) | Main consumers |
+|---|---|---|
+| `Result<TSuccess,TError>` / `DomainError` | `Result` 53 · `DomainError` 34 | foundation of every Application service result |
+| `JobOn` | 24 | Job On services/pages (e.g. `Application\Modules\JobOn\JobOnService.cs`) |
+| `ModuleCatalog` | 7 | `Application\Shared\Access\CanonicalModuleCatalog.cs` + access resolution |
+| `FunctionalProfile` | 4 | `Application\Modules\Admin\AdminUserService.cs`, `Application\Shared\Access\AccessResolver.cs`, `Web\Pages\Admin\TemplateProfileStore.cs`, Web Admin templates |
+| `PegamentoControlo` | 4 | `Application\Modules\Pegamentos\PegamentoService.cs` (+ repo/PDF) |
+| `CurrentUser` | 3 | access resolution / Web |
+| `ControloFolha`, `ToolReference`, `ToolLote`, `BqLote`, `InternalRepairRecord`, `PesoControl`, `RepairExit`, `RepairExitItem`, `TampaoConfiguration`, `TampaoPlano`, `WarehouseLocation`, `WarehouseStock` | 2 each | per-module Application service + repository/interface |
+| `JobonModuleCatalog` | 2 | `Application\Modules\JobOn\JobOnService.cs`, `JobOnPdfService.cs` |
+| `PesoComparisonCmSnapshot` / `PesoComparisonSnapshot` / `PesoComparisonDecisionSnapshot` | 1 each | `Application\Modules\Peso\PesoService.cs` |
+
+(*`ControloFolhaState` has 0 exact-word matches in Application/Web — the enum surfaces through the aggregate's `State` property and serialized JSON, not by type name.*)
 
 ---
 
@@ -838,7 +869,7 @@ Domain-only technical overlaps, recorded for navigation (not refactored).
 
 ## Sources Verified
 
-**Primary Domain source — 95 mapped `.cs` files under the module/shared Domain tree, excluding `bin\`, `obj\`, and `Properties\AssemblyInfo.cs` from the 95-file inventory**
+**Primary Domain source — 96 mapped `.cs` files under the module/shared Domain tree, excluding `bin\`, `obj\`, and `Properties\AssemblyInfo.cs` from the 96-file inventory**
 - `Modules\Armazem\` — all 8 files.
 - `Modules\Boquilhas\` — all 10 files.
 - `Modules\Controlo\` — all 6 files.
@@ -849,14 +880,20 @@ Domain-only technical overlaps, recorded for navigation (not refactored).
 - `Modules\ReparacaoExterna\` — all 10 files.
 - `Modules\ReparacaoInterna\` — all 6 files.
 - `Modules\Tampoes\` — all 11 files.
-- `Shared\Access\` — all 7 files.
+- `Shared\Access\` — all 8 files.
 - `Shared\Kernel\` — all 5 files.
 
 **Additional project metadata belonging to the Domain project**
 - `Properties\AssemblyInfo.cs`
 - `BA.Dmo.Domain.csproj`
 
-No other layer was used as Domain-map evidence.
+**Reconciliation delta (map verified 2026-08-23; map file last changed `f514031` 2026-08-24; current HEAD `8478308` 2026-08-27):**
+- ADDED `Shared\Access\FunctionalProfile.cs` (`FunctionalProfile` enum + `FunctionalProfileNames` helper) — introduced by commit `91e049f` (2026-08-27, "Complete BA DMO restructuring and UI convergence"); absent from the previous map.
+- ADDED Peso comparison snapshot records `PesoComparisonCmSnapshot`, `PesoComparisonSnapshot`, `PesoComparisonDecisionSnapshot` (inside `Modules\Peso\PesoLeitura.cs`) — same commit.
+- No Domain type was renamed, moved, or removed since the previous verification; the prior 95-file inventory maps 1:1 onto the current 96-file tree plus the additions above.
+- Confirmed with concrete evidence: `ComponentFamily` includes `FO` (11 members); enum member lists and aggregate members re-extracted from source.
+
+Domain source is the sole authority for Domain facts; `Application\` / `Web\` paths are cited only as consumer (USED BY) evidence. No domain source, tests, database, or other layer file was modified.
 
 ---
 

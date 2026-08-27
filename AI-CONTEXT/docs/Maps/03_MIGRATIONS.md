@@ -1,6 +1,6 @@
 # BA DMO — Migrations Technical Map
 
-PAIRED MAP: `02_DATABASE.md` owns the final current schema. This map owns schema evolution through the numbered migration family.
+PAIRED MAP: [02_DATABASE.md](02_DATABASE.md) owns the final current schema. This map owns schema evolution through the numbered migration family. Cross-links: [00_INDEX.md](00_INDEX.md) (map registry), [04_DAPPER_INFRASTRUCTURE.md](04_DAPPER_INFRASTRUCTURE.md) (persistence layer), [05_TESTS.md](05_TESTS.md) (migration tests).
 
 ## Navigation Index
 
@@ -33,12 +33,19 @@ PAIRED MAP: `02_DATABASE.md` owns the final current schema. This map owns schema
 - [27. N24 — jobon user current](#27-n24--jobon-user-current)
 - [28. N25 — remediation](#28-n25--remediation)
 - [29. N26 — user modules override](#29-n26--user-modules-override)
+- [30. N27 — access convergence](#30-n27--access-convergence)
+- [31. N28 — reparacao interna cm mf only](#31-n28--reparacao-interna-cm-mf-only)
+- [32. N29 — jobon reference images](#32-n29--jobon-reference-images)
+- [33. N30 — jobon reference image updated_by index](#33-n30--jobon-reference-image-updated_by-index)
+- [34. N31 — template profiles single assignment](#34-n31--template-profiles-single-assignment)
 - [Migration Dependencies](#migration-dependencies)
 - [Object-to-Migration Index](#object-to-migration-index)
 - [Constraint / Index Origin](#constraint--index-origin)
 - [Functions / Triggers Origin](#functions--triggers-origin)
 - [RLS / Policy Evolution](#rls--policy-evolution)
 - [Data Migration Statements](#data-migration-statements)
+- [Migration Execution & Bookkeeping](#migration-execution--bookkeeping)
+- [Consolidated Clean-Install Baseline](#consolidated-clean-install-baseline)
 - [Sources Verified](#sources-verified)
 
 ## 1. Purpose
@@ -53,7 +60,7 @@ This map inventories the BA DMO numbered migration family exactly as written on 
 
 It does **not** explain business workflow, module behavior, Design/SOT, application behavior, Dapper/repository behavior, reconciliation, gaps, or future fixes. It does **not** reproduce the final schema (that is `02_DATABASE.md`); chronology described here is migration-evolution only.
 
-**Migration count verified from disk: 26 numbered migration files (N01–N26).**
+**Migration count verified from disk: 31 numbered migration files (N01–N31).**
 
 ## 2. Migration Source Structure
 
@@ -89,8 +96,13 @@ Numbered migration family (verified from disk):
 | 24 | `N24_jobon_user_current.sql` |
 | 25 | `N25_remediation.sql` |
 | 26 | `N26_user_modules_override.sql` |
+| 27 | `N27_access_convergence.sql` |
+| 28 | `N28_reparacao_interna_cm_mf_only.sql` |
+| 29 | `N29_jobon_reference_images.sql` |
+| 30 | `N30_jobon_reference_image_updated_by_index.sql` |
+| 31 | `N31_template_profiles_single_assignment.sql` |
 
-This is the complete contents of `database\migrations\`; there are no other files in the folder. `database\consolidated_clean_install.sql` is **not** part of the numbered family (it is a consolidated current-schema reference, used here only for presence verification).
+This is the complete contents of `database\migrations\`; there are no other files in the folder. `database\consolidated_clean_install.sql` is **not** part of the numbered family (it is a consolidated clean-install baseline; see [Consolidated Clean-Install Baseline](#consolidated-clean-install-baseline)).
 
 ## 3. Global Migration Inventory
 
@@ -122,6 +134,11 @@ This is the complete contents of `database\migrations\`; there are no other file
 | 24 | N24 | jobon user current | table `jobon_user_current` | N01 `internal_users`, N05 `job_on` |
 | 25 | N25 | remediation | `internal_users.auth_user_id` NOT NULL + UNIQUE; partial unique `uq_job_on_identity`/`uq_bq_traces_active`; CHECKs on `job_on`/`pegamento_controlos`/`repair_exit_items`/`peso_controlos`/`job_on_verification_occurrence`; `ba_dmo_guard_peso_approved()` + trigger; 4 append-only triggers (revision family); RLS/policy/revoke/grants on 10 post-N12 tables; index `ix_audit_events_module_time` | N01 `internal_users`, N06 `peso_controlos`, N05 job_on family, N03 `bq_traces`, N07 `pegamento_controlos`, N08 `repair_exit_items`, N14/N19/N20/N21/N23/N24 tables |
 | 26 | N26 | user modules override | ALTER `internal_users` ADD `modules_override jsonb NULL` | N01 `internal_users` |
+| 27 | N27 | access convergence | table `internal_user_access_templates`; DML migration (profile inference, legacy-override template materialization, top-level-only module rewrite); ALTER `internal_users` (`profile_title` NOT NULL + `ck_internal_users_functional_profile`); RLS/policy/grants | N01 `access_templates`/`internal_users` |
+| 28 | N28 | Reparação Interna CM/MF-only | re-tighten `ck_internal_repair_records_type` to CM/MF (`NOT VALID` + `VALIDATE`), fail-closed guard; explicit `BEGIN/COMMIT` | N08/N22 `internal_repair_records` |
+| 29 | N29 | Job On reference images | table `article_reference_images`; guarded DML migration (legacy `job_on_revision.image_asset_id` → master); RLS/policy/grants | N01 `internal_users`, N05 `job_on`/`job_on_revision` |
+| 30 | N30 | reference-image updated_by index | index `ix_article_reference_images_updated_by` | N29 `article_reference_images` |
+| 31 | N31 | template profiles / single assignment | table `access_template_profiles`; fn `ba_dmo_ensure_access_template_profile` + trg `trg_access_templates_ensure_profile`; backfill + collapse DML; unique `ux_internal_user_access_templates_actor`; RLS/policy/grants | N01 `access_templates`/`internal_users`, N27 `internal_user_access_templates` |
 
 ## 4. N01 — identity
 
@@ -247,7 +264,7 @@ File:
 
 **Creates (tables):**
 - `job_on` (PK `job_on_id uuid`; `production_code`, `article_reference_id`/`article_reference_snapshot`, `machine_code`, planned dates, `status`, `current_revision_id`).
-- `job_on_revision` (PK `job_on_revision_id uuid`; FK `job_on_id → job_on`; snapshot columns; `change_reason`, `saved_by`).
+- `job_on_revision` (PK `job_on_revision_id uuid`; FK `job_on_id → job_on`; snapshot columns; `change_reason`, `saved_by`; `image_asset_id` — legacy logical per-revision image link, later consumed by N29).
 - `job_on_component` (PK; FK `job_on_revision_id → job_on_revision`; FKs `source_tool_id → tool_references`, `source_lot_id → tool_lotes`; `family`, snapshots).
 - `job_on_component_field` (PK; FK `job_on_component_id → job_on_component`; typed value columns).
 - `job_on_component_row` (PK; FK `job_on_component_id → job_on_component`; CAL row columns).
@@ -705,6 +722,212 @@ No type default (nullable, unindexed), no CHECK, no index, no backfill, no comme
 
 **Depends on:** N01 `internal_users`.
 
+## 30. N27 — access convergence
+
+File:
+`database\migrations\N27_access_convergence.sql`
+
+**PURPOSE:** Final access-model convergence: one-or-more templates per user (junction
+table), three closed functional profiles (Admin / Operador / Controlador / Responsável),
+and module-only template grants. Legacy `internal_users.template_id` and
+`internal_users.modules_override` remain physically present for compatibility/auditability.
+This file carries the family's **first reconciliation DML** (see Data Migration Statements).
+
+**Creates (table):**
+- `internal_user_access_templates` (PK `(actor_id, template_id)`; FKs
+  `actor_id → internal_users`, `template_id → access_templates`; `assigned_at_utc`,
+  `assigned_by`).
+
+**Indexes:**
+- `ix_internal_user_access_templates_template` (`template_id, actor_id`).
+
+**Alters (`internal_users`):**
+- `ALTER COLUMN profile_title SET NOT NULL`.
+- `DROP CONSTRAINT IF EXISTS ck_internal_users_functional_profile` + `ADD CONSTRAINT`
+  CHECK (`profile_title IN ('Admin','Operador / Controlador','Responsável')`).
+
+**Data migration statements (in file order):**
+1. `UPDATE internal_users` — infer `profile_title` from the user's template grants
+   (`modules @> '[{"moduleId":"admin"}]'` → Admin; capability values
+   `jobon.edit/jobon.configure/peso.aprovar/controlo.review/ferramentas.configure` →
+   Responsável; else Operador / Controlador), applied only where `profile_title` is
+   NULL or outside the three closed values.
+2. `INSERT INTO access_templates ... SELECT 'legacy-override-' || substr(md5(actor_id),1,24) ...`
+   — materialize each non-null `modules_override` as a private compatibility template
+   (`ON CONFLICT DO NOTHING`).
+3. `INSERT INTO internal_user_access_templates ... SELECT actor_id, template_id, created_at_utc, NULL
+   FROM internal_users ON CONFLICT DO NOTHING` — first junction assignments from the legacy column.
+4. `INSERT INTO internal_user_access_templates ... SELECT actor_id, 'legacy-override-' || ...`
+   — override-derived assignments for users with a non-null `modules_override`.
+5. `UPDATE access_templates` — rewrite `modules` to top-level module ids only,
+   `capabilities` emptied to `[]`, mapping legacy `peso`/`pegamentos` grants → `controlo`;
+   unrelated module ids are dropped from the array.
+6. `UPDATE internal_users SET modules_override = NULL` — the override is made dormant
+   (no DROP; column kept).
+
+**RLS / Policies / Grants:**
+- `ALTER TABLE internal_user_access_templates ENABLE ROW LEVEL SECURITY`.
+- `REVOKE ALL ON TABLE` from `anon`/`authenticated` (guarded by role existence).
+- `GRANT SELECT, INSERT, UPDATE, DELETE ... TO ba_dmo_app`.
+- Policy `internal_user_access_templates_app_access` (`FOR ALL TO ba_dmo_app USING (true)
+  WITH CHECK (true)`). NOTE: policy name diverges from the N12/N25 convention
+  (`ba_dmo_app_access`) — see RLS / Policy Evolution.
+
+**Depends on:** N01 `access_templates`, N01 `internal_users` (junction FKs + the
+legacy `template_id`/`modules_override` columns read/written by the DML).
+
+**MIGRATION PROVENANCE NEEDS REVIEW:** N27's header — unlike N01–N26 and N28–N31 —
+carries no `Authority:` / owner-decision reference, so the decision trail behind the
+profile-inference rules, the `legacy-override-<md5>` template materialization, and the
+peso/pegamentos → controlo module rewrite is not documented in-file.
+
+## 31. N28 — reparacao interna cm mf only
+
+File:
+`database\migrations\N28_reparacao_interna_cm_mf_only.sql`
+
+**PURPOSE:** DB-level convergence to the domain contract that BQ is never a Reparação
+Interna recordable tool type (BQ appears only inside production/reference context).
+N22 temporarily widened `ck_internal_repair_records_type` to CM/MF/BQ; N28 reverses
+that at the constraint level. N28 never deletes or rewrites a repair record — it
+**fails closed** if legacy non-CM/MF rows exist.
+
+**Alters (`internal_repair_records`):**
+- Fail-closed guard `DO`: `RAISE EXCEPTION` when any `tool_type NOT IN ('CM','MF')` row exists.
+- `DROP CONSTRAINT IF EXISTS ck_internal_repair_records_type`.
+- `ADD CONSTRAINT ck_internal_repair_records_type CHECK (tool_type IN ('CM','MF')) NOT VALID`.
+- `VALIDATE CONSTRAINT ck_internal_repair_records_type` (checks the existing rows without
+  re-scanning the table at add time).
+
+**Transaction shape:** the file opens and commits an explicit `BEGIN; ... COMMIT;`
+(like the runner's own per-script transaction; first file in the family with an
+explicit transaction wrapper — N29 and N30 follow the same pattern).
+
+**Depends on:** N08 `internal_repair_records` (created), N22 (CHECK widened to BQ —
+the exact constraint N28 re-narrows). This is a deliberate convergence of the N22
+change, **not** duplication.
+
+## 32. N29 — jobon reference images
+
+File:
+`database\migrations\N29_jobon_reference_images.sql`
+
+**PURPOSE:** Converge the Job On article image from per-revision metadata
+(N05 `job_on_revision.image_asset_id`) to one current association owned by the
+normalized master Article/Reference context. Legacy `image_asset_id` remains dormant
+and is **not** dropped. Legacy current associations are migrated only when safe and
+unambiguous; otherwise the migration fails closed.
+
+**Creates (table):**
+- `article_reference_images` (PK `reference_code text`; `image_asset_id text NOT NULL`;
+  `updated_by` FK → `internal_users`; `updated_at_utc`).
+
+**Constraints:**
+- `ck_article_reference_images_reference` CHECK (`reference_code` non-empty and
+  `reference_code = upper(btrim(reference_code))`).
+- `ck_article_reference_images_asset` CHECK (`image_asset_id` non-empty, trimmed,
+  no `/`, no `\`, no `..`, and ends `.jpe?g|png|gif|webp|bmp` case-insensitive).
+
+**Data migration statements (guarded):**
+1. Guard `DO`: raises if any legacy current revision carries an `image_asset_id`
+   without a readable Reference or with a path-like/unsupported asset name.
+2. Guard `DO`: raises if the same Reference is promoted from conflicting current
+   images (`count(DISTINCT image_asset_id) > 1`).
+3. `INSERT INTO article_reference_images ... SELECT DISTINCT ON (reference_code) ...
+   ORDER BY reference_code, saved_at_utc DESC ... ON CONFLICT (reference_code) DO NOTHING`
+   — promotion of the newest safe legacy association per Reference.
+
+**RLS / Policies / Grants:**
+- `ALTER TABLE article_reference_images ENABLE ROW LEVEL SECURITY`.
+- `GRANT SELECT, INSERT, UPDATE, DELETE` + `DROP POLICY IF EXISTS ba_dmo_app_access` +
+  `CREATE POLICY ba_dmo_app_access ... USING (true) WITH CHECK (true)` — all inside a
+  `DO` guarded by `ba_dmo_app` role existence (plain PostgreSQL without the role gets
+  RLS enabled but no policy/grant).
+- Policy name follows the N12/N25 convention (`ba_dmo_app_access`).
+
+**Depends on:** N01 `internal_users` (FK), N05 `job_on`/`job_on_revision` (reads
+`job_on.current_revision_id` → `job_on_revision.image_asset_id` +
+`reference_snapshot`).
+
+## 33. N30 — jobon reference image updated_by index
+
+File:
+`database\migrations\N30_jobon_reference_image_updated_by_index.sql`
+
+**PURPOSE:** Additive performance convergence (post-N29 advisor check): covering index
+for the `article_reference_images.updated_by` FK.
+
+**Indexes:**
+- `ix_article_reference_images_updated_by` (`ON article_reference_images (updated_by)`),
+  created `IF NOT EXISTS`.
+
+**Transaction shape:** explicit `BEGIN; ... COMMIT;`.
+
+**Depends on:** N29 `article_reference_images`.
+
+## 34. N31 — template profiles single assignment
+
+File:
+`database\migrations\N31_template_profiles_single_assignment.sql`
+
+**PURPOSE:** Template-owned functional profile + single effective template per user
+(Aplicações → Template (title + profile + modules) → User (one template)). A template
+is reusable; assigning it determines both the user's functional profile and the
+authorized modules. Historical audit rows are untouched. N31 supersedes the
+N27 "one-or-more templates per user" model by collapsing assignments to
+`internal_users.template_id` (the compatibility/authority pointer) and enforcing one
+row per user.
+
+**Creates (table):**
+- `access_template_profiles` (PK `template_id` FK → `access_templates`
+  `ON DELETE CASCADE`; `functional_profile text NOT NULL`; `updated_at_utc`).
+
+**Constraints:**
+- `ck_access_template_profiles_functional_profile` CHECK
+  (`functional_profile IN ('Admin','Operador / Controlador','Responsável')`).
+
+**Functions:**
+- `ba_dmo_ensure_access_template_profile()` — `AFTER INSERT` trigger function; inserts a
+  deterministic initial profile for a new template (Admin when
+  `modules @> '[{"moduleId":"admin"}]'`, else Operador / Controlador),
+  `ON CONFLICT (template_id) DO NOTHING`.
+
+**Triggers:**
+- `trg_access_templates_ensure_profile` — `AFTER INSERT ON access_templates`, uses
+  `ba_dmo_ensure_access_template_profile`. (The family's only `AFTER INSERT` trigger;
+  all others are `BEFORE UPDATE OR DELETE` append-only guards.)
+
+**Data migration statements:**
+1. `INSERT INTO access_template_profiles ... SELECT ... FROM access_templates
+   ON CONFLICT DO NOTHING` — backfill: prefer the agreed user profile
+   (`MIN(profile_title)` with `HAVING COUNT(DISTINCT profile_title) = 1`), else the
+   deterministic module/name fallback (admin module → Admin; name `LIKE '%respons%'` →
+   Responsável; else Operador / Controlador).
+2. `DELETE FROM internal_user_access_templates ut USING internal_users u
+   WHERE ut.actor_id = u.actor_id AND ut.template_id <> u.template_id` — collapse any
+   remaining hybrid (multi-template) assignments.
+3. `INSERT INTO internal_user_access_templates (actor_id, template_id, ...)
+   SELECT u.actor_id, u.template_id, ... FROM internal_users u ON CONFLICT DO NOTHING`
+   — re-materialize the single effective assignment.
+
+**Indexes:**
+- `ux_internal_user_access_templates_actor` — `CREATE UNIQUE INDEX IF NOT EXISTS` on
+  `internal_user_access_templates (actor_id)` — enforces one template per user.
+
+**Alters (`internal_users`):**
+- `UPDATE internal_users SET profile_title = p.functional_profile` — keeps the legacy
+  compatibility column in sync with the selected template (data backfill, no DDL).
+
+**RLS / Policies / Grants:**
+- `ALTER TABLE access_template_profiles ENABLE ROW LEVEL SECURITY`.
+- `REVOKE ALL ON TABLE` from `anon`/`authenticated` (guarded).
+- `GRANT SELECT, INSERT, UPDATE, DELETE ... TO ba_dmo_app`.
+- Policy `access_template_profiles_app_access` (`FOR ALL TO ba_dmo_app USING (true)
+  WITH CHECK (true)`) — again the `{table}_app_access` naming (see RLS / Policy Evolution).
+
+**Depends on:** N01 `access_templates`/`internal_users`, N27 `internal_user_access_templates`
+(the junction rows N31 collapses; N31 also reads N27's `template_id`-legacy pointer).
+
 ## Migration Dependencies
 
 Only direct technical dependencies visible from SQL.
@@ -734,13 +957,18 @@ Only direct technical dependencies visible from SQL.
 - **N24** → N01 (`internal_users`), N05 (`job_on`).
 - **N25** → N01 (`internal_users`, `ba_dmo_guard_append_only`), N03 (`bq_traces`), N05 job_on family, N06 (`peso_controlos`), N07 (`pegamento_controlos`), N08 (`repair_exit_items`), plus the 10 post-N12 tables it covers (`pegamento_documentos`, `tool_usage_records`, `repairer_repair_types`, tampão machine/note/event, `controlo_sheets`/items/events, `jobon_user_current`).
 - **N26** → N01 (`internal_users`).
+- **N27** → N01 (`access_templates`, `internal_users` — junction FKs plus the legacy `template_id`/`modules_override` columns read/written by the DML).
+- **N28** → N08/N22 (`internal_repair_records` — re-narrows the CHECK that N22 widened; fail-closed guard on legacy data).
+- **N29** → N01 (`internal_users` — `updated_by` FK), N05 (`job_on`/`job_on_revision` — reads `current_revision_id` → `image_asset_id` + `reference_snapshot`).
+- **N30** → N29 (`article_reference_images`).
+- **N31** → N01 (`access_templates`, `internal_users`), N27 (`internal_user_access_templates` — collapses hybrid assignments, adds the single-template unique index).
 
 ## Object-to-Migration Index
 
 | Object | Created In | Later Altered By |
 |---|---|---|
-| `internal_users` | N01 | N25 (auth_user_id NOT NULL + UNIQUE), N26 (modules_override) |
-| `access_templates` | N01 | — |
+| `internal_users` | N01 | N25 (auth_user_id NOT NULL + UNIQUE), N26 (modules_override), N27 (profile_title NOT NULL + `ck_internal_users_functional_profile`), N31 (profile_title backfill sync) |
+| `access_templates` | N01 | N27 (legacy-override compatibility templates materialized; `modules` rewritten to top-level-only), N31 (profile trigger) |
 | `audit_events` | N01 | N25 (index `ix_audit_events_module_time`) |
 | `ba_dmo_guard_append_only()` | N01 | — |
 | `module_catalog_mirror` | N02 | — |
@@ -750,7 +978,7 @@ Only direct technical dependencies visible from SQL.
 | `bq_discrepancies`, `bq_lifecycle_history`, `bq_utilisation_readings` | N03 | — |
 | `tool_references`, `tool_lotes`, `physical_pieces`, `tool_check_rules`, `tool_check_occurrences` | N04 | — |
 | `job_on` | N05 | N13 (production_folder), N25 (`uq_job_on_identity`, `ck_job_on_lifecycle_consistent`) |
-| `job_on_revision` | N05 | N25 (append-only trigger) |
+| `job_on_revision` | N05 | N25 (append-only trigger), N29 (legacy `image_asset_id` consumed as source for `article_reference_images`; column kept dormant) |
 | `job_on_component` | N05 | N25 (append-only trigger) |
 | `job_on_component_field` | N05 | N25 (append-only trigger) |
 | `job_on_component_row` | N05 | N25 (append-only trigger) |
@@ -766,7 +994,7 @@ Only direct technical dependencies visible from SQL.
 | `repair_exits` | N08 | — |
 | `repair_exit_items` | N08 | N25 (`ck_repair_exit_items_status`) |
 | `repair_events` | N08 | — |
-| `internal_repair_records` | N08 | N22 (tool_type BQ + context columns + FK) |
+| `internal_repair_records` | N08 | N22 (tool_type BQ + context columns + FK), N28 (tool_type re-narrowed to CM/MF, `NOT VALID` + `VALIDATE`) |
 | `warehouse_locations`, `warehouse_stock`, `warehouse_movements` | N09 | — |
 | `tampao_field_defs`, `tampao_field_values`, `tampao_configurations`, `tampao_saldos`, `tampao_movements`, `tampao_planos` | N10 | — |
 | `app_settings` | N11 | — |
@@ -776,6 +1004,9 @@ Only direct technical dependencies visible from SQL.
 | `tampao_configuration_machines`, `tampao_configuration_notes`, `tampao_configuration_machine_event` | N21 | N25 (RLS/policy/grants) |
 | `controlo_sheets`, `controlo_sheet_items`, `controlo_sheet_events` | N23 | N25 (RLS/policy/grants) |
 | `jobon_user_current` | N24 | N25 (RLS/policy/grants) |
+| `internal_user_access_templates` | N27 | N31 (collapse to a single row per user; unique `ux_internal_user_access_templates_actor`) |
+| `article_reference_images` | N29 | N30 (index `ix_article_reference_images_updated_by`) |
+| `access_template_profiles` | N31 | — |
 
 ## Constraint / Index Origin
 
@@ -793,9 +1024,16 @@ Later remediation/additive and partial unique items:
 | `ck_pegamento_controlos_status` | `pegamento_controlos` | N25 |
 | `ck_repair_exit_items_status` | `repair_exit_items` | N25 |
 | `ck_peso_controlos_approved_consistent` | `peso_controlos` | N25 |
-| `ck_internal_repair_records_type` (redefined to add BQ) | `internal_repair_records` | N08 created / N22 redefined |
+| `ck_internal_repair_records_type` (created CM/MF → N22 widened to BQ → N28 re-narrowed to CM/MF) | `internal_repair_records` | N08 created / N22 redefined / N28 redefined again |
 | `ix_pegamento_medicoes_component_tool` | `pegamento_medicoes` | N15 |
 | `ix_audit_events_module_time` | `audit_events` | N25 |
+| `ck_internal_users_functional_profile` | `internal_users` | N27 |
+| `ix_internal_user_access_templates_template` | `internal_user_access_templates` | N27 |
+| `ck_article_reference_images_reference` | `article_reference_images` | N29 |
+| `ck_article_reference_images_asset` | `article_reference_images` | N29 |
+| `ix_article_reference_images_updated_by` | `article_reference_images` | N30 |
+| `ck_access_template_profiles_functional_profile` | `access_template_profiles` | N31 |
+| `ux_internal_user_access_templates_actor` (unique, one row per user) | `internal_user_access_templates` | N31 |
 | `fk_repair_events_internal_record` | `repair_events` | N08 |
 | `fk_internal_repair_records_revision` | `internal_repair_records` | N22 |
 | `fk_job_on_current_revision` (circular) | `job_on` | N05 |
@@ -807,8 +1045,9 @@ Later remediation/additive and partial unique items:
 |---|---|
 | `ba_dmo_guard_append_only()` | N01 |
 | `ba_dmo_guard_peso_approved()` | N25 |
+| `ba_dmo_ensure_access_template_profile()` | N31 |
 
-**Triggers (all `BEFORE UPDATE OR DELETE`, all except `trg_peso_controlos_approved_guard` use `ba_dmo_guard_append_only`):**
+**Triggers (all `BEFORE UPDATE OR DELETE` except `trg_access_templates_ensure_profile`, which is `AFTER INSERT`; all use `ba_dmo_guard_append_only` except `trg_peso_controlos_approved_guard` (`ba_dmo_guard_peso_approved`) and `trg_access_templates_ensure_profile` (`ba_dmo_ensure_access_template_profile`)):**
 | Trigger | Table | Migration |
 |---|---|---|
 | `trg_audit_events_append_only` | `audit_events` | N01 |
@@ -829,6 +1068,7 @@ Later remediation/additive and partial unique items:
 | `trg_job_on_component_field_append_only` | `job_on_component_field` | N25 |
 | `trg_job_on_component_row_append_only` | `job_on_component_row` | N25 |
 | `trg_peso_controlos_approved_guard` (`ba_dmo_guard_peso_approved`) | `peso_controlos` | N25 |
+| `trg_access_templates_ensure_profile` (AFTER INSERT; `ba_dmo_ensure_access_template_profile`) | `access_templates` | N31 |
 
 ## RLS / Policy Evolution
 
@@ -848,22 +1088,177 @@ Migration-level evolution only.
 - `REVOKE ALL ON TABLE` each of the 10 from `anon`/`authenticated` (guarded).
 - `GRANT SELECT, INSERT, UPDATE, DELETE` on the 10 to `ba_dmo_app`.
 
+**N27** (RLS for `internal_user_access_templates`):
+- RLS enabled + policy `internal_user_access_templates_app_access` (`FOR ALL TO ba_dmo_app
+  USING (true) WITH CHECK (true)`) + guarded anon/authenticated REVOKE + `ba_dmo_app` DML grant.
+
+**N29** (RLS for `article_reference_images`):
+- RLS enabled + policy `ba_dmo_app_access` + `ba_dmo_app` DML grant — the whole grant/policy
+  block is inside a `DO` guarded by `ba_dmo_app` role existence.
+
+**N31** (RLS for `access_template_profiles`):
+- RLS enabled + policy `access_template_profiles_app_access` + guarded anon/authenticated
+  REVOKE + `ba_dmo_app` DML grant.
+
+**Policy naming note:** two conventions coexist. N12/N25/N29 use `ba_dmo_app_access`;
+N27 and N31 use `{table}_app_access` (`internal_user_access_templates_app_access`,
+`access_template_profiles_app_access`). Functionally equivalent per-table policies; the
+naming divergence suggests separate authoring moments. Recorded as observed —
+**UNKNOWN / OWNER DECISION REQUIRED** if a single convention is wanted.
+
 **Migration-level totals:**
-- RLS-enabled tables implied by N12 (49) + N25 (10) = **59**.
-- `ba_dmo_app_access` policies implied by N12 (48) + N25 (10) = **58**.
+- RLS-enabled tables implied by N12 (49) + N25 (10) + N27 (1) + N29 (1) + N31 (1) = **62**.
+- `ba_dmo_app` access policies implied by N12 (48) + N25 (10) + N27 (1) + N29 (1, guarded)
+  + N31 (1) = **61**.
 
 ## Data Migration Statements
 
-There are **no** data migration/backfill statements in the migration family. A full search of all migration files for `INSERT`, `UPDATE ... SET` (data), `DELETE FROM`, and `ON CONFLICT` returned no data statements — every match was a `BEFORE UPDATE OR DELETE` trigger clause. No table is seeded by any migration (comments in N01/N02/N10/N11 confirm no operational seeds are placed).
+N01–N26 contain **no** data migration/backfill statements (every `INSERT`/`UPDATE`
+match in those files is a `BEFORE UPDATE OR DELETE` trigger clause; N01/N02/N10/N11
+comments confirm no operational seeds).
+
+**N27, N29, N31 introduce the family's first reconciliation DML** (all guarded/idempotent):
+
+- **N27** — profile-title inference `UPDATE` on `internal_users`; `INSERT ... SELECT
+  ON CONFLICT DO NOTHING` materializing `legacy-override-<md5>` compatibility templates
+  into `access_templates`; junction `INSERT ... SELECT` rows into
+  `internal_user_access_templates`; `UPDATE access_templates` rewriting `modules` to
+  top-level-only (peso/pegamentos → controlo); `UPDATE internal_users SET
+  modules_override = NULL` (dormancy).
+- **N29** — guarded `INSERT INTO article_reference_images ... SELECT DISTINCT ON
+  (reference_code) ... ON CONFLICT (reference_code) DO NOTHING` promoting the newest
+  safe legacy `job_on_revision.image_asset_id` per Reference; two fail-closed `DO`
+  guards (unreadable/unsafe names; conflicting images per Reference).
+- **N31** — `INSERT ... SELECT ON CONFLICT DO NOTHING` backfill of
+  `access_template_profiles` (agreed-user-profile first, deterministic fallback
+  otherwise); `DELETE FROM internal_user_access_templates` collapsing rows whose
+  `template_id <> internal_users.template_id`; re-`INSERT` of the single effective
+  assignment; `UPDATE internal_users SET profile_title = p.functional_profile` sync.
+
+These are data reconciliations tied to schema changes, not operational seeding.
+
+## Migration Execution & Bookkeeping
+
+The migration runner is a custom Npgsql whole-script runner — no EF Core Migrations,
+no DbUp, no SQL parsing/splitting (guard-tested by
+`MigrationArchitectureGuardTests`). Source:
+`src\BA.Dmo.Infrastructure\Persistence\Migrations\`
+(`MigrationRunner.cs`, `MigrationDiscovery.cs`, `MigrationFile.cs`,
+`MigrationChecksum.cs`, `NpgsqlMigrationScriptGateway.cs`,
+`IMigrationScriptGateway.cs`, `MigrationExceptions.cs`).
+
+**Tracking table — `schema_migrations`** (`NpgsqlMigrationScriptGateway.EnsureTrackingTableSql`):
+`version text PK`, `filename text NOT NULL`, `sha256 text NOT NULL`, `applied_at timestamptz
+NOT NULL DEFAULT now()`, `execution_time_ms integer NULL`. Created `IF NOT EXISTS` before any
+run; the table is owned by the migrate role and gets RLS enabled in N12 but **no** app policy
+(migrate CLI only). `schema_migrations` is also reproduced in
+`database\consolidated_clean_install.sql`.
+
+**Discovery** (`MigrationDiscovery.Discover(migrationsDirectory)`):
+only files matching the regex `^(N\d{2})_[A-Za-z0-9_]+\.sql$` are migrations; canonical
+order = ordinal file-name order (N01 … N31); duplicate versions fail explicitly
+(`MigrationDiscoveryException`); any non-conforming file in the directory aborts discovery.
+The shipped-family completeness is asserted by
+`MigrationDiscoveryTests.ShippedFreshBuildFamily_IsComplete_N01ThroughN31`.
+
+**Execution** (`MigrationRunner.RunAsync`):
+1. ensures `schema_migrations`; loads applied records keyed by version;
+2. computes SHA-256 (`MigrationChecksum.ComputeSha256File`) over the **raw file bytes**;
+3. per migration in order:
+   - never applied → execute the **whole file**; record only after success;
+   - applied with the same checksum → skip (idempotent re-runs);
+   - applied with a different checksum → `MigrationChecksumMismatchException`, run stops —
+     applied migrations are immutable (forward-only family);
+4. a failed script (`MigrationExecutionException`) is never recorded and stops the run —
+   no later migration executes.
+
+**Transport** (`NpgsqlMigrationScriptGateway.ExecuteScriptAsync`): each script is sent whole
+to PostgreSQL as a single command inside one transaction; no statement splitting, no custom
+SQL parser, semicolons are data. This is why migrations like N28/N29/N30 can themselves
+open `BEGIN; … COMMIT;` — and why every file must be a single valid script.
+
+**CLI** (`src\BA.Dmo.Web\Cli\MigrateCommand.cs`): invoked as `dotnet BA.Dmo.Web.dll migrate`
+(verb resolved by `CliModeResolver.Resolve(args)` → `CliMode.Migrate`; CLI mode never starts
+the web server; there is no HTTP migration endpoint, guard-tested by
+`MigrationArchitectureGuardTests.WebProgram_HasNoMigrationHookBeyondCliVerb`). Connection:
+`BA_DMO_DB_CONNECTION_STRING` (preferred) else `DATABASE_URL`; optional
+`BA_DMO_MIGRATIONS_DIR` overrides the migrations directory, otherwise `database/migrations`
+is located at or above the application base directory (6 levels). Exit codes: 0 success,
+1 migration failure (checksum mismatch / execution / discovery), 2 configuration error
+(missing connection string or migrations directory).
+
+**Tests** (`AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Migrations\`): `MigrationRunnerTests`
+(whole-script byte-for-byte execution, record-only-after-success, same-checksum skip,
+checksum-mismatch fail, failed script not recorded + run stops, canonical order, semicolons
+inside strings never split), `MigrationDiscoveryTests`, `MigrationChecksumTests` (SHA-256 FIPS
+vector), `MigrationArchitectureGuardTests` (no splitting/parsing machinery, no HTTP surface),
+`FakeMigrationGateway` (in-memory `IMigrationScriptGateway` double). See
+[05_TESTS.md](05_TESTS.md) §5.8/§9.2 and [04_DAPPER_INFRASTRUCTURE.md](04_DAPPER_INFRASTRUCTURE.md).
+
+## Consolidated Clean-Install Baseline
+
+File: `database\consolidated_clean_install.sql` (1666 lines at verification).
+
+- One-pass clean-install baseline reproducing the **final effective schema** of the
+  migration family; it is NOT a migration and must live OUTSIDE `database/migrations\`
+  (every `*.sql` in that folder must match the `N##_<name>.sql` family pattern or
+  `MigrationDiscovery` aborts).
+- Guarded role/default-privilege statements so it also runs on Supabase Hosted
+  (privilege-heavy statements become NOTICEs when the project role lacks entitlement).
+- Also reproduces `schema_migrations` and the RLS/policy/grants contract.
+
+**Verification result (this refresh) — SCHEMA DRIFT — NEEDS AUDIT:** the body
+contains N01–N30 final-state schema including the N25 remediation section, N26
+`modules_override`, N27 junction + `profile_title` contract, N28 CM/MF re-narrowed CHECK,
+and N29 `article_reference_images` with the N30 index — but it does **not** contain any
+N31 object (`access_template_profiles`, `ba_dmo_ensure_access_template_profile`,
+`trg_access_templates_ensure_profile`, `ux_internal_user_access_templates_actor`; grep
+evidence: zero matches). The header/comment trail is stale too: it still claims the
+equivalent of "migration family N01 … N24", references a test named
+`ShippedFreshBuildFamily_IsComplete_N01ThroughN24` (the test is now
+`..._N01ThroughN31`), and the final line says "includes N25-N27" while the body already
+includes N28–N30 objects. Expected next step (owner/coordinator): extend the baseline to
+the N31 final state and refresh its header/equivalence claims.
 
 ## Sources Verified
 
 Primary evidence — every numbered migration file read in full from:
-`database\migrations\` (N01–N26, all 26 files).
+`database\migrations\` (N01–N31, all 31 files, at HEAD 8478308).
 
-Secondary reference (current-schema presence verification only):
-`database\consolidated_clean_install.sql` — spot-checked that key migration objects persist in the final schema: `internal_users.modules_override` (N26), `uq_internal_users_auth_user` (N25), `ix_audit_events_module_time` (N25), `controlo_sheets`/items/events constraints (N23).
+Migration execution/bookkeeping — read in full from:
+- `src\BA.Dmo.Infrastructure\Persistence\Migrations\MigrationRunner.cs`
+- `src\BA.Dmo.Infrastructure\Persistence\Migrations\MigrationDiscovery.cs`
+- `src\BA.Dmo.Infrastructure\Persistence\Migrations\MigrationFile.cs`
+- `src\BA.Dmo.Infrastructure\Persistence\Migrations\MigrationChecksum.cs`
+- `src\BA.Dmo.Infrastructure\Persistence\Migrations\NpgsqlMigrationScriptGateway.cs`
+- `src\BA.Dmo.Infrastructure\Persistence\Migrations\IMigrationScriptGateway.cs`
+- `src\BA.Dmo.Infrastructure\Persistence\Migrations\MigrationExceptions.cs`
+- `src\BA.Dmo.Web\Cli\MigrateCommand.cs`, `CliMode.cs`, `CliModeResolver.cs`
 
-Contract/registry: `maps\00_INDEX.md`.
+Migration tests:
+- `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Migrations\MigrationRunnerTests.cs`
+- `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Migrations\MigrationDiscoveryTests.cs`
+- `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Migrations\MigrationChecksumTests.cs`
+- `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Migrations\MigrationArchitectureGuardTests.cs`
+- `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Migrations\FakeMigrationGateway.cs`
 
-Not used as migration evidence: `01_DOMAIN.md`, Design/SOT, Dapper/Infrastructure, Application source, tests.
+Consolidated baseline:
+- `database\consolidated_clean_install.sql` — header/comments read; N25–N31 object coverage
+  verified by targeted greps (N31 objects absent; header claims N01–N24 — see
+  Consolidated Clean-Install Baseline).
+
+Contract/registry: `AI-CONTEXT\docs\Maps\00_INDEX.md`.
+
+Notes:
+- The map was last verified 2026-08-23 for N01–N26; this refresh adds N27–N31 (all five
+  post-date that verification) and the execution/bookkeeping section.
+- Cross-linked maps: [02_DATABASE.md](02_DATABASE.md) (final schema),
+  [04_DAPPER_INFRASTRUCTURE.md](04_DAPPER_INFRASTRUCTURE.md),
+  [05_TESTS.md](05_TESTS.md), [00_INDEX.md](00_INDEX.md).
+- Not used as migration evidence: `01_DOMAIN.md`, Design/SOT, other Application source.
+
+**Paired-map lag (out of scope, flagged):** [02_DATABASE.md](02_DATABASE.md) still lists
+Functions (2) / Triggers (18) and shows no N27–N31 objects (`access_template_profiles`,
+`article_reference_images`, `internal_user_access_templates`,
+`ba_dmo_ensure_access_template_profile`, `trg_access_templates_ensure_profile`) — the
+paired map post-dates only N01–N26 and needs its own refresh by its owner.
