@@ -70,7 +70,6 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
         var client = _fixture.CreateTestClient();
         await LoginAsync(client, "admin@ba-dmo.example");
 
-        // No token is sent at all — the pre-HI-1 browser behavior.
         var fields = fieldPairs
             .Select(pair => pair.Split('=', 2))
             .ToDictionary(parts => parts[0], parts => parts[1]);
@@ -102,8 +101,8 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
             ["email"] = "new-user@ba-dmo.example",
             ["password"] = "P@ssw0rd-123",
             ["displayName"] = "Novo Utilizador",
-            ["profileTitle"] = "Admin",
-            ["templateIds"] = "tpl-admin"
+            ["templateId"] = "tpl-admin",
+            ["active"] = "true"
         }));
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
@@ -128,7 +127,11 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
             ["__RequestVerificationToken"] = token,
             ["templateId"] = "tpl-af-test",
             ["name"] = "Template AF",
-            ["active"] = "true"
+            ["functionalProfile"] = "Operador / Controlador",
+            ["active"] = "true",
+            ["lines[0].ModuleId"] = "jobon",
+            ["lines[0].DisplayName"] = "Job On",
+            ["lines[0].Granted"] = "true"
         }));
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
@@ -172,7 +175,6 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
         await LoginAsync(clientA, "admin@ba-dmo.example");
         await LoginAsync(clientB, "admin@ba-dmo.example");
 
-        // Token minted for session A, presented with session B's cookie.
         var htmlA = await (await clientA.GetAsync("/admin/users/create")).Content.ReadAsStringAsync();
         var tokenA = ExtractToken(htmlA)
             ?? throw new InvalidOperationException("Form did not render an antiforgery token.");
@@ -218,8 +220,6 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
         Assert.Equal(HttpStatusCode.Redirect, page.StatusCode);
         Assert.StartsWith("/access-denied", page.Headers.Location!.PathAndQuery);
 
-        // Even with the operator's own valid token, the admin.gerir policy
-        // denies the mutation before the antiforgery filter could accept it.
         var createPage = await client.GetAsync("/admin/users/create");
         Assert.Equal(HttpStatusCode.Redirect, createPage.StatusCode);
 
@@ -247,8 +247,7 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
         };
         var token = ExtractToken(html)
             ?? throw new InvalidOperationException("Form did not render an antiforgery token.");
-        if (token is not null)
-            values["__RequestVerificationToken"] = token;
+        values["__RequestVerificationToken"] = token;
 
         var response = await client.PostAsync("/login", new FormUrlEncodedContent(values));
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
@@ -267,11 +266,6 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
         return html[valueStart..valueEnd];
     }
 
-    /// <summary>
-    /// Same real-pipeline fixture as AdminWebAuthorizationTests, EXCEPT the
-    /// antiforgery-disabling convention is absent: antiforgery is enforced
-    /// exactly as in production.
-    /// </summary>
     public sealed class AfFixture : WebApplicationFactory<Program>
     {
         public enum Mode
@@ -281,9 +275,7 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
         }
 
         public Mode IdentityMode { get; set; } = Mode.Admin;
-
         public FakeAdminRepository Repository { get; } = new();
-
         public FakeMirrorRepository Mirror { get; } = new();
 
         public void Reset()
@@ -309,8 +301,6 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
                 ReplaceSingleton<IAdminRepository>(services, Repository);
                 ReplaceSingleton<IModuleCatalogMirrorRepository>(services, Mirror);
                 ReplaceSingleton<IAdminProvisioningAdapter>(services, new FakeProvisioningAdapter());
-                // NOTE: intentionally NO RazorPagesOptions antiforgery
-                // convention here — the default filter stays enforced.
             });
         }
 
@@ -392,7 +382,6 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
         }
     }
 
-    /// <summary>Tracks writes so rejection paths can prove nothing happened.</summary>
     public sealed class FakeAdminRepository : IAdminRepository
     {
         public List<string> Writes { get; } = [];
@@ -463,7 +452,13 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
 
         public Task<IReadOnlyList<AdminTemplateRow>> ListTemplatesAsync(
             CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<AdminTemplateRow>>(Array.Empty<AdminTemplateRow>());
+            Task.FromResult<IReadOnlyList<AdminTemplateRow>>(
+            [
+                new AdminTemplateRow(
+                    "tpl-admin", "Admin",
+                    "[{\"moduleId\":\"admin\",\"capabilities\":[\"admin.gerir\"]}]",
+                    Active: true, DateTimeOffset.UnixEpoch)
+            ]);
 
         public Task<AdminTemplateRow?> GetTemplateAsync(
             string templateId, CancellationToken cancellationToken = default) =>
