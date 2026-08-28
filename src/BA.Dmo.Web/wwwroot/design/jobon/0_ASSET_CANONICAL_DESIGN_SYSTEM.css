@@ -1,0 +1,97 @@
+:root{--dmo-brand-950:#0f1d2a;--dmo-brand-900:#193046;--dmo-brand-800:#234463;--dmo-brand-700:#315d88;--dmo-brand-600:#3c73a8;--dmo-brand-500:#568dc3;--dmo-brand-200:#bdd3e8;--dmo-brand-100:#d9e6f2;--dmo-brand-050:#e8eff7;--dmo-page:#f6f9fc;--dmo-card:#fff;--dmo-subtle:#f1f6fa;--dmo-border:#d9e6f2;--dmo-text:#172d42;--dmo-muted:#64778a;--dmo-success:#527c72;--dmo-success-soft:#e5f0eb;--dmo-warning:#a97943;--dmo-warning-soft:#f7f0e7;--dmo-danger:#9a625d;--dmo-danger-soft:#f3e9e7;--dmo-disabled:#cbd5df;--dmo-r-control:8px;--dmo-r-card:12px;--dmo-r-modal:16px;--dmo-shadow:0 8px 24px rgba(25,48,70,.06);--dmo-fast:150ms ease}
+:root{--dmo-brand-300:#98b9da;--dmo-surface-page:var(--dmo-page);--dmo-surface-card:var(--dmo-card);--dmo-surface-subtle:var(--dmo-subtle);--dmo-text-muted:var(--dmo-muted);--dmo-text-on-color:#fff;--dmo-radius-control:var(--dmo-r-control);--dmo-radius-card:var(--dmo-r-card);--dmo-radius-modal:var(--dmo-r-modal);--dmo-radius-pill:999px;--dmo-control-height:40px;--dmo-control-height-compact:34px;--dmo-sidebar-width:276px;--dmo-header-height:76px;--dmo-tabs-height:52px;--dmo-shadow-card:var(--dmo-shadow);--dmo-shadow-menu:0 10px 24px rgba(15,29,42,.22);--dmo-shadow-modal:0 25px 70px rgba(15,29,42,.35);--dmo-transition-fast:var(--dmo-fast);--dmo-space-1:4px;--dmo-space-2:8px;--dmo-space-3:12px;--dmo-space-4:16px;--dmo-space-5:20px;--dmo-space-6:24px;--dmo-space-8:32px}
+*{box-sizing:border-box}body{margin:0;background:var(--dmo-page);color:var(--dmo-text);font:14px/1.45 Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select,textarea{font:inherit}.dmo-button{min-height:36px;padding:7px 12px;border:1px solid var(--button-color,var(--dmo-brand-600));border-radius:var(--dmo-r-control);background:var(--button-color,var(--dmo-brand-600));color:#fff;font-weight:700;cursor:pointer;transition:background var(--dmo-fast),color var(--dmo-fast),border-color var(--dmo-fast)}.dmo-button:hover,.dmo-button:focus-visible{background:#fff;color:var(--button-color,var(--dmo-brand-600));outline:none}.dmo-button.danger{--button-color:var(--dmo-danger)}.dmo-button.success{--button-color:var(--dmo-success)}.dmo-button:disabled{--button-color:var(--dmo-disabled);cursor:not-allowed}.dmo-icon-button{width:36px;padding:0;display:grid;place-items:center}.dmo-field label{display:block;margin-bottom:6px;color:var(--dmo-muted);font-size:11px;font-weight:750}.dmo-field input,.dmo-field select,.dmo-field textarea{width:100%;min-height:40px;border:1px solid var(--dmo-border);border-radius:var(--dmo-r-control);background:#fff;color:var(--dmo-text);padding:9px 11px;outline:none}.dmo-field input:focus,.dmo-field select:focus,.dmo-field textarea:focus{border-color:var(--dmo-brand-600);box-shadow:0 0 0 3px rgba(60,115,168,.13)}.dmo-card{background:var(--dmo-card);border:1px solid var(--dmo-border);border-radius:var(--dmo-r-card);box-shadow:var(--dmo-shadow)}.dmo-pill{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:var(--dmo-brand-050);color:var(--dmo-brand-700);font-size:10px;font-weight:800}.dmo-pill.active{background:var(--dmo-success-soft);color:var(--dmo-success)}.dmo-pill.inactive{background:#eef1f4;color:var(--dmo-muted)}.dmo-table-wrap{overflow:auto;border:1px solid var(--dmo-border);border-radius:10px}.dmo-table{width:100%;border-collapse:collapse;white-space:nowrap}.dmo-table th{background:var(--dmo-subtle);color:var(--dmo-muted);font-size:10px;text-transform:uppercase;text-align:left;padding:11px 12px}.dmo-table td{padding:11px 12px;border-top:1px solid var(--dmo-border)}.dmo-table tr[data-row]{cursor:pointer}.dmo-table tr[data-row]:hover{background:var(--dmo-page)}.dmo-table tr.selected{background:#d9e6f2}.dmo-modal-backdrop{display:none;position:fixed;z-index:80;inset:0;background:rgba(15,29,42,.68);padding:24px;align-items:center;justify-content:center}.dmo-modal-backdrop.open{display:flex}.dmo-modal{width:min(560px,100%);background:#fff;border-radius:var(--dmo-r-modal);box-shadow:0 25px 70px rgba(15,29,42,.35)}.dmo-modal-head,.dmo-modal-foot{display:flex;align-items:center;padding:18px 20px;border-bottom:1px solid var(--dmo-border)}.dmo-modal-head h2{margin:0;font-size:18px}.dmo-modal-head .dmo-icon-button{margin-left:auto}.dmo-modal-body{padding:20px}.dmo-modal-foot{border:0;border-top:1px solid var(--dmo-border);justify-content:flex-end;gap:8px}.dmo-toast{position:fixed;right:22px;bottom:22px;z-index:100;background:var(--dmo-brand-950);color:#fff;padding:11px 15px;border-radius:9px;box-shadow:var(--dmo-shadow);opacity:0;transform:translateY(50px);transition:.2s}.dmo-toast.show{opacity:1;transform:none}
+
+/* Canonical control sizing. Context wins over the base button size. */
+.filters > .btn,
+.filters > .dmo-button,
+.search > .btn,
+.search > .dmo-button,
+.history-filters > .btn,
+.history-filters > .dmo-button,
+.dmo-filter-row > .btn,
+.dmo-filter-row > .dmo-button {
+  min-height: var(--dmo-control-height);
+}
+.pager > .btn.icon,
+.pager > .dmo-icon-button,
+.dmo-pagination > .btn.icon,
+.dmo-pagination > .dmo-icon-button {
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  height: 36px;
+  padding: 0;
+}
+@media(max-width:720px){.dmo-modal-backdrop{padding:12px}.dmo-table{min-width:760px}}
+
+/* Canonical selectable lists */
+[data-dmo-list] [data-dmo-row]{cursor:pointer;transition:background var(--dmo-fast),border-color var(--dmo-fast)}
+[data-dmo-list] [data-dmo-row]:hover{background:var(--dmo-page)}
+[data-dmo-list] [data-dmo-row]:focus-visible{outline:3px solid rgba(60,115,168,.2);outline-offset:1px}
+[data-dmo-list] [data-dmo-row].selected{background:var(--dmo-brand-100);border-color:var(--dmo-brand-600)}
+
+/* Canonical calendar */
+.dmo-calendar__head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.dmo-calendar__week,.dmo-calendar__grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+.dmo-calendar__week{margin-top:12px;color:var(--dmo-muted);font-size:10px;font-weight:800;text-align:center}
+.dmo-calendar__grid{margin-top:7px}
+.dmo-calendar__day{position:relative;min-height:38px;border:1px solid var(--dmo-border);border-radius:7px;background:#fff;color:var(--dmo-text);font-weight:700;cursor:pointer}
+.dmo-calendar__day:hover{border-color:var(--dmo-brand-600);background:var(--dmo-page)}
+.dmo-calendar__day.has-record::after{content:"";position:absolute;left:50%;bottom:4px;width:4px;height:4px;border-radius:50%;background:var(--dmo-warning);transform:translateX(-50%)}
+.dmo-calendar__day.selected{background:var(--dmo-brand-600);border-color:var(--dmo-brand-600);color:#fff}
+.dmo-calendar__day.selected::after{background:#fff}
+.dmo-calendar__day:disabled{visibility:hidden}
+
+/* Canonical record states: shared by weight controls and comparisons */
+.dmo-pill.pending{background:#e7eef5;color:#315d88}
+.dmo-pill.approved{background:#e5f0eb;color:#3f7765}
+.dmo-pill.rejected{background:#f3e9e7;color:#9a625d}
+.dmo-pill.record-type{background:#edf2f6;color:#536b80}
+
+/* Canonical application header */
+.dmo-app-header{min-height:var(--dmo-header-height);display:flex;align-items:center;gap:13px;padding:10px 28px;background:var(--dmo-card);border-bottom:1px solid var(--dmo-border)}
+.dmo-app-header__logo{width:44px;height:44px;object-fit:contain;border-radius:50%;flex:0 0 auto}
+.dmo-app-header__page{min-width:0}
+.dmo-app-header__page h1{margin:0;color:var(--dmo-text);font-size:18px;line-height:1.2;font-weight:800}
+.dmo-app-header__page p{margin:3px 0 0;color:var(--dmo-muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dmo-app-header__user{margin-left:auto;min-width:150px;padding-left:18px;text-align:right;border-left:1px solid var(--dmo-border)}
+.dmo-app-header__user strong{display:block;color:var(--dmo-text);font-size:12px;line-height:1.3}
+.dmo-app-header__user span{display:block;margin-top:2px;color:var(--dmo-muted);font-size:11px;line-height:1.3}
+@media(max-width:600px){.dmo-app-header{padding:10px 14px}.dmo-app-header__logo{width:38px;height:38px}.dmo-app-header__page h1{font-size:15px}.dmo-app-header__page p{max-width:180px}.dmo-app-header__user{min-width:0;padding-left:10px}.dmo-app-header__user strong{font-size:11px}}
+
+/* Canonical interactive components. Pages control layout; this file controls appearance. */
+html body :is(.dmo-button,.button,.btn){min-height:var(--dmo-control-height);padding:9px 14px;border:1px solid var(--button-color,var(--dmo-brand-600));border-radius:var(--dmo-r-control);background:var(--button-color,var(--dmo-brand-600));color:#fff;font-size:13px;font-weight:800;line-height:1.2;cursor:pointer;transition:background var(--dmo-fast),color var(--dmo-fast),border-color var(--dmo-fast)}
+html body :is(.dmo-button,.button,.btn):hover,html body :is(.dmo-button,.button,.btn):focus-visible{background:#fff;color:var(--button-color,var(--dmo-brand-600));outline:none}
+html body :is(.dmo-button,.button,.btn).danger{--button-color:var(--dmo-danger)}
+html body :is(.dmo-button,.button,.btn).success{--button-color:var(--dmo-success)}
+html body :is(.dmo-button,.button,.btn):disabled{--button-color:var(--dmo-disabled);cursor:not-allowed}
+.dmo-primary-nav,.dmo-secondary-nav{display:flex;align-items:stretch;background:#fff;border-bottom:1px solid var(--dmo-border);overflow-x:auto}
+.dmo-primary-nav{min-height:48px;gap:22px;padding:0 22px}
+.dmo-secondary-nav{min-height:46px;gap:20px;padding:0 18px}
+.dmo-primary-nav :is(a,button),.dmo-secondary-nav :is(a,button){display:inline-flex;align-items:center;min-width:max-content;padding:0 5px;border:0;border-bottom:3px solid transparent;background:none;color:var(--dmo-muted);font-size:13px;font-weight:800;text-decoration:none}
+.dmo-primary-nav :is(a,button):hover,.dmo-primary-nav :is(a,button).active,.dmo-secondary-nav :is(a,button):hover,.dmo-secondary-nav :is(a,button).active{color:var(--dmo-brand-700);border-bottom-color:var(--dmo-brand-600)}
+@media(max-width:600px){.dmo-primary-nav,.dmo-secondary-nav{gap:14px;padding-inline:12px}.dmo-primary-nav :is(a,button),.dmo-secondary-nav :is(a,button){font-size:12px}}
+
+/* When both navigation levels are direct page rows, keep them stacked while scrolling. */
+body > .dmo-primary-nav{position:sticky;top:0;z-index:46}
+body > .dmo-primary-nav + .dmo-secondary-nav{position:sticky;top:48px;z-index:45}
+
+/* Canonical page hierarchy; aliases keep older mockups aligned during migration. */
+html body :is(.dmo-page-head,.page-head,.page-heading){display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px}
+html body :is(.dmo-page-head,.page-head,.page-heading) :is(h1,h2){margin:0;color:var(--dmo-text);font-family:inherit;font-size:24px !important;font-weight:800 !important;line-height:1.2;letter-spacing:-.015em}
+html body :is(.dmo-page-head,.page-head,.page-heading) p{margin:4px 0 0;color:var(--dmo-muted);font-family:inherit;font-size:12px !important;line-height:1.45}
+html body :is(.dmo-page-head,.page-head,.page-heading) .eyebrow{display:block;margin-bottom:4px;color:var(--dmo-brand-600);font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+
+/* Common header aliases. Each page may still own fixed/sticky positioning. */
+html body :is(.dmo-app-header,.app-header,.header){min-height:var(--dmo-header-height);align-items:center;padding-block:10px;background:var(--dmo-card);border-bottom:1px solid var(--dmo-border);font-family:inherit}
+html body :is(.dmo-app-header__page,.brand-copy,.header .brand > div,.header .head,.app-header .brand) :is(h1,strong){margin:0;color:var(--dmo-text);font-family:inherit;font-size:18px !important;font-weight:800 !important;line-height:1.2}
+html body :is(.dmo-app-header__page,.brand-copy,.header .brand > div,.header .head,.app-header .brand) :is(p,span){margin:3px 0 0;color:var(--dmo-muted);font-family:inherit;font-size:11px !important;line-height:1.3}
+html body :is(.dmo-app-header__user,.user-block,.header .user){font-family:inherit}
+
+/* Action buttons are filled at rest. Tabs, calendar days and bare icon controls are excluded. */
+html body :is(a,button):is(.dmo-button,.button,.btn):not(:disabled){background:var(--button-color,var(--dmo-brand-600)) !important;border-color:var(--button-color,var(--dmo-brand-600)) !important;color:#fff !important}
+html body :is(a,button):is(.dmo-button,.button,.btn):not(:disabled):hover,
+html body :is(a,button):is(.dmo-button,.button,.btn):not(:disabled):focus-visible{background:#fff !important;color:var(--button-color,var(--dmo-brand-600)) !important}
+html body :is(a,button):is(.dmo-button,.button,.btn):disabled{background:var(--dmo-disabled) !important;border-color:var(--dmo-disabled) !important;color:#fff !important}
+@media(max-width:600px){html body :is(.dmo-page-head,.page-head,.page-heading){align-items:flex-start;flex-direction:column}html body :is(.dmo-page-head,.page-head,.page-heading) :is(h1,h2){font-size:21px}}
