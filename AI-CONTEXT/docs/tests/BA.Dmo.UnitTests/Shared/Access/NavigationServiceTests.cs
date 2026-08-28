@@ -56,7 +56,6 @@ public class NavigationServiceTests
             item => item.Id == CanonicalModuleCatalog.ControloAreaId);
         Assert.IsType<NavigationTab>(tab);
         Assert.Equal("/controlo", tab.Route);
-        Assert.Empty(navigation.LeftItems.OfType<NavigationArea>());
         Assert.DoesNotContain(navigation.LeftItems,
             item => item.Id is CanonicalModuleCatalog.PesoModuleId
                 or CanonicalModuleCatalog.PegamentosModuleId);

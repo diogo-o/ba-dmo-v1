@@ -60,7 +60,7 @@ This map inventories the BA DMO numbered migration family exactly as written on 
 
 It does **not** explain business workflow, module behavior, Design/SOT, application behavior, Dapper/repository behavior, reconciliation, gaps, or future fixes. It does **not** reproduce the final schema (that is `02_DATABASE.md`); chronology described here is migration-evolution only.
 
-**Migration count verified from disk: 31 numbered migration files (N01–N31).**
+**Migration count verified from disk: 36 numbered migration files (N01–N36).**
 
 ## 2. Migration Source Structure
 
@@ -101,6 +101,11 @@ Numbered migration family (verified from disk):
 | 29 | `N29_jobon_reference_images.sql` |
 | 30 | `N30_jobon_reference_image_updated_by_index.sql` |
 | 31 | `N31_template_profiles_single_assignment.sql` |
+| 32 | `N32_access_authority_convergence.sql` |
+| 33 | `N33_legacy_access_mirror_quiescence.sql` |
+| 34 | `N34_legacy_access_mirror_removal.sql` |
+| 35 | `N35_index_rationalization.sql` |
+| 36 | `N36_ba_dmo_app_access_policy_rename.sql` |
 
 This is the complete contents of `database\migrations\`; there are no other files in the folder. `database\consolidated_clean_install.sql` is **not** part of the numbered family (it is a consolidated clean-install baseline; see [Consolidated Clean-Install Baseline](#consolidated-clean-install-baseline)).
 
@@ -139,6 +144,11 @@ This is the complete contents of `database\migrations\`; there are no other file
 | 29 | N29 | Job On reference images | table `article_reference_images`; guarded DML migration (legacy `job_on_revision.image_asset_id` → master); RLS/policy/grants | N01 `internal_users`, N05 `job_on`/`job_on_revision` |
 | 30 | N30 | reference-image updated_by index | index `ix_article_reference_images_updated_by` | N29 `article_reference_images` |
 | 31 | N31 | template profiles / single assignment | table `access_template_profiles`; fn `ba_dmo_ensure_access_template_profile` + trg `trg_access_templates_ensure_profile`; backfill + collapse DML; unique `ux_internal_user_access_templates_actor`; RLS/policy/grants | N01 `access_templates`/`internal_users`, N27 `internal_user_access_templates` |
+| 32 | N32 | access-authority convergence (SCHEMA-RAT-03A, D-1/D-2) | fail-closed junction guards (multi-assignment/conflict diagnostics); deterministic `access_template_profiles` backfill; NO destructive DDL | N01 `access_templates`/`internal_users`, N27 junction, N31 `access_template_profiles` |
+| 33 | N33 | legacy access mirror quiescence (SCHEMA-RAT-03B) | `internal_users.profile_title DROP NOT NULL`; junction `REVOKE ALL` from `ba_dmo_app`; `internal_users` column-level SELECT/INSERT/UPDATE grants excluding `profile_title` | N01/N27 `internal_users`, N27 junction |
+| 34 | N34 | legacy access mirror REMOVAL | `DROP TABLE internal_user_access_templates` (PK/FKs/indexes/inert policy); `DROP CONSTRAINT ck_internal_users_functional_profile`; `DROP COLUMN internal_users.profile_title` — Option A, no CASCADE, `IF EXISTS` | N27/N31/N32/N33 mirror lifecycle complete |
+| 35 | N35 | safe index rationalization | ADD `ix_bq_movements_noted_repairer` (BQ-16) on `bq_movements`; DROP redundant `ix_pegamento_documentos_controlo` (duplicates UNIQUE). Optional BQ-10 CHECK trim deliberately EXCLUDED (OD-16) | N03 `bq_movements`, N14 `pegamento_documentos` |
+| 36 | N36 | RLS policy-name convention (D-15) | rename `access_template_profiles_app_access` → `ba_dmo_app_access` (identical `FOR ALL TO ba_dmo_app USING(TRUE) WITH CHECK(TRUE)` semantics; no grant change) | N31 `access_template_profiles` |
 
 ## 4. N01 — identity
 
@@ -962,19 +972,24 @@ Only direct technical dependencies visible from SQL.
 - **N29** → N01 (`internal_users` — `updated_by` FK), N05 (`job_on`/`job_on_revision` — reads `current_revision_id` → `image_asset_id` + `reference_snapshot`).
 - **N30** → N29 (`article_reference_images`).
 - **N31** → N01 (`access_templates`, `internal_users`), N27 (`internal_user_access_templates` — collapses hybrid assignments, adds the single-template unique index).
+- **N32** → N01 (`access_templates`, `internal_users`), N27 (`internal_user_access_templates` — fail-closed guards read the junction), N31 (`access_template_profiles` — completeness backfill).
+- **N33** → N01/N27 (`internal_users` — `profile_title` relax + column-level grants), N27 (`internal_user_access_templates` — REVOKE).
+- **N34** → N27 (`internal_user_access_templates` — drop), N01/N27 (`internal_users.profile_title` + `ck_internal_users_functional_profile` — drop). Runs last in the mirror lifecycle; every mirror-dependent migration (N27/N31/N32/N33) has already executed.
+- **N35** → N03 (`bq_movements` — index), N14 (`pegamento_documentos` — redundant index drop).
+- **N36** → N31 (`access_template_profiles` — policy rename; the junction policy pair died in N34).
 
 ## Object-to-Migration Index
 
 | Object | Created In | Later Altered By |
 |---|---|---|
-| `internal_users` | N01 | N25 (auth_user_id NOT NULL + UNIQUE), N26 (modules_override), N27 (profile_title NOT NULL + `ck_internal_users_functional_profile`), N31 (profile_title backfill sync) |
+| `internal_users` | N01 | N25 (auth_user_id NOT NULL + UNIQUE), N26 (modules_override), N27 (profile_title NOT NULL + `ck_internal_users_functional_profile`), N31 (profile_title backfill sync), N33 (profile_title DROP NOT NULL; column-level SELECT/INSERT/UPDATE grants excluding the mirror), **N34 (`profile_title` column + `ck_internal_users_functional_profile` REMOVED**) |
 | `access_templates` | N01 | N27 (legacy-override compatibility templates materialized; `modules` rewritten to top-level-only), N31 (profile trigger) |
 | `audit_events` | N01 | N25 (index `ix_audit_events_module_time`) |
 | `ba_dmo_guard_append_only()` | N01 | — |
 | `module_catalog_mirror` | N02 | — |
 | `bq_lotes` | N03 | — |
 | `bq_traces` | N03 | N25 (partial unique `uq_bq_traces_active`) |
-| `bq_movements` | N03 | N18 (noted_repairer_id) |
+| `bq_movements` | N03 | N18 (noted_repairer_id), **N35 (index `ix_bq_movements_noted_repairer`)** |
 | `bq_discrepancies`, `bq_lifecycle_history`, `bq_utilisation_readings` | N03 | — |
 | `tool_references`, `tool_lotes`, `physical_pieces`, `tool_check_rules`, `tool_check_occurrences` | N04 | — |
 | `job_on` | N05 | N13 (production_folder), N25 (`uq_job_on_identity`, `ck_job_on_lifecycle_consistent`) |
@@ -998,15 +1013,15 @@ Only direct technical dependencies visible from SQL.
 | `warehouse_locations`, `warehouse_stock`, `warehouse_movements` | N09 | — |
 | `tampao_field_defs`, `tampao_field_values`, `tampao_configurations`, `tampao_saldos`, `tampao_movements`, `tampao_planos` | N10 | — |
 | `app_settings` | N11 | — |
-| `pegamento_documentos` | N14 | N25 (RLS/policy/grants) |
+| `pegamento_documentos` | N14 | N25 (RLS/policy/grants), **N35 (redundant standalone index `ix_pegamento_documentos_controlo` REMOVED; UNIQUE constraint index remains)** |
 | `tool_usage_records` | N19 | N25 (RLS/policy/grants) |
 | `repairer_repair_types` | N20 | N25 (RLS/policy/grants) |
 | `tampao_configuration_machines`, `tampao_configuration_notes`, `tampao_configuration_machine_event` | N21 | N25 (RLS/policy/grants) |
 | `controlo_sheets`, `controlo_sheet_items`, `controlo_sheet_events` | N23 | N25 (RLS/policy/grants) |
 | `jobon_user_current` | N24 | N25 (RLS/policy/grants) |
-| `internal_user_access_templates` | N27 | N31 (collapse to a single row per user; unique `ux_internal_user_access_templates_actor`) |
+| `internal_user_access_templates` | N27 | N31 (collapse to a single row per user; unique `ux_internal_user_access_templates_actor`), N32 (fail-closed guards), N33 (privilege quiescence), **N34 (TABLE REMOVED — mirror removed with its PK/FKs/indexes/policy/default)** |
 | `article_reference_images` | N29 | N30 (index `ix_article_reference_images_updated_by`) |
-| `access_template_profiles` | N31 | — |
+| `access_template_profiles` | N31 | **N36 (policy renamed `access_template_profiles_app_access` → `ba_dmo_app_access`)** |
 
 ## Constraint / Index Origin
 
@@ -1027,13 +1042,15 @@ Later remediation/additive and partial unique items:
 | `ck_internal_repair_records_type` (created CM/MF → N22 widened to BQ → N28 re-narrowed to CM/MF) | `internal_repair_records` | N08 created / N22 redefined / N28 redefined again |
 | `ix_pegamento_medicoes_component_tool` | `pegamento_medicoes` | N15 |
 | `ix_audit_events_module_time` | `audit_events` | N25 |
-| `ck_internal_users_functional_profile` | `internal_users` | N27 |
-| `ix_internal_user_access_templates_template` | `internal_user_access_templates` | N27 |
+| `ck_internal_users_functional_profile` | `internal_users` | N27 (**N34 removed with the column**) |
+| `ix_internal_user_access_templates_template` | `internal_user_access_templates` | N27 (**N34 removed with the table**) |
 | `ck_article_reference_images_reference` | `article_reference_images` | N29 |
 | `ck_article_reference_images_asset` | `article_reference_images` | N29 |
 | `ix_article_reference_images_updated_by` | `article_reference_images` | N30 |
 | `ck_access_template_profiles_functional_profile` | `access_template_profiles` | N31 |
-| `ux_internal_user_access_templates_actor` (unique, one row per user) | `internal_user_access_templates` | N31 |
+| `ux_internal_user_access_templates_actor` (unique, one row per user) | `internal_user_access_templates` | N31 (**N34 removed with the table**) |
+| `ix_bq_movements_noted_repairer` | `bq_movements` | **N35** |
+| `ix_pegamento_documentos_controlo` (redundant — duplicates UNIQUE) | `pegamento_documentos` | N14 (**N35 removed**) |
 | `fk_repair_events_internal_record` | `repair_events` | N08 |
 | `fk_internal_repair_records_revision` | `internal_repair_records` | N22 |
 | `fk_job_on_current_revision` (circular) | `job_on` | N05 |
@@ -1091,6 +1108,7 @@ Migration-level evolution only.
 **N27** (RLS for `internal_user_access_templates`):
 - RLS enabled + policy `internal_user_access_templates_app_access` (`FOR ALL TO ba_dmo_app
   USING (true) WITH CHECK (true)`) + guarded anon/authenticated REVOKE + `ba_dmo_app` DML grant.
+- **N34 removes the table — the policy dies with it.**
 
 **N29** (RLS for `article_reference_images`):
 - RLS enabled + policy `ba_dmo_app_access` + `ba_dmo_app` DML grant — the whole grant/policy
@@ -1099,17 +1117,22 @@ Migration-level evolution only.
 **N31** (RLS for `access_template_profiles`):
 - RLS enabled + policy `access_template_profiles_app_access` + guarded anon/authenticated
   REVOKE + `ba_dmo_app` DML grant.
+- **N36 (D-15) renames the policy to `ba_dmo_app_access` with identical semantics.**
 
-**Policy naming note:** two conventions coexist. N12/N25/N29 use `ba_dmo_app_access`;
-N27 and N31 use `{table}_app_access` (`internal_user_access_templates_app_access`,
-`access_template_profiles_app_access`). Functionally equivalent per-table policies; the
-naming divergence suggests separate authoring moments. Recorded as observed —
-**UNKNOWN / OWNER DECISION REQUIRED** if a single convention is wanted.
+**N33** (privilege quiescence for the mirrors — non-RLS security surface):
+- Junction `REVOKE ALL` from `ba_dmo_app`; `internal_users` column-level SELECT/INSERT/UPDATE
+  grants for the 8 canonical columns (excluding the retired `profile_title`; DELETE untouched).
 
-**Migration-level totals:**
-- RLS-enabled tables implied by N12 (49) + N25 (10) + N27 (1) + N29 (1) + N31 (1) = **62**.
-- `ba_dmo_app` access policies implied by N12 (48) + N25 (10) + N27 (1) + N29 (1, guarded)
-  + N31 (1) = **61**.
+**Policy naming note:** resolved. N12/N25/N29/N36 use the single convention `ba_dmo_app_access`;
+the two historical exceptions (`internal_user_access_templates_app_access` N27,
+`access_template_profiles_app_access` N31) are gone — the first died with the junction table in
+N34, the second was renamed by N36 (D-15). All post-N36 migrations must use `ba_dmo_app_access`.
+
+**Migration-level totals (post-N34/N36):**
+- RLS-enabled application tables = **60** (61 N33-era app tables minus the junction removed by N34);
+  RLS-enabled tables incl. `schema_migrations` (no policy) = **61**.
+- `ba_dmo_app` access policies implied by N12 (48) + N25 (10) + N29 (1, guarded) + N31→N36 (1) =
+  **60**, every one named `ba_dmo_app_access`.
 
 ## Data Migration Statements
 
@@ -1134,6 +1157,15 @@ comments confirm no operational seeds).
   otherwise); `DELETE FROM internal_user_access_templates` collapsing rows whose
   `template_id <> internal_users.template_id`; re-`INSERT` of the single effective
   assignment; `UPDATE internal_users SET profile_title = p.functional_profile` sync.
+- **N32** — deterministic `INSERT ... SELECT ON CONFLICT DO NOTHING` completeness
+  backfill of `access_template_profiles` (deterministic default only; never copies
+  user profiles). The N32 fail-closed junction guards raise diagnostics, they do
+  not mutate.
+- **N33** — no data migration (privilege quiescence only; `DROP NOT NULL` is DDL).
+- **N34** — no data migration — **destructive object removal**: the mirrors'
+  fossil `profile_title` values and junction rows are discarded by design (dead
+  since N33; pre-drop backup is a rollout step of the N34 verification protocol).
+- **N35 / N36** — no data migration (index add/drop and policy rename only).
 
 These are data reconciliations tied to schema changes, not operational seeding.
 
@@ -1156,10 +1188,10 @@ run; the table is owned by the migrate role and gets RLS enabled in N12 but **no
 
 **Discovery** (`MigrationDiscovery.Discover(migrationsDirectory)`):
 only files matching the regex `^(N\d{2})_[A-Za-z0-9_]+\.sql$` are migrations; canonical
-order = ordinal file-name order (N01 … N31); duplicate versions fail explicitly
+order = ordinal file-name order (N01 … N36); duplicate versions fail explicitly
 (`MigrationDiscoveryException`); any non-conforming file in the directory aborts discovery.
 The shipped-family completeness is asserted by
-`MigrationDiscoveryTests.ShippedFreshBuildFamily_IsComplete_N01ThroughN31`.
+`MigrationDiscoveryTests.ShippedFreshBuildFamily_IsComplete_N01ThroughN36`.
 
 **Execution** (`MigrationRunner.RunAsync`):
 1. ensures `schema_migrations`; loads applied records keyed by version;
@@ -1187,6 +1219,19 @@ is located at or above the application base directory (6 levels). Exit codes: 0 
 1 migration failure (checksum mismatch / execution / discovery), 2 configuration error
 (missing connection string or migrations directory).
 
+**Deploy order (ADM-14)** — `migrate` (the whole N01…N36 family, including N33
+legacy-access-mirror quiescence AND N34 legacy-access-mirror removal) MUST complete
+BEFORE the first user write of the application build that ships with this family.
+N33 is what retires the mirrors as runtime objects (relaxes `internal_users.profile_title`
+NOT NULL, revokes `ba_dmo_app` privileges on the junction, and switches
+`internal_users` to column-level grants); N34 then physically REMOVES the mirrors
+(`internal_user_access_templates` + `profile_title` + its CHECK). A fresh application
+version writing user rows before N33/N34 is applied would hit a mirror posture or
+columns the runtime no longer supports. On a consolidated-built database the same
+guarantee holds: run `migrate` (or install the up-to-date
+`database/consolidated_clean_install.sql` baseline, which embeds the post-N34 posture)
+before opening the app to users.
+
 **Tests** (`AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Migrations\`): `MigrationRunnerTests`
 (whole-script byte-for-byte execution, record-only-after-success, same-checksum skip,
 checksum-mismatch fail, failed script not recorded + run stops, canonical order, semicolons
@@ -1197,7 +1242,7 @@ vector), `MigrationArchitectureGuardTests` (no splitting/parsing machinery, no H
 
 ## Consolidated Clean-Install Baseline
 
-File: `database\consolidated_clean_install.sql` (1666 lines at verification).
+File: `database\consolidated_clean_install.sql` (≈1800 lines at the N01–N36 verification).
 
 - One-pass clean-install baseline reproducing the **final effective schema** of the
   migration family; it is NOT a migration and must live OUTSIDE `database/migrations\`
@@ -1207,23 +1252,22 @@ File: `database\consolidated_clean_install.sql` (1666 lines at verification).
   (privilege-heavy statements become NOTICEs when the project role lacks entitlement).
 - Also reproduces `schema_migrations` and the RLS/policy/grants contract.
 
-**Verification result (this refresh) — SCHEMA DRIFT — NEEDS AUDIT:** the body
-contains N01–N30 final-state schema including the N25 remediation section, N26
-`modules_override`, N27 junction + `profile_title` contract, N28 CM/MF re-narrowed CHECK,
-and N29 `article_reference_images` with the N30 index — but it does **not** contain any
-N31 object (`access_template_profiles`, `ba_dmo_ensure_access_template_profile`,
-`trg_access_templates_ensure_profile`, `ux_internal_user_access_templates_actor`; grep
-evidence: zero matches). The header/comment trail is stale too: it still claims the
-equivalent of "migration family N01 … N24", references a test named
-`ShippedFreshBuildFamily_IsComplete_N01ThroughN24` (the test is now
-`..._N01ThroughN31`), and the final line says "includes N25-N27" while the body already
-includes N28–N30 objects. Expected next step (owner/coordinator): extend the baseline to
-the N31 final state and refresh its header/equivalence claims.
+**Verification result (N34–N36 session refresh):** the baseline was parity-hardened by
+Queue A (PC-10/CB-01..05: N31 objects + N29 RLS stanza + post-N33 mirror posture +
+corrected header) and is now extended to the **N01–N36 final state** (this session):
+the legacy access mirrors are absent (`internal_user_access_templates` removed; the
+`internal_users.profile_title` replica and its CHECK removed — N34 final state), the
+redundant `ix_pegamento_documentos_controlo` is gone and `ix_bq_movements_noted_repairer`
+is present (N35 final state), and the `access_template_profiles` policy is created under
+the convention name `ba_dmo_app_access` (N36 final state). The family test referenced by
+this map is `ShippedFreshBuildFamily_IsComplete_N01ThroughN36`; the tail comment reads
+"includes N25-N36".
 
 ## Sources Verified
 
 Primary evidence — every numbered migration file read in full from:
-`database\migrations\` (N01–N31, all 31 files, at HEAD 8478308).
+`database\migrations\` (N01–N36, all 36 files, at HEAD 8d916cb + the Queue A working
+tree and the N34–N36 change sets).
 
 Migration execution/bookkeeping — read in full from:
 - `src\BA.Dmo.Infrastructure\Persistence\Migrations\MigrationRunner.cs`
@@ -1243,22 +1287,24 @@ Migration tests:
 - `AI-CONTEXT\docs\tests\BA.Dmo.IntegrationTests\Migrations\FakeMigrationGateway.cs`
 
 Consolidated baseline:
-- `database\consolidated_clean_install.sql` — header/comments read; N25–N31 object coverage
-  verified by targeted greps (N31 objects absent; header claims N01–N24 — see
-  Consolidated Clean-Install Baseline).
+- `database\consolidated_clean_install.sql` — N01–N36 final state verified this session
+  (mirrors removed; N35 index deltas; N36 policy naming; header/tail corrected).
 
 Contract/registry: `AI-CONTEXT\docs\Maps\00_INDEX.md`.
 
 Notes:
-- The map was last verified 2026-08-23 for N01–N26; this refresh adds N27–N31 (all five
-  post-date that verification) and the execution/bookkeeping section.
+- The map was last verified 2026-08-23 for N01–N26; Queue A and the N34–N36 session bring
+  the inventory through N36 (all post-2026-08-23 migrations added) and the
+  execution/bookkeeping section.
 - Cross-linked maps: [02_DATABASE.md](02_DATABASE.md) (final schema),
   [04_DAPPER_INFRASTRUCTURE.md](04_DAPPER_INFRASTRUCTURE.md),
   [05_TESTS.md](05_TESTS.md), [00_INDEX.md](00_INDEX.md).
 - Not used as migration evidence: `01_DOMAIN.md`, Design/SOT, other Application source.
 
-**Paired-map lag (out of scope, flagged):** [02_DATABASE.md](02_DATABASE.md) still lists
-Functions (2) / Triggers (18) and shows no N27–N31 objects (`access_template_profiles`,
-`article_reference_images`, `internal_user_access_templates`,
-`ba_dmo_ensure_access_template_profile`, `trg_access_templates_ensure_profile`) — the
-paired map post-dates only N01–N26 and needs its own refresh by its owner.
+**Paired-map lag (out of scope, flagged):** [04_DAPPER_INFRASTRUCTURE.md](04_DAPPER_INFRASTRUCTURE.md),
+[15_ADMIN.md](15_ADMIN.md), [16_USERS_ACCESS.md](16_USERS_ACCESS.md), [18_LOGIN.md](18_LOGIN.md),
+[19_APPLICATION.md](19_APPLICATION.md), [20_WEB.md](20_WEB.md) still carry pre-03A/03B
+narrative (junction joins, `TemplateProfileStore`, mirror writes). They were already stale
+at 03A/03B (see reports/schema_rationalization_N34_legacy_mirror_removal_audit.md §3.4)
+and remain a separate documentation refresh item; [02_DATABASE.md](02_DATABASE.md)'s
+mirror-object entries were refreshed as part of the N34–N36 change set.

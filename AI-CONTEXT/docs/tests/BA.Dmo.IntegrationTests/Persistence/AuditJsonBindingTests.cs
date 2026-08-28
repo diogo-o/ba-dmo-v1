@@ -3,6 +3,7 @@ using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using BA.Dmo.Application.Modules.Admin;
 using BA.Dmo.Application.Shared.Persistence;
 using BA.Dmo.Infrastructure.Access;
 
@@ -81,6 +82,36 @@ public sealed class AuditJsonBindingTests
         Assert.Contains("@After::jsonb", command.Sql, StringComparison.Ordinal);
         Assert.Equal(before, command.Parameters["Before"]);
         Assert.Equal(after, command.Parameters["After"]);
+    }
+
+    [Fact]
+    public async Task AdminAudit_NullSummaries_StayNull_AndFreeTextIsNormalizedBeforeCast()
+    {
+        var connection = new RecordingDbConnection();
+        var repository = new DapperAdminRepository(new RecordingConnectionFactory(connection));
+
+        // Current callers pass NULL (Manual-compliant) — stays NULL.
+        var entry = new AuditEntry(
+            new DateTimeOffset(2026, 8, 17, 18, 0, 0, TimeSpan.Zero),
+            "user-1", "User", "admin", "create", "internal_user", "actor-1",
+            "Display", "succeeded", null, BeforeSummary: null, AfterSummary: null);
+        await repository.InsertAuditEventAsync(entry);
+
+        var command = connection.Commands[0];
+        Assert.Contains("@BeforeSummary::jsonb", command.Sql, StringComparison.Ordinal);
+        Assert.Contains("@AfterSummary::jsonb", command.Sql, StringComparison.Ordinal);
+        Assert.Null(command.Parameters["BeforeSummary"]);
+        Assert.Null(command.Parameters["AfterSummary"]);
+
+        // Defensive hardening (audit PC-11/ADM-08): a future free-text payload is
+        // normalized to a JSON string before the ::jsonb cast (never a raw 22P02).
+        var freeTextEntry = entry with { BeforeSummary = "manter", AfterSummary = "{\"chave\":1}" };
+        await repository.InsertAuditEventAsync(freeTextEntry);
+
+        var second = connection.Commands[1];
+        AssertJsonString(second.Parameters["BeforeSummary"], "manter");
+        // Already-valid JSON passes through unchanged.
+        Assert.Equal("{\"chave\":1}", second.Parameters["AfterSummary"]);
     }
 
     private static void AssertJsonString(object? value, string expected)

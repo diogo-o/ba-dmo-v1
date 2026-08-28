@@ -644,17 +644,12 @@ public class ShellRoutingTests : IClassFixture<ShellRoutingTests.ShellFixture>
                 Guid? referenceId, string? search, string? status, Domain.Modules.Peso.PesoRecordType? type,
                 DateTime? from, DateTime? to, CancellationToken cancellationToken = default) =>
                 Task.FromResult<IReadOnlyList<Domain.Modules.Peso.PesoControl>>(Array.Empty<Domain.Modules.Peso.PesoControl>());
-            public Task<IReadOnlyList<Domain.Modules.Peso.PesoControl>> GetApprovedControlsForJobOnAsync(
-                Guid jobOnId, CancellationToken cancellationToken = default) =>
-                Task.FromResult<IReadOnlyList<Domain.Modules.Peso.PesoControl>>(Array.Empty<Domain.Modules.Peso.PesoControl>());
             public Task UpdateControlAsync(Domain.Modules.Peso.PesoControl control, CancellationToken cancellationToken = default) =>
+                Task.CompletedTask;
+            public Task UpdateControlHeaderAsync(Domain.Modules.Peso.PesoControl control, CancellationToken cancellationToken = default) =>
                 Task.CompletedTask;
             public Task DeleteControlAsync(Guid id, CancellationToken cancellationToken = default) =>
                 Task.CompletedTask;
-            public Task<Domain.Modules.Peso.PesoControloAnterior?> GetPreviousApprovedAsync(
-                string mold, string neckring, string productionCode, DateTime countrolDate,
-                CancellationToken cancellationToken = default) =>
-                Task.FromResult<Domain.Modules.Peso.PesoControloAnterior?>(null);
             public Task SaveDayApprovalAsync(
                 string mold, string neckring, string line, DateTime approvalDate,
                 string approvedBy, CancellationToken cancellationToken = default) =>
@@ -780,14 +775,8 @@ public class ShellRoutingTests : IClassFixture<ShellRoutingTests.ShellFixture>
             public Task<WarehouseStock?> GetActiveStockByToolIdAsync(Guid toolId, CancellationToken ct = default) =>
                 Task.FromResult(_stocks.FirstOrDefault(s => s.ToolId == toolId && s.IsActive));
 
-            public Task<IReadOnlyList<WarehouseStock>> GetActiveStocksAsync(CancellationToken ct = default) =>
-                Task.FromResult<IReadOnlyList<WarehouseStock>>(_stocks.Where(s => s.IsActive).ToList());
-
             public Task<IReadOnlyList<WarehouseStock>> GetStockByLocationAsync(Guid warehouseLocationId, CancellationToken ct = default) =>
                 Task.FromResult<IReadOnlyList<WarehouseStock>>(_stocks.Where(s => s.WarehouseLocationId == warehouseLocationId).ToList());
-
-            public Task<IReadOnlyList<WarehouseStock>> GetStockByToolIdAsync(Guid toolId, CancellationToken ct = default) =>
-                Task.FromResult<IReadOnlyList<WarehouseStock>>(_stocks.Where(s => s.ToolId == toolId).ToList());
 
             public Task<Guid> RegisterEntradaAsync(WarehouseStock stock, WarehouseMovement movement, CancellationToken ct = default)
             {
@@ -811,24 +800,6 @@ public class ShellRoutingTests : IClassFixture<ShellRoutingTests.ShellFixture>
                 stock.ReleasedBy = releasedBy;
                 movement.WarehouseStockId = stockId;
                 _movements.Add(movement);
-                return Task.CompletedTask;
-            }
-
-            public Task ReplaceOccupationAsync(
-                Guid currentStockId,
-                WarehouseStock newStock,
-                WarehouseMovement outMovement,
-                WarehouseMovement inMovement,
-                CancellationToken ct = default)
-            {
-                var current = _stocks.Single(s => s.WarehouseStockId == currentStockId);
-                current.ReleasedAtUtc = outMovement.OccurredAtUtc;
-                current.ReleasedBy = outMovement.ActorId;
-                outMovement.WarehouseStockId = currentStockId;
-                inMovement.WarehouseStockId = newStock.WarehouseStockId;
-                _stocks.Add(newStock);
-                _movements.Add(outMovement);
-                _movements.Add(inMovement);
                 return Task.CompletedTask;
             }
 

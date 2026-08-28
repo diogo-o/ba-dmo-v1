@@ -53,23 +53,3 @@ public enum PesoCmDecision
     Manter,
     ColocarDeParte
 }
-
-/// <summary>Per-CM decision persistence/text helpers.</summary>
-public static class PesoCmDecisionCodec
-{
-    public static PesoCmDecision Parse(string? value) => value?.Trim().ToLowerInvariant() switch
-    {
-        null or "" => PesoCmDecision.None,
-        "manter" => PesoCmDecision.Manter,
-        "colocar_de_parte" or "aside" => PesoCmDecision.ColocarDeParte,
-        _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown Peso CM decision.")
-    };
-
-    public static string? ToStorage(PesoCmDecision value) => value switch
-    {
-        PesoCmDecision.None => null,
-        PesoCmDecision.Manter => "manter",
-        PesoCmDecision.ColocarDeParte => "colocar_de_parte",
-        _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown Peso CM decision.")
-    };
-}

@@ -99,7 +99,7 @@ Related maps: [00_INDEX.md](00_INDEX.md) · [01_DOMAIN.md](01_DOMAIN.md) · [03_
 | 56 | `controlo_sheet_items` | N23 | Controlo | Current-state |
 | 57 | `controlo_sheet_events` | N23 | Controlo | History/event (append-only) |
 | 58 | `jobon_user_current` | N24 | Job On (user context) | Current-state |
-| 59 | `internal_user_access_templates` | N27 | Access/Identity | Relationship |
+| 59 | ~~`internal_user_access_templates`~~ **REMOVED (N34)** | N27 | Access/Identity | Relationship (removed) |
 | 60 | `article_reference_images` | N29 | Job On (master article image) | Current-state |
 | 61 | `access_template_profiles` | N31 | Access/Identity | Lookup/config |
 
@@ -118,10 +118,10 @@ Related maps: [00_INDEX.md](00_INDEX.md) · [01_DOMAIN.md](01_DOMAIN.md) · [03_
 
 ### `internal_users`
 
-- MODULE/OWNER: Access/Identity. ORIGIN: N01. LATER ALTERATIONS: N25 (`auth_user_id` SET NOT NULL + UNIQUE `uq_internal_users_auth_user`; fails closed on NULL legacy rows); N26 (ADD `modules_override` jsonb, nullable per-user override); N27 (data backfill of `profile_title`; `modules_override` made dormant/NULL after materializing `legacy-override-*` compatibility templates; `profile_title` SET NOT NULL + CHECK `ck_internal_users_functional_profile`); N31 (data UPDATE synchronizes `profile_title` from the template's `access_template_profiles.functional_profile`).
+- MODULE/OWNER: Access/Identity. ORIGIN: N01. LATER ALTERATIONS: N25 (`auth_user_id` SET NOT NULL + UNIQUE `uq_internal_users_auth_user`; fails closed on NULL legacy rows); N26 (ADD `modules_override` jsonb, nullable per-user override); N27 (data backfill of `profile_title`; `modules_override` made dormant/NULL after materializing `legacy-override-*` compatibility templates; `profile_title` SET NOT NULL + CHECK `ck_internal_users_functional_profile`); N31 (data UPDATE synchronizes `profile_title` from the template's `access_template_profiles.functional_profile`); N33 (`profile_title` DROP NOT NULL; column-level SELECT/INSERT/UPDATE grants excluding the mirror); **N34 (REMOVED the `profile_title` column and its CHECK `ck_internal_users_functional_profile`)**.
 - PK: `actor_id` (text). FKs: `template_id → access_templates(template_id)` (NOT NULL).
 - UNIQUE: `uq_internal_users_auth_user (auth_user_id)` (N25).
-- CHECK: `ck_internal_users_functional_profile` — `profile_title IN ('Admin','Operador / Controlador','Responsável')` (N27).
+- CHECK: ~~`ck_internal_users_functional_profile` — `profile_title IN ('Admin','Operador / Controlador','Responsável')` (N27)~~ **removed with the column (N34)**.
 - IMPORTANT INDEXES: `ix_internal_users_auth_user_id`, `ix_internal_users_active`, `ix_internal_users_template_id`.
 - TRIGGERS: none. RLS: policy `ba_dmo_app_access` (N12).
 - DAPPER CONSUMERS: `DapperAdminRepository`, `DapperInternalUserRepository`.
@@ -157,24 +157,23 @@ Related maps: [00_INDEX.md](00_INDEX.md) · [01_DOMAIN.md](01_DOMAIN.md) · [03_
 - DAPPER CONSUMERS: `DapperAppSettingsReader` (src\BA.Dmo.Infrastructure\Access\); also read by `FileSystemJobOnImageProvider` (image root configuration).
 - CATEGORY: lookup/configuration (key/value jsonb; no operational seeds).
 
-### `internal_user_access_templates`
+### ~~`internal_user_access_templates`~~ — REMOVED (N34)
 
-- MODULE/OWNER: Access/Identity. ORIGIN: N27. LATER ALTERATIONS: N31 (data DELETE collapses hybrid assignments to `internal_users.template_id`; INSERT re-materializes exactly one row per user; ADD UNIQUE index `ux_internal_user_access_templates_actor` → ONE effective template per user, single-template model).
+- MODULE/OWNER: Access/Identity. ORIGIN: N27. LATER ALTERATIONS: N31 (data DELETE collapses hybrid assignments to `internal_users.template_id`; INSERT re-materializes exactly one row per user; ADD UNIQUE index `ux_internal_user_access_templates_actor` → ONE effective template per user, single-template model); N32 (fail-closed guards); N33 (privilege quiescence — `REVOKE ALL` from `ba_dmo_app`).
 - PK: `(actor_id, template_id)`. FKs: `actor_id → internal_users(actor_id)`, `template_id → access_templates(template_id)`.
 - UNIQUE: `ux_internal_user_access_templates_actor (actor_id)` (N31, one row per user).
 - INDEXES: `ix_internal_user_access_templates_template (template_id, actor_id)`.
-- TRIGGERS: none. RLS: policy `internal_user_access_templates_app_access` (N27) + anon/authenticated REVOKE + `ba_dmo_app` grants.
-- DAPPER CONSUMERS: `DapperAdminRepository`, `DapperInternalUserRepository`.
-- CATEGORY: relationship (user ↔ template junction; single-assignment since N31).
+- TRIGGERS: none. RLS: policy `internal_user_access_templates_app_access` (N27).
+- **N34 physically REMOVED the table** (Option A, no cascading): PK, FKs, both indexes, the inert RLS policy, the `assigned_at_utc` default, the row type and TOAST. Historical record only — the D-2 authority is `internal_users.template_id` → `access_templates`.
 
 ### `access_template_profiles`
 
-- MODULE/OWNER: Access/Identity (16_USERS_ACCESS.md). ORIGIN: N31. LATER ALTERATIONS: none.
+- MODULE/OWNER: Access/Identity (16_USERS_ACCESS.md). ORIGIN: N31. LATER ALTERATIONS: N36 (**policy renamed `access_template_profiles_app_access` → `ba_dmo_app_access`**, identical semantics).
 - PK: `template_id` (text, FK `access_templates(template_id)` ON DELETE CASCADE).
 - CHECK: `ck_access_template_profiles_functional_profile` — `functional_profile IN ('Admin','Operador / Controlador','Responsável')`.
 - INDEXES: none. TRIGGERS: none (rows maintained by trigger `trg_access_templates_ensure_profile` on `access_templates` + N31 backfill + Admin template editor).
-- RLS: policy `access_template_profiles_app_access` (N31) + anon/authenticated REVOKE + `ba_dmo_app` grants.
-- DAPPER CONSUMERS: **none in Infrastructure** — consumed via Web raw SQL in `src\BA.Dmo.Web\Pages\Admin\TemplateProfileStore.cs` (`IDbConnectionFactory` + `Db.*`; see [19_APPLICATION.md](19_APPLICATION.md) §10.4 finding: Web bypasses Application for this table and for the `internal_users.profile_title` sync).
+- RLS: policy `ba_dmo_app_access` (N31 created it as `access_template_profiles_app_access`; **N36 renamed it to the convention name**) + anon/authenticated REVOKE + `ba_dmo_app` grants.
+- DAPPER CONSUMERS: **none in Infrastructure** — the pre-03A Web raw-SQL consumer (`TemplateProfileStore.cs`) was removed in the 03A/03B refactor; consumed via Application (`AdminTemplateService`/`DapperAdminRepository` authority reads). (The historical 19_APPLICATION.md §10.4 claim predates that removal.)
 - CATEGORY: lookup/configuration — template-owned functional profile (single template determines user profile + modules).
 
 ## 5. Job On
@@ -708,26 +707,28 @@ Related maps: [00_INDEX.md](00_INDEX.md) · [01_DOMAIN.md](01_DOMAIN.md) · [03_
 
 - N12 (rls): RLS ENABLED on **49** tables (48 application tables existing at N12 + `schema_migrations`); single technical policy `ba_dmo_app_access` (`FOR ALL TO ba_dmo_app USING (true) WITH CHECK (true)`) on the 48 application tables; `anon`/`authenticated` have NO table access (guarded REVOKE); `ba_dmo_app` receives SELECT/INSERT/UPDATE/DELETE. `schema_migrations`: RLS on, no policy (migrate CLI only).
 - N25 §2 (SEC-02): the **10 late tables** created after N12 (`pegamento_documentos`, `tool_usage_records`, `repairer_repair_types`, `tampao_configuration_machines`, `tampao_configuration_notes`, `tampao_configuration_machine_event`, `controlo_sheets`, `controlo_sheet_items`, `controlo_sheet_events`, `jobon_user_current`) get RLS + policy `ba_dmo_app_access` + anon/authenticated REVOKE + `ba_dmo_app` GRANT.
-- N27: `internal_user_access_templates` gets its own-named policy `internal_user_access_templates_app_access` (same `FOR ALL TO ba_dmo_app` semantics) + REVOKE/GRANT.
+- N27: `internal_user_access_templates` got its own-named policy `internal_user_access_templates_app_access` (same `FOR ALL TO ba_dmo_app` semantics) + REVOKE/GRANT — **policy and table REMOVED by N34**.
 - N29: `article_reference_images` gets RLS + policy `ba_dmo_app_access` + REVOKE/GRANT (in-script).
 - N31: `access_template_profiles` gets RLS + policy `access_template_profiles_app_access` + REVOKE/GRANT (in-script).
+- **N34 (removal)**: the junction table and its policy are physically gone — RLS-enabled application tables drop from 61 to **60**, policies from 61 to **60**.
+- **N36 (D-15)**: `access_template_profiles` policy renamed to the convention name `ba_dmo_app_access` — every application table now carries exactly one policy named `ba_dmo_app_access`.
 - MODEL NOTE (GLM-DATA-06.3): V1 has NO per-user/per-module RLS policies; capabilities are enforced exclusively in the C# Application layer. RLS is the technical access envelope for `ba_dmo_app` only.
 
 ## 16. Table Category Summary
 
-- **Current-state tables (39):** access_templates, internal_users, module_catalog_mirror, bq_lotes, bq_traces, bq_discrepancies, tool_references, tool_lotes, physical_pieces, tool_check_rules, tool_check_occurrences, job_on, job_on_verification_occurrence, job_on_field_option, jobon_user_current, peso_references, peso_lotes, peso_controlos, peso_leituras, peso_comparacao_anterior, peso_day_approvals, peso_settings, pegamento_controlos, pegamento_documentos, repairers, line_repairer_defaults, repair_exits, repair_exit_items, internal_repair_records, warehouse_locations, warehouse_stock, tampao_field_defs, tampao_field_values, tampao_configurations, tampao_saldos, tampao_planos, internal_user_access_templates, access_template_profiles, article_reference_images.
+- **Current-state tables (38):** access_templates, internal_users, module_catalog_mirror, bq_lotes, bq_traces, bq_discrepancies, tool_references, tool_lotes, physical_pieces, tool_check_rules, tool_check_occurrences, job_on, job_on_verification_occurrence, job_on_field_option, jobon_user_current, peso_references, peso_lotes, peso_controlos, peso_leituras, peso_comparacao_anterior, peso_day_approvals, peso_settings, pegamento_controlos, pegamento_documentos, repairers, line_repairer_defaults, repair_exits, repair_exit_items, internal_repair_records, warehouse_locations, warehouse_stock, tampao_field_defs, tampao_field_values, tampao_configurations, tampao_saldos, tampao_planos, access_template_profiles, article_reference_images.
 - **History/event tables (append-only, 17):** audit_events, bq_movements, bq_lifecycle_history, bq_utilisation_readings, tool_usage_records, job_on_audit_event, pegamento_medicoes, repair_events, warehouse_movements, tampao_movements, tampao_configuration_notes, tampao_configuration_machine_event, controlo_sheet_events + revision-family snapshots made append-only in N25 (job_on_revision, job_on_component, job_on_component_field, job_on_component_row).
-- **Relationship tables (3):** repairer_repair_types, tampao_configuration_machines, internal_user_access_templates.
+- **Relationship tables (2):** repairer_repair_types, tampao_configuration_machines. (~~`internal_user_access_templates`~~ — the third relationship table in the N27-era inventory — **REMOVED by N34**.)
 - **Audit tables (2):** audit_events (global canonical), job_on_audit_event (Job On module audit). (Module-level events also exist append-only in controlo_sheet_events / tampao_configuration_machine_event.)
 - **Lookup/configuration tables (10):** access_templates, module_catalog_mirror, app_settings, job_on_field_option, peso_settings, repairers (registry), line_repairer_defaults, tampao_field_defs, tampao_field_values, access_template_profiles.
 - Append-only enforcement is by trigger on `ba_dmo_guard_append_only()` (N01 function) — see [03_MIGRATIONS.md](03_MIGRATIONS.md) for the full trigger inventory.
 
 ## Sources Verified
 
-- `database\migrations\N01_identity.sql` … `N31_template_profiles_single_assignment.sql` — all 31 files read in full (column-level).
-- `database\consolidated_clean_install.sql` — existence + N31 drift noted (SCHEMA DRIFT — NEEDS AUDIT, cross-ref [03_MIGRATIONS.md](03_MIGRATIONS.md)).
+- `database\migrations\N01_identity.sql` … `N36_ba_dmo_app_access_policy_rename.sql` — all 36 files read in full (column-level).
+- `database\consolidated_clean_install.sql` — N01–N36 final state verified this session (mirrors removed; N35 index deltas; N36 policy naming).
 - `src\BA.Dmo.Infrastructure\` — Dapper consumer mapping per table (file-level grep of every table name against all Infrastructure .cs files).
-- Cross-layer evidence referenced from [04_DAPPER_INFRASTRUCTURE.md](04_DAPPER_INFRASTRUCTURE.md) (query-level detail), [19_APPLICATION.md](19_APPLICATION.md) (§10.4 TemplateProfileStore raw-SQL bypass finding), [03_MIGRATIONS.md](03_MIGRATIONS.md) (per-migration DDL and provenance notes).
-- No source, test, or migration file was modified; only `02_DATABASE.md` was updated.
+- Cross-layer evidence referenced from [04_DAPPER_INFRASTRUCTURE.md](04_DAPPER_INFRASTRUCTURE.md) (query-level detail), [03_MIGRATIONS.md](03_MIGRATIONS.md) (per-migration DDL and provenance notes).
+- This refresh (N34–N36 session): junction + profile_title entries removed/annotated; policy convention updated for N36; index deltas noted (N35). The historical 19_APPLICATION.md TemplateProfileStore claim is pre-03A staleness, flagged in [03_MIGRATIONS.md](03_MIGRATIONS.md).
 
-*End of 02_DATABASE.md — rebuilt from the current migration chain (N01–N31).*
+*End of 02_DATABASE.md — rebuilt from the current migration chain (N01–N36).*

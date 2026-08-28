@@ -50,7 +50,7 @@ public class JobOnRevisionImmutabilityIntegrationTests
 
         var pegGate = new PegamentoAuthorizationGate(PegFakeAuthorship.Authorized());
         _pegamentoService = new PegamentoService(
-            _pegamento, _pegLookup, pegGate, new TestClock(Now),
+            _pegamento, new FakePegamentoUnitOfWorkFactory(), _pegLookup, pegGate, new TestClock(Now),
             new FakeSettings("D:\\Documentos"),
             new FakeJobOnProductionFolderResolver { DefaultFolder = "5447T173" });
     }

@@ -11,11 +11,14 @@ namespace BA.Dmo.IntegrationTests.Integrity;
 /// (Npgsql keyword/value connection string). When the variable is absent the
 /// tests skip (return) — the suite stays green in DB-less environments, and
 /// the CI/freeze environment supplies the variable so the guards are proven.
-/// The schema is assumed to be fully migrated (N01-N33); tests are isolated
-/// by using fresh GUID keys per run. The N33_* probes self-skip when the test
-/// database is still at N32 (retired mirror column still NOT NULL). The
-/// connection role is expected to be the migration/owner role (can create
-/// roles when absent and SET ROLE to ba_dmo_app).
+/// The schema is assumed to be fully migrated (N01-N42); the N39/N40/N42
+/// probes additionally self-skip when those migrations are not yet applied.
+/// Tests are isolated by using fresh GUID keys per run. The N34_* probes
+/// self-skip when the test database still contains the legacy access mirrors
+/// (a pre-N34 schema: N32/N33 still leave the junction table and
+/// internal_users.profile_title physically present). The connection role is
+/// expected to be the migration/owner role (can create roles when absent and
+/// SET ROLE to ba_dmo_app).
 /// </summary>
 public sealed class RemediationGuardTests
 {
@@ -97,18 +100,25 @@ END $$;");
     }
 
     /// <summary>
-    /// True when N33 has NOT been applied to the test database (the retired
-    /// profile mirror column is still NOT NULL). Used to self-skip the N33
-    /// probes on databases stopped at N32.
+    /// True when the test database still contains BOTH legacy access mirrors
+    /// (pre-N34 schema: N32/N33 left the junction table and the
+    /// internal_users.profile_title mirror column physically present). Used to
+    /// self-skip the N34 probes on databases that have not yet applied N34 —
+    /// after N34 both objects are absent, so catalog probes must check absence
+    /// instead of nullability.
     /// </summary>
-    private static async Task<bool> ProfileTitleStillNotNull(string cs)
+    private static async Task<bool> AccessMirrorsStillPresent(string cs)
     {
-        var value = await CaptureScalar(cs, $@"
-SELECT is_nullable FROM information_schema.columns
+        var junctionRows = await ScalarInt(cs, $@"
+SELECT count(*) FROM information_schema.tables
+WHERE table_schema = 'public'
+  AND table_name = 'internal_user_access_templates';");
+        var columnCount = await ScalarInt(cs, $@"
+SELECT count(*) FROM information_schema.columns
 WHERE table_schema = 'public'
   AND table_name = 'internal_users'
   AND column_name = 'profile_title';");
-        return !string.Equals(value, "YES", StringComparison.OrdinalIgnoreCase);
+        return junctionRows >= 1 || columnCount >= 1;
     }
 
     /// <summary>
@@ -471,86 +481,163 @@ WHERE schemaname='public' AND indexname='ix_audit_events_module_time'");
     }
 
     // ----------------------------------------------------------------------
-    // N32 — access-authority convergence (SCHEMA-RAT-03A, D-1/D-2).
-    // Executed-PostgreSQL probes: the suite DB is assumed fully migrated
-    // through N32; the guards/backfill of N32 are replicated here so its
-    // fail-closed reconciliation and template-owned profile authority are
-    // PROVEN against real PostgreSQL (SKIPs without BA_DMO_TEST_DATABASE).
+    // N34 — legacy access mirror REMOVAL.
+    // Executed-PostgreSQL probes: after N34 the junction table
+    // (internal_user_access_templates) and the internal_users.profile_title
+    // mirror column (plus its CHECK) are PHYSICALLY ABSENT; any DML naming
+    // them fails loudly (42P01 / 42703) and the N33 column-level ba_dmo_app
+    // grants on the canonical internal_users columns are unchanged.
+    // Self-skipping: when the test database still contains the mirrors
+    // (pre-N34 schema: N32/N33) these probes skip. The historical N32/N33
+    // executed probes (fail-closed junction reconciliation, mirror privilege
+    // revocation) are superseded: their file-level guards remain in
+    // MigrationDiscoveryTests.N32_*/N33_*, and N34 removes the objects the
+    // executed probes named. The connection role is expected to be the
+    // migration/owner role (can create roles when absent and SET ROLE).
     // ----------------------------------------------------------------------
 
     [Fact]
-    public async Task N32_ConflictingLegacyJunction_RaisesFailClosedDiagnostic_NeverSilentChoice()
+    public async Task N34_JunctionTable_IsAbsent_AndAnyDmlRaises42P01()
     {
         if (SkipIfNoDatabase()) return;
         var cs = Cs!;
-        var tpl1 = "tpl-n32-a-" + Guid.NewGuid().ToString("N")[..8];
-        var tpl2 = "tpl-n32-b-" + Guid.NewGuid().ToString("N")[..8];
-        var actor = "n32-conflict-" + Guid.NewGuid().ToString("N")[..8];
-        await EnsureTemplateAsync(cs, tpl1);
-        await EnsureTemplateAsync(cs, tpl2);
-        // profile rows exist via the N31 trigger; N32-201 backfill also covers.
-        await Exec(cs, $@"
-INSERT INTO internal_users (actor_id, auth_user_id, template_id, display_name)
-VALUES ('{actor}', '{Guid.NewGuid()}', '{tpl1}', 'N32 Conflict');");
+        if (await AccessMirrorsStillPresent(cs)) return; // N34 not applied
 
-        // All mutations inside ONE transaction that is ROLLED BACK, so the
-        // shared test database is left untouched (junction row + guard run +
-        // index never altered globally).
+        // Catalog probe: the junction table does not exist.
+        var tables = await ScalarInt(cs, $@"
+SELECT count(*) FROM information_schema.tables
+WHERE table_schema = 'public'
+  AND table_name = 'internal_user_access_templates';");
+        Assert.Equal(0, tables);
+
+        // Behaviour probe: naming the junction in DML fails with 42P01
+        // (relation does not exist) from any role — the object is gone.
+        var state = await CaptureSqlState(cs, $@"
+INSERT INTO internal_user_access_templates (actor_id, template_id, assigned_at_utc)
+VALUES ('n34-probe-{Guid.NewGuid():N}', 'tpl-n34-{Guid.NewGuid():N}', now());");
+        Assert.Equal("42P01", state);
+    }
+
+    [Fact]
+    public async Task N34_ProfileTitleColumn_IsAbsent_AndAnyDmlRaises42703()
+    {
+        if (SkipIfNoDatabase()) return;
+        var cs = Cs!;
+        if (await AccessMirrorsStillPresent(cs)) return; // N34 not applied
+
+        // Catalog probe: the mirror column (and therefore its CHECK) is gone.
+        var columns = await ScalarInt(cs, $@"
+SELECT count(*) FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'internal_users'
+  AND column_name = 'profile_title';");
+        Assert.Equal(0, columns);
+        var checkCount = await ScalarInt(cs, $@"
+SELECT count(*) FROM pg_constraint
+WHERE conrelid = 'public.internal_users'::regclass
+  AND conname = 'ck_internal_users_functional_profile';");
+        Assert.Equal(0, checkCount);
+
+        // Behaviour probes: SELECT / INSERT / UPDATE of the removed column each
+        // fail with 42703 (undefined column).
+        Assert.Equal("42703", await CaptureSqlState(cs,
+            "UPDATE internal_users SET profile_title = 'Admin' WHERE FALSE;"));
+        Assert.Equal("42703", await CaptureSqlState(cs, $@"
+INSERT INTO internal_users (actor_id, auth_user_id, template_id, display_name, profile_title)
+VALUES ('n34-probe-{Guid.NewGuid():N}', NULL, 'tpl-n34-{Guid.NewGuid():N}', 'N34 Mirror Insert', 'Admin');"));
+        Assert.Equal("42703", await CaptureSqlState(cs,
+            "SELECT profile_title FROM internal_users WHERE FALSE;"));
+    }
+
+    [Fact]
+    public async Task N34_CanonicalColumnPrivileges_AreUnchanged_ForBaDmoApp()
+    {
+        if (SkipIfNoDatabase()) return;
+        var cs = Cs!;
+        await EnsureRoleExistsAsync(cs, "ba_dmo_app");
+        if (await AccessMirrorsStillPresent(cs)) return; // N34 not applied
+
+        // Catalog probe: every canonical internal_users column keeps
+        // SELECT/INSERT/UPDATE for ba_dmo_app (the N33 column-level grants are
+        // untouched by N34 — they named the canonical list, never the mirror).
+        var canonicalMissing = await ScalarInt(cs, $@"
+SELECT count(*) FROM (VALUES
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'actor_id', 'SELECT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'actor_id', 'INSERT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'actor_id', 'UPDATE')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'auth_user_id', 'SELECT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'auth_user_id', 'INSERT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'auth_user_id', 'UPDATE')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'template_id', 'SELECT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'template_id', 'INSERT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'template_id', 'UPDATE')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'display_name', 'SELECT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'display_name', 'INSERT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'display_name', 'UPDATE')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'active', 'SELECT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'active', 'INSERT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'active', 'UPDATE')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'created_at_utc', 'SELECT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'created_at_utc', 'INSERT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'created_at_utc', 'UPDATE')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'updated_at_utc', 'SELECT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'updated_at_utc', 'INSERT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'updated_at_utc', 'UPDATE')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'modules_override', 'SELECT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'modules_override', 'INSERT')),
+    (has_column_privilege('ba_dmo_app', 'internal_users', 'modules_override', 'UPDATE'))) v(ok)
+WHERE NOT ok;");
+        Assert.Equal(0, canonicalMissing);
+
+        // Behaviour probe: reading the canonical columns as ba_dmo_app
+        // succeeds (no privilege regression after the mirror removal).
+        Assert.Null(await CaptureSqlStateAs(cs, "ba_dmo_app",
+            "SELECT actor_id, auth_user_id, template_id, display_name, active FROM internal_users WHERE FALSE;"));
+    }
+
+    [Fact]
+    public async Task N34_NewUserRows_AreInsertable_OnThePostRemovalSchema()
+    {
+        if (SkipIfNoDatabase()) return;
+        var cs = Cs!;
+        await EnsureRoleExistsAsync(cs, "ba_dmo_app");
+        if (await AccessMirrorsStillPresent(cs)) return; // N34 not applied
+
+        var tpl = "tpl-n34-null-" + Guid.NewGuid().ToString("N")[..8];
+        await EnsureTemplateAsync(cs, tpl);
+        var actor = "n34-null-" + Guid.NewGuid().ToString("N")[..8];
+
+        // The whole probe runs as ba_dmo_app inside ONE transaction that is
+        // ROLLED BACK, so the shared test database is left untouched.
+        string? state = null;
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await using var tx = await conn.BeginTransactionAsync();
-        await using (var cmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock(hashtext('ba_dmo_n32_probe'))", conn, tx))
-            await cmd.ExecuteNonQueryAsync();
-
-        // Make the junction DISPUTE the canonical direct FK (delete any mirror
-        // row, then insert a conflicting single junction row).
-        await using (var cmd = new NpgsqlCommand(
-            "DELETE FROM internal_user_access_templates WHERE actor_id = @ActorId; " +
-            "INSERT INTO internal_user_access_templates (actor_id, template_id, assigned_at_utc) " +
-            "VALUES (@ActorId, @TemplateId2, now());",
-            conn, tx))
-        {
-            cmd.Parameters.AddWithValue("ActorId", actor);
-            cmd.Parameters.AddWithValue("TemplateId2", tpl2);
-            await cmd.ExecuteNonQueryAsync();
-        }
-
-        // N32 §2 guard (replicated verbatim semantics): a single junction row
-        // disputing internal_users.template_id MUST raise a diagnostic and
-        // never silently pick a side.
-        string? message = null;
         try
         {
-            await using var guard = new NpgsqlCommand(
-                """
-                DO $$
-                DECLARE v_sample text;
-                BEGIN
-                    SELECT string_agg(u.actor_id, ', ' ORDER BY u.actor_id)
-                      INTO v_sample
-                      FROM internal_users u
-                      JOIN internal_user_access_templates ut ON ut.actor_id = u.actor_id
-                     WHERE ut.template_id IS DISTINCT FROM u.template_id
-                       AND ut.template_id IS NOT NULL;
-                    IF v_sample IS NOT NULL THEN
-                        RAISE EXCEPTION 'N32 blocked: internal_user_access_templates disputes the canonical internal_users.template_id for actor(s): %', v_sample;
-                    END IF;
-                END
-                $$;
-                """,
-                conn, tx);
-            await guard.ExecuteNonQueryAsync();
+            await using (var setRole = new NpgsqlCommand("SET ROLE ba_dmo_app", conn, tx))
+                await setRole.ExecuteNonQueryAsync();
+
+            try
+            {
+                await using var insert = new NpgsqlCommand($@"
+INSERT INTO internal_users (actor_id, auth_user_id, template_id, display_name)
+VALUES ('{actor}', '{Guid.NewGuid()}', '{tpl}', 'N34 Null Mirror');", conn, tx);
+                await insert.ExecuteNonQueryAsync();
+            }
+            catch (PostgresException ex)
+            {
+                state = ex.SqlState;
+            }
         }
-        catch (PostgresException ex)
+        finally
         {
-            message = ex.Message;
+            await tx.RollbackAsync(); // data + role switch all restored
         }
 
-        Assert.NotNull(message);
-        Assert.Contains("N32 blocked", message, StringComparison.Ordinal);
-        Assert.Contains(actor, message, StringComparison.Ordinal);
-
-        await tx.RollbackAsync(); // index + data + advisory lock all restored
+        // On the post-N34 schema the mirror column does not exist, so a user
+        // INSERT never references it and succeeds under the canonical grants.
+        Assert.Null(state);
     }
 
     [Fact]
@@ -565,11 +652,15 @@ VALUES ('{tpl}', 'Sem responsabilidades', '[{{""moduleId"":""jobon"",""capabilit
 ON CONFLICT (template_id) DO NOTHING;");
         // The N31 trigger auto-creates the profile; delete it to force backfill.
         await Exec(cs, $"DELETE FROM access_template_profiles WHERE template_id = '{tpl}';");
-        // A user whose profile_title mirror says 'Admin' — backfill must NOT
-        // copy that into the template (template profile is the authority).
+        // A user with a non-admin template — the backfill must produce the
+        // deterministic default from the TEMPLATE (module/name), never from a
+        // user-level mirror. (The legacy profile_title mirror that N32-era
+        // probes used to seed 'Admin' was removed by N34; the deterministic
+        // template default is the same and the backfill SQL has no user column
+        // dependency — verified by the N32 file-level guards.)
         await Exec(cs, $@"
-INSERT INTO internal_users (actor_id, auth_user_id, template_id, display_name, profile_title)
-VALUES ('{tpl}-user', '{Guid.NewGuid()}', '{tpl}', 'N32 User', 'Admin');");
+INSERT INTO internal_users (actor_id, auth_user_id, template_id, display_name)
+VALUES ('{tpl}-user', '{Guid.NewGuid()}', '{tpl}', 'N32 User');");
 
         // N32 §3 backfill (replicated): deterministic default only.
         await Exec(cs, $@"
@@ -590,145 +681,300 @@ ON CONFLICT (template_id) DO NOTHING;");
             $"SELECT functional_profile FROM access_template_profiles WHERE template_id = '{tpl}';");
         // The deterministic default must win (no user profile copying).
         Assert.Equal("Operador / Controlador", profile);
-
-        // The user's legacy mirror still says 'Admin' — resolution authority
-        // is the template anyway; the mirror is NOT the source of truth.
-        var mirror = await CaptureScalar(cs,
-            $"SELECT profile_title FROM internal_users WHERE actor_id = '{tpl}-user';");
-        Assert.Equal("Admin", mirror);
     }
 
     // ----------------------------------------------------------------------
-    // N33 — legacy access mirror quiescence (SCHEMA-RAT-03B).
-    // Executed-PostgreSQL probes: after N33, ba_dmo_app holds NO privilege on
-    // the junction table, has no SELECT/INSERT/UPDATE path to
-    // internal_users.profile_title (its table-level SELECT/INSERT/UPDATE
-    // grants were revoked and re-issued at COLUMN level for every column
-    // except the retired mirror; DELETE stays table-level), and new user
-    // rows may be inserted without a value for the retired mirror column.
-    // Self-skipping: when the test database is still at N32 (column still
-    // NOT NULL) these probes skip. The connection role is expected to be the
-    // migration/owner role (can create roles when absent and SET ROLE).
+    // N35 — safe index / constraint rationalization (BQ-16 + redundant drop).
+    // Executed-PostgreSQL catalog probes: after N35, bq_movements carries the
+    // index ix_bq_movements_noted_repairer and pegamento_documentos NO longer
+    // carries the redundant standalone index ix_pegamento_documentos_controlo
+    // (the UNIQUE constraint index remains). Self-skipping mirrors N34.
     // ----------------------------------------------------------------------
 
     [Fact]
-    public async Task N33_JunctionPrivileges_AreRevoked_FromBaDmoApp()
+    public async Task N35_BqMovementsRepairerIndex_Exists_AndRedundantPegamentoIndex_IsGone()
     {
         if (SkipIfNoDatabase()) return;
         var cs = Cs!;
-        await EnsureRoleExistsAsync(cs, "ba_dmo_app");
-        if (await ProfileTitleStillNotNull(cs)) return; // N33 not applied
+        if (await AccessMirrorsStillPresent(cs)) return; // N34 not applied
 
-        // Catalog probe: no table privilege left for ba_dmo_app.
-        var grants = await ScalarInt(cs, $@"
-SELECT count(*) FROM information_schema.table_privileges
+        // BQ-16 additive index present on bq_movements (noted_repairer_id).
+        var bqIndex = await ScalarInt(cs, $@"
+SELECT count(*) FROM pg_indexes
+WHERE schemaname = 'public'
+  AND tablename = 'bq_movements'
+  AND indexname = 'ix_bq_movements_noted_repairer';");
+        Assert.Equal(1, bqIndex);
+
+        // The redundant standalone pegamento_documentos index is gone while
+        // the UNIQUE (pegamento_controlo_id) constraint index survives — the
+        // column stays served, the duplicate write maintenance does not.
+        var redundant = await ScalarInt(cs, $@"
+SELECT count(*) FROM pg_indexes
+WHERE schemaname = 'public'
+  AND tablename = 'pegamento_documentos'
+  AND indexname = 'ix_pegamento_documentos_controlo';");
+        Assert.Equal(0, redundant);
+        var unique = await ScalarInt(cs, $@"
+SELECT count(*) FROM pg_indexes
+WHERE schemaname = 'public'
+  AND tablename = 'pegamento_documentos'
+  AND indexdef LIKE '%UNIQUE%pegamento_controlo_id%';");
+        Assert.Equal(1, unique);
+    }
+
+    // ----------------------------------------------------------------------
+    // N36 — D-15 policy-name convention (access_template_profiles_app_access
+    // → ba_dmo_app_access).
+    // Executed-PostgreSQL catalog probe: AFTER N34+N36 every application table
+    // (60 = 61 N33-era tables minus the removed junction) carries EXACTLY ONE
+    // policy, named ba_dmo_app_access; no divergent name survives. The
+    // authorization body is asserted on access_template_profiles itself.
+    // ----------------------------------------------------------------------
+
+    [Fact]
+    public async Task N36_PolicyInventory_IsUniform_BaDmoAppAccess_Only()
+    {
+        if (SkipIfNoDatabase()) return;
+        var cs = Cs!;
+        if (await AccessMirrorsStillPresent(cs)) return; // N34 not applied
+
+        // Every RLS-enabled application table has exactly one policy and it is
+        // named ba_dmo_app_access (schema_migrations has RLS but no policy by
+        // design); the divergent naming is gone.
+        var divergent = await ScalarInt(cs, $@"
+SELECT count(*) FROM pg_policy p
+JOIN pg_class c ON c.oid = p.polrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public'
+  AND p.polname <> 'ba_dmo_app_access';");
+        Assert.Equal(0, divergent);
+
+        var tableCount = await ScalarInt(cs, $@"
+SELECT count(*) FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public' AND c.relkind = 'r'
+  AND c.relname <> 'schema_migrations';");
+        var policyCount = await ScalarInt(cs, $@"
+SELECT count(*) FROM pg_policy p
+JOIN pg_class c ON c.oid = p.polrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public'
+  AND p.polname = 'ba_dmo_app_access';");
+        Assert.Equal(tableCount, policyCount);
+
+        // Identity of semantics on access_template_profiles: the policy is the
+        // N12/N25/N29 convention body (FOR ALL TO ba_dmo_app, USING true,
+        // WITH CHECK true) owned by ba_dmo_app.
+        var semanticsOk = await ScalarInt(cs, $@"
+SELECT count(*) FROM pg_policy p
+JOIN pg_class c ON c.oid = p.polrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public' AND c.relname = 'access_template_profiles'
+  AND p.polname = 'ba_dmo_app_access'
+  AND p.polcmd = '*'
+  AND (SELECT oid FROM pg_roles WHERE rolname = 'ba_dmo_app') = ANY(p.polroles)
+  AND pg_get_expr(p.polqual, p.polrelid) = 'true'
+  AND pg_get_expr(p.polwithcheck, p.polrelid) = 'true';");
+        Assert.Equal(1, semanticsOk);
+    }
+
+    // ----------------------------------------------------------------------
+    // N39 — pegamento_medicoes.contra_costura nullable (owner D-12/OD-2:
+    // one-sided measurements NON-blocking). Executed-PostgreSQL probes;
+    // self-skipping when the test database has NOT applied N39 (column still
+    // NOT NULL).
+    // ----------------------------------------------------------------------
+
+    private static async Task<bool> ContraCosturaStillNotNull(string cs)
+    {
+        var notNull = await ScalarInt(cs, @"
+SELECT count(*) FROM information_schema.columns
 WHERE table_schema = 'public'
-  AND table_name = 'internal_user_access_templates'
-  AND grantee = 'ba_dmo_app';");
-        Assert.Equal(0, grants);
-
-        // Behaviour probe: a ba_dmo_app session is denied DML on the junction
-        // (the privilege check fails before any FK/constraint evaluation).
-        var state = await CaptureSqlStateAs(cs, "ba_dmo_app", $@"
-INSERT INTO internal_user_access_templates (actor_id, template_id, assigned_at_utc)
-VALUES ('n33-probe-{Guid.NewGuid():N}', 'tpl-n33-{Guid.NewGuid():N}', now());");
-        Assert.Equal("42501", state);
+  AND table_name = 'pegamento_medicoes'
+  AND column_name = 'contra_costura'
+  AND is_nullable = 'NO';");
+        return notNull >= 1;
     }
 
     [Fact]
-    public async Task N33_ProfileTitleColumnPrivileges_AreRevoked_FromBaDmoApp()
+    public async Task N39_ContraCostura_IsNullable()
     {
         if (SkipIfNoDatabase()) return;
         var cs = Cs!;
-        await EnsureRoleExistsAsync(cs, "ba_dmo_app");
-        if (await ProfileTitleStillNotNull(cs)) return; // N33 not applied
+        if (await ContraCosturaStillNotNull(cs)) return; // N39 not applied
 
-        // Catalog probe: the retired mirror column is inaccessible for
-        // SELECT/INSERT/UPDATE. (A table-level grant would imply all three —
-        // the N33 correction revokes table-level SELECT/INSERT/UPDATE and
-        // restores them column-level excluding the mirror.)
-        var mirrorGrants = await ScalarInt(cs, $@"
-SELECT count(*) FROM (VALUES
-    (has_column_privilege('ba_dmo_app', 'internal_users', 'profile_title', 'SELECT')),
-    (has_column_privilege('ba_dmo_app', 'internal_users', 'profile_title', 'INSERT')),
-    (has_column_privilege('ba_dmo_app', 'internal_users', 'profile_title', 'UPDATE'))) v(ok)
-WHERE ok;");
-        Assert.Equal(0, mirrorGrants);
-
-        // Catalog probe: representative canonical columns keep the intended
-        // column-level privileges (SELECT/INSERT/UPDATE).
-        var canonicalMissing = await ScalarInt(cs, $@"
-SELECT count(*) FROM (VALUES
-    (has_column_privilege('ba_dmo_app', 'internal_users', 'template_id', 'SELECT')),
-    (has_column_privilege('ba_dmo_app', 'internal_users', 'template_id', 'INSERT')),
-    (has_column_privilege('ba_dmo_app', 'internal_users', 'template_id', 'UPDATE')),
-    (has_column_privilege('ba_dmo_app', 'internal_users', 'display_name', 'SELECT')),
-    (has_column_privilege('ba_dmo_app', 'internal_users', 'display_name', 'INSERT')),
-    (has_column_privilege('ba_dmo_app', 'internal_users', 'display_name', 'UPDATE')),
-    (has_column_privilege('ba_dmo_app', 'internal_users', 'active', 'SELECT')),
-    (has_column_privilege('ba_dmo_app', 'internal_users', 'active', 'INSERT')),
-    (has_column_privilege('ba_dmo_app', 'internal_users', 'active', 'UPDATE'))) v(ok)
-WHERE NOT ok;");
-        Assert.Equal(0, canonicalMissing);
-
-        // Behaviour probes from a ba_dmo_app session: UPDATE, INSERT and
-        // SELECT of the retired mirror column are each denied (42501).
-        Assert.Equal("42501", await CaptureSqlStateAs(cs, "ba_dmo_app",
-            "UPDATE internal_users SET profile_title = 'Admin' WHERE FALSE;"));
-        Assert.Equal("42501", await CaptureSqlStateAs(cs, "ba_dmo_app", $@"
-INSERT INTO internal_users (actor_id, auth_user_id, template_id, display_name, profile_title)
-VALUES ('n33-probe-{Guid.NewGuid():N}', NULL, 'tpl-n33-{Guid.NewGuid():N}', 'N33 Mirror Insert', 'Admin');"));
-        Assert.Equal("42501", await CaptureSqlStateAs(cs, "ba_dmo_app",
-            "SELECT profile_title FROM internal_users WHERE FALSE;"));
-
-        // Behaviour probe: reading the canonical columns as ba_dmo_app
-        // succeeds (no privilege regression).
-        Assert.Null(await CaptureSqlStateAs(cs, "ba_dmo_app",
-            "SELECT template_id, display_name, active FROM internal_users WHERE FALSE;"));
+        var nullable = await ScalarInt(cs, @"
+SELECT count(*) FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'pegamento_medicoes'
+  AND column_name = 'contra_costura'
+  AND is_nullable = 'YES';");
+        Assert.Equal(1, nullable);
     }
 
     [Fact]
-    public async Task N33_NewUserRows_MayBeInserted_WithoutRetiredMirrorValue()
+    public async Task N39_OneSidedMeasurement_IsInsertable_AndNormalMeasurementStillWorks()
     {
         if (SkipIfNoDatabase()) return;
         var cs = Cs!;
-        await EnsureRoleExistsAsync(cs, "ba_dmo_app");
-        if (await ProfileTitleStillNotNull(cs)) return; // N33 not applied
+        if (await ContraCosturaStillNotNull(cs)) return; // N39 not applied
 
-        var tpl = "tpl-n33-null-" + Guid.NewGuid().ToString("N")[..8];
-        await EnsureTemplateAsync(cs, tpl);
-        var actor = "n33-null-" + Guid.NewGuid().ToString("N")[..8];
+        // Seed a pegamento control (rascunho) + revision context.
+        var (jobId, revId) = await SeedJobWithRevisionAsync(cs, "M-PEG");
+        var controlId = Guid.NewGuid().ToString();
+        await Exec(cs, $@"
+INSERT INTO pegamento_controlos (
+    pegamento_controlo_id, job_on_id, job_on_revision_id, production_code, machine_code, status)
+VALUES ('{controlId}', '{jobId}', '{revId}', 'N39-PG-{Guid.NewGuid():N}', 'B1', 'aberto');");
 
-        // The whole probe runs as ba_dmo_app inside ONE transaction that is
-        // ROLLED BACK, so the shared test database is left untouched.
-        string? state = null;
-        await using var conn = new NpgsqlConnection(cs);
-        await conn.OpenAsync();
-        await using var tx = await conn.BeginTransactionAsync();
-        try
-        {
-            await using (var setRole = new NpgsqlCommand("SET ROLE ba_dmo_app", conn, tx))
-                await setRole.ExecuteNonQueryAsync();
+        // One-sided CM measurement: contra_costura NULL — must NOT raise 23502.
+        var oneSided = await CaptureSqlState(cs, $@"
+INSERT INTO pegamento_medicoes (
+    pegamento_medicao_id, pegamento_controlo_id, component_key, tool_number,
+    costura, contra_costura, measured_at_utc, actor_id)
+VALUES ('{Guid.NewGuid():N}', '{controlId}', 'CM', 7, 52.3000, NULL, now(), 'pg-actor');");
+        Assert.Null(oneSided);
 
-            try
-            {
-                await using var insert = new NpgsqlCommand($@"
-INSERT INTO internal_users (actor_id, auth_user_id, template_id, display_name)
-VALUES ('{actor}', '{Guid.NewGuid()}', '{tpl}', 'N33 Null Mirror');", conn, tx);
-                await insert.ExecuteNonQueryAsync();
-            }
-            catch (PostgresException ex)
-            {
-                state = ex.SqlState;
-            }
-        }
-        finally
-        {
-            await tx.RollbackAsync(); // data + role switch all restored
-        }
+        // Normal two-sided measurement still persists.
+        var twoSided = await CaptureSqlState(cs, $@"
+INSERT INTO pegamento_medicoes (
+    pegamento_medicao_id, pegamento_controlo_id, component_key, tool_number,
+    costura, contra_costura, measured_at_utc, actor_id)
+VALUES ('{Guid.NewGuid():N}', '{controlId}', 'CM', 8, 52.3000, 52.0000, now(), 'pg-actor');");
+        Assert.Null(twoSided);
 
-        // Inserting a user WITHOUT the retired mirror column succeeds under
-        // the N33 schema (column nullable; no mirror writer required).
-        Assert.Null(state);
+        var nullCount = await ScalarInt(cs, $@"
+SELECT count(*) FROM pegamento_medicoes
+WHERE pegamento_controlo_id = '{controlId}' AND contra_costura IS NULL;");
+        Assert.Equal(1, nullCount);
+    }
+
+    // ----------------------------------------------------------------------
+    // N40 — approved Peso readings protection (owner D-10/OD-3 Go).
+    // Executed-PostgreSQL probes; self-skipping when the test database has
+    // NOT applied N40 (guard trigger absent).
+    // ----------------------------------------------------------------------
+
+    private static async Task<bool> N40GuardAbsent(string cs)
+    {
+        var triggers = await ScalarInt(cs, @"
+SELECT count(*) FROM pg_trigger t
+JOIN pg_class c ON c.oid = t.tgrelid
+WHERE c.relname = 'peso_leituras'
+  AND t.tgname = 'trg_peso_leituras_approved_guard'
+  AND NOT t.tgisinternal;");
+        return triggers < 1;
+    }
+
+    private static async Task<string> SeedPesoControloWithReadingAsync(
+        string cs, string jobId, string revId, string status, bool withApprovedAt)
+    {
+        var controlId = await SeedPesoControloAsync(cs, jobId, revId, status, withApprovedAt);
+        await Exec(cs, $@"
+INSERT INTO peso_leituras (peso_leitura_id, peso_controlo_id, cm_number, readings)
+VALUES ('{Guid.NewGuid():N}', '{controlId}', '{Guid.NewGuid():N}', '{{}}')
+ON CONFLICT (peso_controlo_id, cm_number) DO NOTHING;");
+        return controlId;
+    }
+
+    [Fact]
+    public async Task N40_ApprovedControl_ReadingsDml_IsRejected()
+    {
+        if (SkipIfNoDatabase()) return;
+        var cs = Cs!;
+        if (await N40GuardAbsent(cs)) return; // N40 not applied
+        var (jobId, revId) = await SeedJobWithRevisionAsync(cs, "M-RDG");
+        var controlId = await SeedPesoControloWithReadingAsync(cs, jobId, revId, "aprovado", withApprovedAt: true);
+
+        // INSERT of an extra reading under an approved parent — denied.
+        var ins = await CaptureMessage(cs, $@"
+INSERT INTO peso_leituras (peso_leitura_id, peso_controlo_id, cm_number, readings)
+VALUES ('{Guid.NewGuid():N}', '{controlId}', '{Guid.NewGuid():N}', '{{}}');");
+        Assert.Contains("approved peso control", ins, StringComparison.OrdinalIgnoreCase);
+
+        // UPDATE of an existing reading — denied.
+        var upd = await CaptureMessage(cs, $@"
+UPDATE peso_leituras SET readings = '{{}}' WHERE peso_controlo_id = '{controlId}';");
+        Assert.Contains("approved peso control", upd, StringComparison.OrdinalIgnoreCase);
+
+        // DELETE of an existing reading — denied.
+        var del = await CaptureMessage(cs, $@"
+DELETE FROM peso_leituras WHERE peso_controlo_id = '{controlId}';");
+        Assert.Contains("approved peso control", del, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task N40_DraftReadingsRemainEditable_AndReopenRestoresEditability()
+    {
+        if (SkipIfNoDatabase()) return;
+        var cs = Cs!;
+        if (await N40GuardAbsent(cs)) return; // N40 not applied
+        var (jobId, revId) = await SeedJobWithRevisionAsync(cs, "M-RDG2");
+        var controlId = await SeedPesoControloWithReadingAsync(cs, jobId, revId, "rascunho", withApprovedAt: false);
+
+        // Draft parent: readings INSERT/UPDATE/DELETE are allowed (guard silent).
+        Assert.Null(await CaptureSqlState(cs, $@"
+INSERT INTO peso_leituras (peso_leitura_id, peso_controlo_id, cm_number, readings)
+VALUES ('{Guid.NewGuid():N}', '{controlId}', '{Guid.NewGuid():N}', '{{}}');"));
+        Assert.Null(await CaptureSqlState(cs, $@"
+UPDATE peso_leituras SET readings = '{{}}' WHERE peso_controlo_id = '{controlId}';"));
+        Assert.True(await Exec(cs, $@"
+DELETE FROM peso_leituras WHERE peso_controlo_id = '{controlId}';") >= 1);
+
+        // Approve the control (header flip + approval stamp — readings untouched).
+        Assert.Null(await CaptureSqlState(cs, $@"
+UPDATE peso_controlos SET status = 'aprovado', approved_at_utc = now()
+WHERE peso_controlo_id = '{controlId}';"));
+
+        // After approval, readings DML is rejected…
+        var blocked = await CaptureMessage(cs, $@"
+DELETE FROM peso_leituras WHERE peso_controlo_id = '{controlId}';");
+        Assert.Contains("approved peso control", blocked, StringComparison.OrdinalIgnoreCase);
+
+        // …and the audited reopen (status back to rascunho, approval stamp
+        // cleared) restores editability — the reopen transaction itself never
+        // touches readings.
+        Assert.Null(await CaptureSqlState(cs, $@"
+UPDATE peso_controlos SET status = 'rascunho', approved_at_utc = NULL
+WHERE peso_controlo_id = '{controlId}';"));
+        Assert.Null(await CaptureSqlState(cs, $@"
+INSERT INTO peso_leituras (peso_leitura_id, peso_controlo_id, cm_number, readings)
+VALUES ('{Guid.NewGuid():N}', '{controlId}', '{Guid.NewGuid():N}', '{{}}');"));
+    }
+
+    // ----------------------------------------------------------------------
+    // N42 — tool_check_occurrences REMOVAL (owner OD-6/PA-01).
+    // Executed-PostgreSQL probes; self-skipping when the test database has
+    // NOT applied N42 (table still present).
+    // ----------------------------------------------------------------------
+
+    [Fact]
+    public async Task N42_OccurrenceTwin_IsAbsent_AndAnyDmlRaises42P01()
+    {
+        if (SkipIfNoDatabase()) return;
+        var cs = Cs!;
+
+        var tables = await ScalarInt(cs, @"
+SELECT count(*) FROM information_schema.tables
+WHERE table_schema = 'public'
+  AND table_name = 'tool_check_occurrences';");
+        if (tables >= 1) return; // N42 not applied
+
+        // Behaviour probe: naming the removed table in DML fails with 42P01.
+        var state = await CaptureSqlState(cs, $@"
+INSERT INTO tool_check_occurrences (tool_check_occurrence_id, tool_check_rule_id)
+VALUES ('{Guid.NewGuid():N}', '{Guid.NewGuid():N}');");
+        Assert.Equal("42P01", state);
+
+        // Its CHECK constraints and indexes are gone with the table.
+        var checkCount = await ScalarInt(cs, @"
+SELECT count(*) FROM pg_constraint
+WHERE conname LIKE 'ck_tool_check_occurrences_%';");
+        Assert.Equal(0, checkCount);
+        var indexCount = await ScalarInt(cs, @"
+SELECT count(*) FROM pg_indexes
+WHERE schemaname = 'public' AND indexname LIKE 'ix_tool_check_occurrences_%';");
+        Assert.Equal(0, indexCount);
     }
 }

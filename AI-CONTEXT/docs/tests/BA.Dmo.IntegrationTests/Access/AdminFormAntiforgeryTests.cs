@@ -434,18 +434,6 @@ public class AdminFormAntiforgeryTests : IClassFixture<AdminFormAntiforgeryTests
             return Task.FromResult(true);
         }
 
-        public Task SetUserModulesOverrideAsync(
-            string actorId, string modulesJson, DateTimeOffset expectedUpdatedAt,
-            DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default)
-        {
-            Writes.Add("set_modules_override");
-            return Task.CompletedTask;
-        }
-
-        public Task<int> CountActiveAdminsAsync(
-            string? excludeActorId = null, CancellationToken cancellationToken = default) =>
-            Task.FromResult(1);
-
         public Task<IReadOnlyList<AdminTemplateRow>> ListTemplatesAsync(
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<AdminTemplateRow>>(

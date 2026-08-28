@@ -11,22 +11,3 @@ public enum TampaoBalanceKind
     Enchidos,
     PorEncher
 }
-
-/// <summary>Codec between the domain enum and domain identifiers.</summary>
-public static class TampaoBalanceKindCodec
-{
-    /// <summary>Column/balance-friendly identifier (storage-agnostic).</summary>
-    public static string ToKey(TampaoBalanceKind kind) => kind switch
-    {
-        TampaoBalanceKind.Enchidos => "enchidos",
-        TampaoBalanceKind.PorEncher => "por_encher",
-        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, $"Unknown balance kind: {kind}")
-    };
-
-    public static TampaoBalanceKind FromKey(string? value) => value?.Trim().ToLowerInvariant() switch
-    {
-        "enchidos" => TampaoBalanceKind.Enchidos,
-        "por_encher" => TampaoBalanceKind.PorEncher,
-        _ => throw new InvalidOperationException($"Unknown balance kind: {value}")
-    };
-}

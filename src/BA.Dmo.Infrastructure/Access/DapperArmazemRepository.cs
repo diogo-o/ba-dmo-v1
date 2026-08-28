@@ -124,21 +124,6 @@ LIMIT 1;";
         finally { await DisposeAsync(conn); }
     }
 
-    public async Task<IReadOnlyList<WarehouseStock>> GetActiveStocksAsync(CancellationToken ct = default)
-    {
-        const string sql = @"
-SELECT warehouse_stock_id, warehouse_location_id, tool_lote_id,
-       occupied_since_utc, occupied_by, released_at_utc, released_by
-FROM warehouse_stock WHERE released_at_utc IS NULL;";
-        var conn = await Open(_connectionFactory, ct);
-        try
-        {
-            var rows = await Db.QueryAsync<dynamic>(conn, sql, cancellationToken: ct);
-            return rows.Select<dynamic, WarehouseStock>(r => MapStock(r)).ToList().AsReadOnly();
-        }
-        finally { await DisposeAsync(conn); }
-    }
-
     public async Task<IReadOnlyList<WarehouseStock>> GetStockByLocationAsync(Guid warehouseLocationId, CancellationToken ct = default)
     {
         const string sql = @"
@@ -149,21 +134,6 @@ FROM warehouse_stock WHERE warehouse_location_id = @LocationId;";
         try
         {
             var rows = await Db.QueryAsync<dynamic>(conn, sql, new { LocationId = warehouseLocationId }, cancellationToken: ct);
-            return rows.Select<dynamic, WarehouseStock>(r => MapStock(r)).ToList().AsReadOnly();
-        }
-        finally { await DisposeAsync(conn); }
-    }
-
-    public async Task<IReadOnlyList<WarehouseStock>> GetStockByToolIdAsync(Guid toolId, CancellationToken ct = default)
-    {
-        const string sql = @"
-SELECT warehouse_stock_id, warehouse_location_id, tool_lote_id,
-       occupied_since_utc, occupied_by, released_at_utc, released_by
-FROM warehouse_stock WHERE tool_lote_id = @ToolId;";
-        var conn = await Open(_connectionFactory, ct);
-        try
-        {
-            var rows = await Db.QueryAsync<dynamic>(conn, sql, new { ToolId = toolId }, cancellationToken: ct);
             return rows.Select<dynamic, WarehouseStock>(r => MapStock(r)).ToList().AsReadOnly();
         }
         finally { await DisposeAsync(conn); }
@@ -252,44 +222,6 @@ WHERE warehouse_stock_id = @Id AND released_at_utc IS NULL;";
 
             var mv = ToMovementWithStock(movement, stockId);
             await InsertMovementAsync(conn, tx, mv, ct);
-            return true;
-        }, ct);
-    }
-
-    public async Task ReplaceOccupationAsync(
-        Guid currentStockId, WarehouseStock newStock, WarehouseMovement outMovement, WarehouseMovement inMovement, CancellationToken ct = default)
-    {
-        await DapperUnitOfWork.RunAsync(_connectionFactory, async (conn, tx, _) =>
-        {
-            const string releaseSql = @"
-UPDATE warehouse_stock
-SET released_at_utc = @ReleasedAtUtc, released_by = @ReleasedBy
-WHERE warehouse_stock_id = @Id AND released_at_utc IS NULL;";
-            var affected = await Db.ExecuteAsync(conn, releaseSql, new
-            {
-                Id = currentStockId,
-                ReleasedAtUtc = newStock.OccupiedSinceUtc,
-                ReleasedBy = (object?)newStock.OccupiedBy ?? DBNull.Value
-            }, tx, ct);
-            ConcurrencyGuard.EnsureSingleRowUpdated(affected, "warehouse_stock (substituir)");
-
-            const string insertSql = @"
-INSERT INTO warehouse_stock
-    (warehouse_stock_id, warehouse_location_id, tool_lote_id,
-     occupied_since_utc, occupied_by)
-VALUES
-    (@Id, @LocationId, @ToolId, @OccupiedSinceUtc, @OccupiedBy);";
-            await Db.ExecuteAsync(conn, insertSql, new
-            {
-                Id = newStock.WarehouseStockId,
-                LocationId = newStock.WarehouseLocationId,
-                ToolId = newStock.ToolId,
-                OccupiedSinceUtc = newStock.OccupiedSinceUtc,
-                OccupiedBy = (object?)newStock.OccupiedBy ?? DBNull.Value
-            }, tx, ct);
-
-            await InsertMovementAsync(conn, tx, ToMovementWithStock(outMovement, currentStockId), ct);
-            await InsertMovementAsync(conn, tx, ToMovementWithStock(inMovement, newStock.WarehouseStockId), ct);
             return true;
         }, ct);
     }

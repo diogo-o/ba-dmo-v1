@@ -34,7 +34,7 @@ public sealed class DapperInternalUserRepository : IInternalUserRepository
                t.name                 AS TemplateName,
                t.active               AS TemplateActive,
                t.modules::text        AS ModulesJson,
-               u.modules_override::text AS ModulesOverrideJson,
+               NULL::text             AS ModulesOverrideJson, -- N38 removed dormant override column
                p.functional_profile   AS FunctionalProfile
         FROM internal_users u
         JOIN access_templates t ON t.template_id = u.template_id

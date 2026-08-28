@@ -112,6 +112,51 @@ public class PesoControlWorkflowTests
         Assert.Equal("PESO_CONTROL_REOPEN_REASON", error!.Code);
     }
 
+    // ---- N40: in-place editing is confined to rascunho/nao_aprovado -----
+
+    [Fact]
+    public void ValidateEditable_ApprovedEvenWithReason_IsBlocked()
+    {
+        var control = NewControl();
+        control.Submit();
+        control.Approve("user-9", Now);
+
+        // A non-empty change reason must NOT unlock an in-place edit of an
+        // approved baseline — the explicit reopen is the only path (N40).
+        var error = PesoValidator.ValidateControlEditable(
+            PesoControlStateCodec.ToStorage(control.Status), reason: "corrigir leitura");
+
+        Assert.NotNull(error);
+        Assert.Equal("PESO_CONTROL_REOPEN_REASON", error!.Code);
+    }
+
+    [Fact]
+    public void ValidateEditable_PendenteEvenWithReason_IsBlocked()
+    {
+        var control = NewControl();
+        control.Submit();
+
+        var error = PesoValidator.ValidateControlEditable(
+            PesoControlStateCodec.ToStorage(control.Status), reason: "corrigir antes da decisão");
+
+        Assert.NotNull(error);
+        Assert.Equal("PESO_CONTROL_REOPEN_REASON", error!.Code);
+    }
+
+    [Fact]
+    public void ValidateEditable_Rascunho_And_NaoAprovado_AreEditable()
+    {
+        var draft = NewControl();
+        Assert.Null(PesoValidator.ValidateControlEditable(
+            PesoControlStateCodec.ToStorage(draft.Status), reason: null));
+
+        var rejected = NewControl();
+        rejected.Submit();
+        rejected.Reject("nota");
+        Assert.Null(PesoValidator.ValidateControlEditable(
+            PesoControlStateCodec.ToStorage(rejected.Status), reason: null));
+    }
+
     [Fact]
     public void Reopen_ApprovedControl_IncrementsRevisionAndBackToRascunho()
     {
@@ -185,15 +230,5 @@ public class PesoControlWorkflowTests
         Assert.Equal(PesoControlState.Aprovado, baseControl.Status);
         Assert.Equal(baseDecisionSnapshot, baseControl.ComparisonDecisionsJson);
         Assert.Equal(PesoControlState.Pendente, comparison.Status);
-    }
-
-    [Fact]
-    public void CmDecisionCodec_RoundTrips()
-    {
-        Assert.Equal("manter", PesoCmDecisionCodec.ToStorage(PesoCmDecision.Manter));
-        Assert.Equal("colocar_de_parte", PesoCmDecisionCodec.ToStorage(PesoCmDecision.ColocarDeParte));
-        Assert.Equal(PesoCmDecision.ColocarDeParte, PesoCmDecisionCodec.Parse("aside"));
-        Assert.Equal(PesoCmDecision.None, PesoCmDecisionCodec.Parse(null));
-        Assert.Equal(PesoCmDecision.None, PesoCmDecisionCodec.Parse(""));
     }
 }

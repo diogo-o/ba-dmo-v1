@@ -5,7 +5,8 @@ namespace BA.Dmo.Domain.Modules.JobOn;
 /// <summary>
 /// Immutable revision snapshot per N05 (TD-18). Each Save creates a NEW revision
 /// - never UPDATE of saved revisions. Revision_id is pinned by downstream consumers
-/// (Peso, Pegamentos) for historical attribution. image_asset_id is LOGICAL metadata only.
+/// (Peso, Pegamentos) for historical attribution. Article images are reference-owned;
+/// the legacy revision-level property remains only as an in-memory compatibility slot.
 /// </summary>
 public sealed record JobOnRevision
 {
@@ -51,7 +52,7 @@ public sealed record JobOnRevision
     /// <summary>General notes field.</summary>
     public string? GeneralNotes { get; init; }
 
-    /// <summary>image_asset_id - LOGICAL metadata ONLY, not binary (TD-23).</summary>
+    /// <summary>Legacy in-memory compatibility slot; persistence keeps it NULL after N38.</summary>
     public string? ImageAssetId { get; init; }
 
     /// <summary>Change reason (mandatory when editing closed revision).</summary>

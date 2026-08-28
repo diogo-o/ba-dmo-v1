@@ -315,6 +315,16 @@ O sinal da Ovalização é preservado. O sinal pode ser funcionalmente relevante
 
 A Média representa o valor médio entre as duas medições. Ela é uma informação útil, mas não substitui as medições individuais.
 
+### Medição de um só eixo (ausência de Contra costura)
+
+Uma medição nunca é bloqueada apenas porque um dos lados/eixos não está presente. Quando Contra costura não é medida ou não se aplica, a medição é válida e fica registada com Contra costura em falta (NULL):
+
+*   Ovalização fica indefinida/ausente (não é calculada);
+*   Média assume o valor da Costura (valor único) — Média = Costura;
+*   o corredor de tolerância aplica-se à Média nesse caso.
+
+Quando Contra costura é fornecida, o comportamento normal mantém-se (Ovalização = Costura − Contra costura; Média = (Costura + Contra costura) / 2). A ausência de Contra costura não pode originar bloqueio na base de dados, no serviço, na validação, nem erro cru 23502.
+
 ### Aplicação independente
 
 O controlo aplica-se independentemente a:

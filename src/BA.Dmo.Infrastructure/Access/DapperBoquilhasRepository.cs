@@ -5,6 +5,7 @@ using BA.Dmo.Application.Shared.Persistence;
 using BA.Dmo.Domain.Modules.Boquilhas;
 using BA.Dmo.Infrastructure.Persistence;
 using Dapper;
+using Npgsql;
 
 namespace BA.Dmo.Infrastructure.Access;
 
@@ -86,39 +87,29 @@ LIMIT @PageSize OFFSET @Offset;";
         finally { await DisposeAsync(conn); }
     }
 
-    public async Task<int> CountLotesAsync(BqLoteFilter filter, CancellationToken ct = default)
-    {
-        const string sql = @"
-SELECT COUNT(*) FROM bq_lotes
-WHERE (@Search IS NULL OR reference ILIKE '%' || @Search || '%' OR batch_code ILIKE '%' || @Search || '%')
-  AND (@OnlyAvailable = FALSE OR lifecycle_state = 'available')
-  AND (@Lifecycle IS NULL OR lifecycle_state = @Lifecycle);";
-        var conn = await Open(ct);
-        try
-        {
-            return await Db.ExecuteScalarAsync<int>(conn, sql, new
-            {
-                Search = filter.Search,
-                OnlyAvailable = filter.OnlyAvailable == true,
-                Lifecycle = filter.LifecycleState is null ? null : BqLifecycleStateCodec.ToStorage(filter.LifecycleState.Value)
-            }, cancellationToken: ct);
-        }
-        finally { await DisposeAsync(conn); }
-    }
-
-    public Task CreateLoteAsync(IDbUnitOfWork uow, BqLote lote, CancellationToken ct = default)
+    public async Task CreateLoteAsync(IDbUnitOfWork uow, BqLote lote, CancellationToken ct = default)
     {
         const string sql = @"
 INSERT INTO bq_lotes (bq_lote_id, reference, batch_code, allowed_lines, lifecycle_state,
                       created_by, created_at_utc, updated_at_utc)
 VALUES (@Id, @Reference, @BatchCode, @AllowedLines, @LifecycleState,
         @CreatedBy, @CreatedAtUtc, @UpdatedAtUtc);";
-        return Db.ExecuteAsync(uow.Connection, sql, new
+        try
         {
-            Id = lote.BqLoteId, lote.Reference, lote.BatchCode, AllowedLines = lote.AllowedLines.ToArray(),
-            LifecycleState = BqLifecycleStateCodec.ToStorage(lote.LifecycleState),
-            CreatedBy = (object?)lote.CreatedBy ?? DBNull.Value, lote.CreatedAtUtc, lote.UpdatedAtUtc
-        }, uow.Transaction, ct);
+            await Db.ExecuteAsync(uow.Connection, sql, new
+            {
+                Id = lote.BqLoteId, lote.Reference, lote.BatchCode, AllowedLines = lote.AllowedLines.ToArray(),
+                LifecycleState = BqLifecycleStateCodec.ToStorage(lote.LifecycleState),
+                CreatedBy = (object?)lote.CreatedBy ?? DBNull.Value, lote.CreatedAtUtc, lote.UpdatedAtUtc
+            }, uow.Transaction, ct);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            // uq_bq_lotes_reference_batch — a concurrent create already inserted
+            // the same (reference, batch_code) (audit BQ-15).
+            throw new BqLoteDuplicateException(
+                $"Já existe um lote {lote.BatchCode} para a referência {lote.Reference}.");
+        }
     }
 
     public Task UpdateLoteAsync(IDbUnitOfWork uow, BqLote lote, CancellationToken ct = default)
@@ -263,9 +254,6 @@ FROM bq_movements WHERE bq_trace_id = @TraceId ORDER BY occurred_at_utc, bq_move
         finally { await DisposeAsync(conn); }
     }
 
-    public async Task<IReadOnlyList<BqMovement>> ListMovementsByLoteAsync(Guid bqLoteId, BqHistoryFilter filter, CancellationToken ct = default)
-        => await ListMovementsAsync(filter with { BqLoteId = bqLoteId }, ct);
-
     public async Task<IReadOnlyList<BqMovement>> ListMovementsAsync(BqHistoryFilter filter, CancellationToken ct = default)
     {
         var sql = @"
@@ -322,25 +310,6 @@ WHERE (@LoteId IS NULL OR t.bq_lote_id = @LoteId)
         finally { await DisposeAsync(conn); }
     }
 
-    public Task VoidMovementAsync(IDbUnitOfWork uow, Guid bqTraceId, Guid bqMovementId, CancellationToken ct = default)
-        => Db.ExecuteAsync(uow.Connection, @"
-UPDATE bq_traces
-SET deleted_movements = deleted_movements || to_jsonb(@MovementId::text),
-    updated_at_utc = now()
-WHERE bq_trace_id = @TraceId;", new { TraceId = bqTraceId, MovementId = bqMovementId.ToString() }, uow.Transaction, ct);
-
-    public async Task<IReadOnlySet<Guid>> ListVoidedMovementIdsAsync(Guid bqTraceId, CancellationToken ct = default)
-    {
-        const string sql = "SELECT deleted_movements FROM bq_traces WHERE bq_trace_id = @Id;";
-        var conn = await Open(ct);
-        try
-        {
-            var raw = await Db.ExecuteScalarAsync<string>(conn, sql, new { Id = bqTraceId }, cancellationToken: ct);
-            return ParseGuidJsonArray(raw);
-        }
-        finally { await DisposeAsync(conn); }
-    }
-
     // ---- Utilisation ----------------------------------------------------------------
 
     public Task InsertUtilisationReadingAsync(IDbUnitOfWork uow, BqUtilisationReading reading, CancellationToken ct = default)
@@ -365,22 +334,6 @@ VALUES (@Id, @TraceId, @Kind, @Value, @ActorId, @OccurredAtUtc);", new
     }
 
     // ---- Discrepancies ----------------------------------------------------------------
-
-    public async Task<BqDiscrepancy?> GetOpenDiscrepancyForTraceAsync(Guid bqLoteId, Guid? bqTraceId, CancellationToken ct = default)
-    {
-        var conn = await Open(ct);
-        try
-        {
-            dynamic? row = await Db.QuerySingleOrDefaultAsync<dynamic>(conn, @"
-SELECT bq_discrepancy_id, bq_lote_id, bq_trace_id, expected_qty, actual_qty, excess_qty,
-       status, resolution_note, resolved_by, resolved_at_utc, created_by, created_at_utc
-FROM bq_discrepancies
-WHERE bq_lote_id = @LoteId AND (@TraceId IS NULL OR bq_trace_id = @TraceId) AND status = 'open'
-ORDER BY created_at_utc DESC LIMIT 1;", new { LoteId = bqLoteId, TraceId = bqTraceId }, cancellationToken: ct);
-            return row is null ? null : MapDiscrepancy(row);
-        }
-        finally { await DisposeAsync(conn); }
-    }
 
     public Task InsertDiscrepancyAsync(IDbUnitOfWork uow, BqDiscrepancy discrepancy, CancellationToken ct = default)
         => Db.ExecuteAsync(uow.Connection, @"
@@ -522,24 +475,6 @@ VALUES (@Id, @Name, @Active, @CreatedAtUtc, @UpdatedAtUtc);", new
             else
                 await Db.ExecuteAsync(conn, "UPDATE repairers SET name = @Name, updated_at_utc = @UpdatedAtUtc WHERE repairer_id = @Id;",
                     new { Id = repairer.RepairerId, Name = repairer.Name, UpdatedAtUtc = repairer.UpdatedAtUtc }, cancellationToken: ct);
-        }
-        finally { await DisposeAsync(conn); }
-    }
-
-    public async Task<BqLineRepairerDefault?> GetLineRepairerDefaultAsync(string line, CancellationToken ct = default)
-    {
-        var conn = await Open(ct);
-        try
-        {
-            dynamic? row = await Db.QuerySingleOrDefaultAsync<dynamic>(conn, @"
-SELECT line, tool_type, repairer_id
-FROM line_repairer_defaults WHERE line = @Line AND tool_type = 'BQ';",
-                new { Line = line }, cancellationToken: ct);
-            return row is null ? null : new BqLineRepairerDefault
-            {
-                Line = line,
-                DefaultRepairerId = row.repairer_id as Guid?
-            };
         }
         finally { await DisposeAsync(conn); }
     }

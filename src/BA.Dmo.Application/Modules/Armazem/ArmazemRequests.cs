@@ -19,14 +19,6 @@ public sealed record RegistrarSaidaRequest(
     string? Destination,
     string? Observations);
 
-/// <summary>Replace the tool occupying a position with another tool (one atomic workflow).</summary>
-public sealed record SubstituirRequest(
-    string PositionCode,
-    string NewToolType,
-    string? NewReference,
-    string? NewLot,
-    string? Observations);
-
 /// <summary>Search tools or positions (Consulta).</summary>
 public sealed record ConsultarRequest(
     string? ToolType,

@@ -217,7 +217,7 @@ public sealed class PesoControl
 
 /// <summary>
 /// A resolved previous-approved-control fact for deltas (TD-13/TD-30;
-/// <c>peso_comparacao_anterior</c>). Same mold+neckring, strictly earlier
+/// <c>peso_controlos.previous_control</c>). Same mold+neckring, strictly earlier
 /// production/date, CROSS-LINE. Null when none exists → deltas stay null.
 /// </summary>
 public sealed record PesoControloAnterior(

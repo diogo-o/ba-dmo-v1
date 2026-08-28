@@ -453,6 +453,14 @@ public sealed class TampaoService
             await uow.CommitAsync(ct);
             return Result<Guid, DomainError>.Success(movementId);
         }
+        catch (TampaoConfigurationDuplicateException)
+        {
+            // uq_tampao_configurations_values raced (audit TP-06): the destination
+            // configuration was created concurrently by another transformation.
+            return Result<Guid, DomainError>.Failure(DomainError.DomainConflict(
+                "TAMPAO_CONFIGURATION_DUPLICATE",
+                "Já existe uma configuração com estes valores."));
+        }
         catch (Exception)
         {
             return Result<Guid, DomainError>.Failure(DomainError.Unexpected(

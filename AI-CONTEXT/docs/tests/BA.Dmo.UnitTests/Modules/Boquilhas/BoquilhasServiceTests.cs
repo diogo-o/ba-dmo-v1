@@ -54,6 +54,23 @@ public class BoquilhasServiceTests
     }
 
     [Fact]
+    public async Task CreateLote_ConcurrentDuplicate_Raw23505_MapsToSameCleanConflict()
+    {
+        var repo = new FakeBoquilhasRepository();
+        repo.FailLoteDuplicate = true; // uq_bq_lotes_reference_batch raced (audit BQ-15)
+        var service = BuildService(repo);
+
+        var result = await service.CreateLoteWithTraceAsync(new CreateBqLoteRequest(
+            "T194", "12", new[] { "B1" }, 60, null, null));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("BQ_DUPLICATE_LOT", result.Error.Code); // same code as the fast-path pre-check
+        Assert.Empty(repo.Lotes);
+        Assert.Empty(repo.Traces);
+        Assert.Empty(repo.Movements);
+    }
+
+    [Fact]
     public async Task InvalidReference_IsRejected()
     {
         var service = BuildService(new FakeBoquilhasRepository());
@@ -162,7 +179,7 @@ public class BoquilhasServiceTests
         var trace = repo.SeedActiveTrace(lote, 60);
         var service = BuildService(repo);
 
-        var result = await service.CloseTraceAsync(new CloseBqTraceRequest(lote.BqLoteId, trace.BqTraceId, 60, 40, "fim"));
+        var result = await service.CloseTraceAsync(new CloseBqTraceRequest(lote.BqLoteId, trace.BqTraceId, 40, "fim"));
 
         Assert.True(result.IsSuccess);
         Assert.Equal(BqTraceStatus.Closed, trace.Status);

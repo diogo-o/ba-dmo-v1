@@ -3,6 +3,7 @@ using BA.Dmo.Application.Modules.JobOn;
 using BA.Dmo.Application.Modules.Pegamentos;
 using BA.Dmo.Application.Shared;
 using BA.Dmo.Application.Shared.Identity;
+using BA.Dmo.Application.Shared.Persistence;
 using BA.Dmo.Domain.Modules.Pegamentos;
 using BA.Dmo.Domain.Shared.Kernel;
 using Microsoft.AspNetCore.Mvc;
@@ -192,16 +193,17 @@ public class PegamentoWebApiTests : IClassFixture<PegamentoWebApiTests.PegFixtur
 
         private sealed class FakePegRepo : IPegamentoRepository
         {
-            public Task<Guid> CreateAsync(PegamentoControlo control, CancellationToken ct = default) => Task.FromResult(control.PegamentoControloId);
+            public Task<Guid> CreateAsync(IDbUnitOfWork uow, PegamentoControlo control, CancellationToken ct = default) => Task.FromResult(control.PegamentoControloId);
             public Task<PegamentoControlo?> GetByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult<PegamentoControlo?>(null);
+            public Task<PegamentoControlo?> GetByIdInTransactionAsync(IDbUnitOfWork uow, Guid id, CancellationToken ct = default) => Task.FromResult<PegamentoControlo?>(null);
             public Task<IReadOnlyList<PegamentoControlo>> GetByRevisionAsync(Guid jobOnRevisionId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<PegamentoControlo>>(Array.Empty<PegamentoControlo>());
             public Task<IReadOnlyList<PegamentoControlo>> GetByJobOnAsync(Guid jobOnId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<PegamentoControlo>>(Array.Empty<PegamentoControlo>());
             public Task<IReadOnlyList<PegamentoControlo>> SearchAsync(string? reference, string? productionCode, string? machine, DateTime? from, DateTime? to, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<PegamentoControlo>>(Array.Empty<PegamentoControlo>());
-            public Task UpdateAsync(PegamentoControlo control, CancellationToken ct = default) => Task.CompletedTask;
-            public Task<Guid> AddMeasurementAsync(Guid controloId, PegamentoMedicao medicao, string actorId, CancellationToken ct = default) => Task.FromResult(Guid.NewGuid());
+            public Task UpdateAsync(IDbUnitOfWork uow, PegamentoControlo control, CancellationToken ct = default) => Task.CompletedTask;
+            public Task<Guid> AddMeasurementAsync(IDbUnitOfWork uow, Guid controloId, PegamentoMedicao medicao, string actorId, CancellationToken ct = default) => Task.FromResult(Guid.NewGuid());
             public Task<IReadOnlyList<PegamentoMedicao>> GetMeasurementsAsync(Guid controloId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<PegamentoMedicao>>(Array.Empty<PegamentoMedicao>());
-            public Task UpsertDocumentAsync(PegamentoDocumento document, CancellationToken ct = default) => Task.CompletedTask;
-            public Task<PegamentoDocumento?> GetDocumentAsync(Guid controloId, CancellationToken ct = default) => Task.FromResult<PegamentoDocumento?>(null);
+            public Task UpsertDocumentAsync(IDbUnitOfWork uow, PegamentoDocumento document, CancellationToken ct = default) => Task.CompletedTask;
+            public Task<PegamentoDocumento?> GetDocumentAsync(IDbUnitOfWork uow, Guid controloId, CancellationToken ct = default) => Task.FromResult<PegamentoDocumento?>(null);
         }
     }
 

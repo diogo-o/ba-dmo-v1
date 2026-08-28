@@ -74,6 +74,9 @@ public sealed class FakeTampaoRepository : ITampaoRepository
 
     public bool FailTransaction { get; set; }
 
+    /// <summary>When true, CreateConfigurationAsync throws TampaoConfigurationDuplicateException (audit TP-06 mapping test).</summary>
+    public bool FailConfigurationDuplicate { get; set; }
+
     // ---- Fields & values ----------------------------------------------------
 
     public Task<IReadOnlyList<TampaoFieldDef>> ListFieldDefsAsync(bool onlyActive, CancellationToken ct = default)
@@ -141,6 +144,9 @@ public sealed class FakeTampaoRepository : ITampaoRepository
     public Task<Guid> CreateConfigurationAsync(IDbUnitOfWork uow, TampaoConfiguration config, string valuesJson, CancellationToken ct = default)
     {
         if (FailTransaction) throw new InvalidOperationException("simulated");
+        if (FailConfigurationDuplicate)
+            throw new TampaoConfigurationDuplicateException(
+                "Já existe uma configuração com estes valores.");
         Configurations.Add(config);
         return Task.FromResult(config.TampaoConfigurationId);
     }

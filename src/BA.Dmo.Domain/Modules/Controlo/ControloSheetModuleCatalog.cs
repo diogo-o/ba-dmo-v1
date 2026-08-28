@@ -18,8 +18,4 @@ public static class ControloSheetModuleCatalog
     /// <summary>Canonical sheet statuses (N23 <c>controlo_sheets.status</c>).</summary>
     public static readonly IReadOnlyList<string> Statuses =
         new[] { "rascunho", "submetido", "aprovado", "rejeitado" };
-
-    /// <summary>Allowed component families to snapshot from the Job On revision.</summary>
-    public static readonly IReadOnlyList<string> ComponentFamilies =
-        new[] { "MP_CM", "MF", "BQ" };
 }

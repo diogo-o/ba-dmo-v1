@@ -41,8 +41,6 @@ public sealed class FakeBoquilhasWebRepository : IBoquilhasRepository
             (filter.OnlyAvailable != true || l.LifecycleState == BqLifecycleState.Available) &&
             (filter.LifecycleState is null || l.LifecycleState == filter.LifecycleState)).ToList());
 
-    public Task<int> CountLotesAsync(BqLoteFilter filter, CancellationToken ct = default) => Task.FromResult(Lotes.Count);
-
     public Task CreateLoteAsync(IDbUnitOfWork uow, BqLote lote, CancellationToken ct = default)
     {
         Lotes.Add(lote); return Task.CompletedTask;
@@ -106,10 +104,6 @@ public sealed class FakeBoquilhasWebRepository : IBoquilhasRepository
     public Task<IReadOnlyList<BqMovement>> ListMovementsForTraceAsync(Guid bqTraceId, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<BqMovement>>(Movements.Where(m => m.BqTraceId == bqTraceId).OrderBy(m => m.OccurredAtUtc).ToList());
 
-    public Task<IReadOnlyList<BqMovement>> ListMovementsByLoteAsync(Guid bqLoteId, BqHistoryFilter filter, CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<BqMovement>>(Movements.Where(m =>
-            Traces.Any(t => t.BqTraceId == m.BqTraceId && t.BqLoteId == bqLoteId)).ToList());
-
     public Task<IReadOnlyList<BqMovement>> ListMovementsAsync(BqHistoryFilter filter, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<BqMovement>>(Movements
             .Where(m => filter.BqLoteId is null || Traces.Any(t => t.BqTraceId == m.BqTraceId && t.BqLoteId == filter.BqLoteId))
@@ -127,10 +121,6 @@ public sealed class FakeBoquilhasWebRepository : IBoquilhasRepository
 
     public Task<int> CountMovementsAsync(BqHistoryFilter filter, CancellationToken ct = default) => Task.FromResult(Movements.Count);
 
-    public Task VoidMovementAsync(IDbUnitOfWork uow, Guid bqTraceId, Guid bqMovementId, CancellationToken ct = default) => Task.CompletedTask;
-    public Task<IReadOnlySet<Guid>> ListVoidedMovementIdsAsync(Guid bqTraceId, CancellationToken ct = default)
-        => Task.FromResult<IReadOnlySet<Guid>>(new HashSet<Guid>());
-
     public Task InsertUtilisationReadingAsync(IDbUnitOfWork uow, BqUtilisationReading reading, CancellationToken ct = default)
     {
         Utilisation.Add(reading); return Task.CompletedTask;
@@ -138,8 +128,6 @@ public sealed class FakeBoquilhasWebRepository : IBoquilhasRepository
 
     public Task<BqUtilisationReading?> GetUtilisationReadingAsync(Guid bqTraceId, BqUtilisationReadingKind kind, CancellationToken ct = default)
         => Task.FromResult(Utilisation.LastOrDefault(u => u.BqTraceId == bqTraceId && u.ReadingKind == kind));
-
-    public Task<BqDiscrepancy?> GetOpenDiscrepancyForTraceAsync(Guid bqLoteId, Guid? bqTraceId, CancellationToken ct = default) => Task.FromResult<BqDiscrepancy?>(null);
 
     public Task InsertDiscrepancyAsync(IDbUnitOfWork uow, BqDiscrepancy discrepancy, CancellationToken ct = default)
     {
@@ -173,9 +161,6 @@ public sealed class FakeBoquilhasWebRepository : IBoquilhasRepository
         if (r is not null) { r.Name = repairer.Name; r.Active = repairer.Active; }
         return Task.CompletedTask;
     }
-
-    public Task<BqLineRepairerDefault?> GetLineRepairerDefaultAsync(string line, CancellationToken ct = default)
-        => Task.FromResult(LineDefaults.FirstOrDefault(d => d.Line == line));
 
     public Task SetLineRepairerDefaultAsync(BqLineRepairerDefault lineDefault, CancellationToken ct = default)
     {

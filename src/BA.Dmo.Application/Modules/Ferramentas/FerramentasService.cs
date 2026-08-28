@@ -129,20 +129,22 @@ public sealed class FerramentasService
             _clock.UtcNow, gate.Value.ActorId);
         if (newLoteResult.IsFailure) return Result<FerramentasLoteItem, DomainError>.Failure(newLoteResult.Error);
 
-        var newLoteId = await _repository.CreateLoteAsync(newLoteResult.Value, ct);
-
-        // Copy active rules as CONFIGURATION only (never occurrences/checks/history).
+        // Copy active rules as CONFIGURATION only (never occurrences/checks/history) —
+        // the copies carry the source rule id as copied_from_rule_id.
         var sourceRules = await _repository.GetCheckRulesByLoteAsync(baseLote.ToolLoteId, ct);
+        var copiedRules = new List<ToolCheckRule>();
         foreach (var rule in sourceRules.Where(r => r.Active))
         {
             var copy = ToolCheckRule.Create(
-                newLoteId, rule.RuleText, rule.Frequency, rule.ToolCheckRuleId, _clock.UtcNow, gate.Value.ActorId);
+                newLoteResult.Value.ToolLoteId, rule.RuleText, rule.Frequency, rule.ToolCheckRuleId, _clock.UtcNow, gate.Value.ActorId);
             if (copy.IsSuccess)
-                await _repository.AddCheckRuleAsync(copy.Value, ct);
+                copiedRules.Add(copy.Value);
         }
 
-        await _repository.InsertAuditEventAsync(baseLote.ToolLoteId, "ferramentas.lote.duplicar",
-            baseLote.ToolLoteId.ToString(), newLoteId.ToString(), gate.Value.ActorId, ct);
+        // Lot + copied rules + the duplicar audit event commit/roll back as ONE
+        // transaction (audit FA-03): no partially duplicated lot can remain.
+        var newLoteId = await _repository.CreateLoteWithRulesAtomicallyAsync(
+            newLoteResult.Value, copiedRules, baseLote.ToolLoteId, gate.Value.ActorId, ct);
 
         var saved = await _repository.GetLoteByIdAsync(newLoteId, ct);
         if (saved is null) return NotFound<FerramentasLoteItem>();
@@ -163,7 +165,19 @@ public sealed class FerramentasService
         var pieceResult = PhysicalPiece.Register(request.LoteId, request.Sequence, request.Number, _clock.UtcNow, gate.Value.ActorId);
         if (pieceResult.IsFailure) return Result<Guid, DomainError>.Failure(pieceResult.Error);
 
-        var pieceId = await _repository.RegisterPieceAsync(pieceResult.Value, ct);
+        Guid pieceId;
+        try
+        {
+            pieceId = await _repository.RegisterPieceAsync(pieceResult.Value, ct);
+        }
+        catch (PhysicalPieceDuplicateException)
+        {
+            // uq_physical_pieces_lote_number raced under concurrency (audit
+            // ON-02 / approved unique-violation mapping).
+            return Result<Guid, DomainError>.Failure(DomainError.DomainConflict(
+                "FERRAMENTAS_PIECE_DUPLICATE",
+                $"O número {request.Number} já está registado neste lote."));
+        }
         await _repository.InsertAuditEventAsync(request.LoteId, "ferramentas.peca.registar",
             null, request.Number, gate.Value.ActorId, ct);
         return Result<Guid, DomainError>.Success(pieceId);

@@ -108,12 +108,3 @@ public sealed record FerramentasCheckRuleItem(
     string Frequency,
     bool Active,
     Guid? CopiedFromRuleId);
-
-public sealed record FerramentasOccurrenceItem(
-    Guid OccurrenceId,
-    Guid RuleId,
-    Guid? JobOnId,
-    string Status,
-    string CompletionSource,
-    string? CompletedBy,
-    DateTimeOffset? CompletedAtUtc);

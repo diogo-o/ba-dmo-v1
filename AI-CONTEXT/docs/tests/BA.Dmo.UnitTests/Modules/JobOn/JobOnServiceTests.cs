@@ -129,6 +129,37 @@ public class JobOnServiceTests
         Assert.Empty(_repository.JobOns);
     }
 
+    // ---- unique-violation mapping (audit JA-03/ON-02) ---------------------
+
+    [Fact]
+    public async Task Create_IdentityDuplicate_Raw23505_MapsToCleanDomainConflict()
+    {
+        _repository.FailIdentityDuplicate = true;
+
+        var result = await _service.CreateAsync(new CreateJobOnRequest("202608", "LINHA-1", Start, null));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ErrorCategory.DomainConflict, result.Error.Category);
+        Assert.Equal("JOB_ON_IDENTITY_DUPLICATE", result.Error.Code);
+        Assert.Empty(_repository.JobOns);
+        Assert.Empty(_repository.AuditEvents);
+    }
+
+    [Fact]
+    public async Task Duplicate_IdentityDuplicate_Raw23505_MapsToCleanDomainConflict()
+    {
+        var sourceId = await SeedPlaneadoWithRevision();
+        _repository.FailIdentityDuplicate = true;
+
+        var result = await _service.DuplicateAsync(new DuplicateJobOnRequest(
+            sourceId, "202620", "LINHA-1", Start, null));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ErrorCategory.DomainConflict, result.Error.Category);
+        Assert.Equal("JOB_ON_IDENTITY_DUPLICATE", result.Error.Code);
+        Assert.Single(_repository.JobOns); // source only; no partial duplicate
+    }
+
     // ---- save revision (TD-18) -------------------------------------------
 
     [Fact]

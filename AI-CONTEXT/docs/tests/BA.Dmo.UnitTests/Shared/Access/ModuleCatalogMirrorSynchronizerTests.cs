@@ -18,25 +18,6 @@ public class ModuleCatalogMirrorSynchronizerTests
         new(2026, 8, 17, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void BuildSyncRows_MirrorsTheCanonicalCatalog_InCanonicalOrder()
-    {
-        var rows = _synchronizer.BuildSyncRows(SyncInstant);
-
-        Assert.Equal(12, rows.Count);
-        Assert.Equal(
-            CanonicalModuleCatalog.Instance.Modules.Select(m => m.ModuleId),
-            rows.Select(r => r.ModuleId));
-        Assert.All(rows, r =>
-        {
-            Assert.True(r.Active);
-            Assert.Equal(SyncInstant, r.SyncedAtUtc);
-        });
-        Assert.Equal(
-            CanonicalModuleCatalog.Instance.Modules.Select(m => m.DisplayName),
-            rows.Select(r => r.DisplayName));
-    }
-
-    [Fact]
     public void ValidateMirrorRows_DiscardsUnknownModules_WithReport()
     {
         var report = _synchronizer.ValidateMirrorRows(new[]

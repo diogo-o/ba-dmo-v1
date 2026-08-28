@@ -19,7 +19,6 @@ public interface IBoquilhasRepository
     Task<BqLote?> GetLoteByIdAsync(Guid bqLoteId, CancellationToken ct = default);
     Task<BqLote?> GetLoteByReferenceBatchAsync(string reference, string batchCode, CancellationToken ct = default);
     Task<IReadOnlyList<BqLote>> ListLotesAsync(BqLoteFilter filter, CancellationToken ct = default);
-    Task<int> CountLotesAsync(BqLoteFilter filter, CancellationToken ct = default);
 
     /// <summary>Creates the lot row within the shared unit of work.</summary>
     Task CreateLoteAsync(IDbUnitOfWork uow, BqLote lote, CancellationToken ct = default);
@@ -60,25 +59,15 @@ public interface IBoquilhasRepository
     /// <summary>All non-voided movements of a trace, in occurred order (for balance computation).</summary>
     Task<IReadOnlyList<BqMovement>> ListMovementsForTraceAsync(Guid bqTraceId, CancellationToken ct = default);
 
-    /// <summary>Paginated movements of a lot (Registo page list).</summary>
-    Task<IReadOnlyList<BqMovement>> ListMovementsByLoteAsync(Guid bqLoteId, BqHistoryFilter filter, CancellationToken ct = default);
-
     /// <summary>Paginated movements across lots (Histórico aggregate view).</summary>
     Task<IReadOnlyList<BqMovement>> ListMovementsAsync(BqHistoryFilter filter, CancellationToken ct = default);
     Task<int> CountMovementsAsync(BqHistoryFilter filter, CancellationToken ct = default);
-
-    /// <summary>Records a voided movement id in the trace's deleted_movements (never physical delete).</summary>
-    Task VoidMovementAsync(IDbUnitOfWork uow, Guid bqTraceId, Guid bqMovementId, CancellationToken ct = default);
-
-    /// <summary>Returns the set of movement ids voided for a trace.</summary>
-    Task<IReadOnlySet<Guid>> ListVoidedMovementIdsAsync(Guid bqTraceId, CancellationToken ct = default);
 
     // ---- Utilisation ----------------------------------------------------------------
     Task InsertUtilisationReadingAsync(IDbUnitOfWork uow, BqUtilisationReading reading, CancellationToken ct = default);
     Task<BqUtilisationReading?> GetUtilisationReadingAsync(Guid bqTraceId, BqUtilisationReadingKind kind, CancellationToken ct = default);
 
     // ---- Discrepancies ----------------------------------------------------------------
-    Task<BqDiscrepancy?> GetOpenDiscrepancyForTraceAsync(Guid bqLoteId, Guid? bqTraceId, CancellationToken ct = default);
     Task InsertDiscrepancyAsync(IDbUnitOfWork uow, BqDiscrepancy discrepancy, CancellationToken ct = default);
     Task UpdateDiscrepancyAsync(IDbUnitOfWork uow, BqDiscrepancy discrepancy, CancellationToken ct = default);
     Task<IReadOnlyList<BqDiscrepancy>> ListDiscrepanciesAsync(Guid? bqLoteId, CancellationToken ct = default);
@@ -88,7 +77,6 @@ public interface IBoquilhasRepository
     Task<BqRepairer?> GetRepairerByIdAsync(Guid repairerId, CancellationToken ct = default);
     Task<Guid> CreateRepairerAsync(BqRepairer repairer, CancellationToken ct = default);
     Task UpdateRepairerAsync(BqRepairer repairer, CancellationToken ct = default);
-    Task<BqLineRepairerDefault?> GetLineRepairerDefaultAsync(string line, CancellationToken ct = default);
     Task SetLineRepairerDefaultAsync(BqLineRepairerDefault lineDefault, CancellationToken ct = default);
 
     // ---- Audit ----------------------------------------------------------------

@@ -27,7 +27,6 @@ public sealed record RegisterBqMovementRequest(
 public sealed record CloseBqTraceRequest(
     Guid BqLoteId,
     Guid BqTraceId,
-    decimal? FinalCount,
     decimal? FinalUtilisation,
     string? Reason);
 
@@ -55,12 +54,6 @@ public sealed record BqLifecycleRequest(
 public sealed record ResolveBqDiscrepancyRequest(
     Guid BqDiscrepancyId,
     string? ResolutionNote);
-
-/// <summary>Void a movement (append-only; identifies the trace+movement to void).</summary>
-public sealed record VoidBqMovementRequest(
-    Guid BqTraceId,
-    Guid BqMovementId,
-    string? Reason);
 
 // ---- Repairers --------------------------------------------------------------
 

@@ -51,6 +51,7 @@ public sealed record AdminUserRow
     public bool Active { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; }
     public string? AuthEmail { get; set; }
+    /// <summary>Compatibility projection slot; always NULL after N38.</summary>
     public string? ModulesOverrideJson { get; set; }
     public string[]? TemplateIds { get; set; }
 

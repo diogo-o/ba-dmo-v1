@@ -224,8 +224,8 @@ public class FerramentasWebApiTests : IClassFixture<FerramentasWebApiTests.FerrF
             public Task<Guid?> CopyCheckRuleAsync(Guid sourceRuleId, Guid targetLoteId, CancellationToken ct = default) => Task.FromResult<Guid?>(Guid.NewGuid());
             public Task<IReadOnlyList<ToolCheckRule>> GetCheckRulesByLoteAsync(Guid loteId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ToolCheckRule>>(Array.Empty<ToolCheckRule>());
             public Task<ToolCheckRule?> GetCheckRuleByIdAsync(Guid ruleId, CancellationToken ct = default) => Task.FromResult<ToolCheckRule?>(null);
-            public Task<IReadOnlyList<ToolCheckOccurrence>> GetOccurrencesByRuleAsync(Guid ruleId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ToolCheckOccurrence>>(Array.Empty<ToolCheckOccurrence>());
             public Task<(Guid ReferenceId, Guid LoteId)> CreateReferenceWithFirstLoteAsync(ToolReference reference, ToolLote lote, CancellationToken ct = default) => Task.FromResult((reference.ToolReferenceId, lote.ToolLoteId));
+            public Task<Guid> CreateLoteWithRulesAtomicallyAsync(ToolLote lote, IReadOnlyList<ToolCheckRule> copiedRules, Guid? sourceLoteId, string actorId, CancellationToken ct = default) => Task.FromResult(lote.ToolLoteId);
             public Task InsertAuditEventAsync(Guid? entityId, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken ct = default) => Task.CompletedTask;
             public Task RecordUtilisationReadingAsync(ToolUtilisationReading reading, CancellationToken ct = default) => Task.CompletedTask;
             public Task<IReadOnlyList<ToolUtilisationReading>> ListUtilisationReadingsAsync(Guid toolLoteId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ToolUtilisationReading>>(Array.Empty<ToolUtilisationReading>());

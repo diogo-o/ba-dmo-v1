@@ -1,0 +1,99 @@
+-- ============================================================================
+-- BA DMO N34 — legacy access mirror REMOVAL (SCHEMA-RAT-03B → N34).
+--
+-- After N32 (SCHEMA-RAT-03A, D-1/D-2) runtime identity/authorization reads
+-- exclusively:
+--
+--   internal_users.template_id
+--      -> access_templates
+--      -> access_template_profiles.functional_profile   (functional authority)
+--
+-- and N33 (SCHEMA-RAT-03B) retired both legacy MIRROR structures as RUNTIME
+-- objects (zero application readers/writers; `ba_dmo_app` privileges revoked;
+-- `internal_users.profile_title` relaxed back to NULLABLE). Both mirrors then
+-- stayed PHYSICALLY present for this separately designed destructive phase:
+--
+--   internal_user_access_templates   (actor_id, template_id junction  — N27)
+--   internal_users.profile_title     (user-level profile mirror column — N01,
+--                                     NOT NULL + CHECK by N27, NULLABLE by N33)
+--
+-- N34 is the approved physical removal (owner decision OD-1 / D-16 Option A;
+-- reports/schema_rationalization_N34_legacy_mirror_removal_audit.md §5 — design
+-- consequence Option A). It removes BOTH mirrors with zero external dependents:
+--
+--   * the junction table carries only self-owned objects (PK, both FKs to
+--     internal_users/access_templates, both indexes incl.
+--     ux_internal_user_access_templates_actor, the inert RLS policy
+--     internal_user_access_templates_app_access, the assigned_at_utc default,
+--     the row type and TOAST) — no incoming FK, no view/function references it
+--     (live audit §2.1; repository audit §3; re-verified against the chain);
+--   * internal_users.profile_title has exactly ONE catalog dependency — the
+--     NULL-tolerant CHECK ck_internal_users_functional_profile (N27:117-120) —
+--     which is dropped explicitly BEFORE the column (Option A; explicit drop
+--     order, no cascading).
+--
+-- Who is affected: NONE at runtime. grep over src/ returns zero matches for
+-- either identifier (the PascalCase ProfileTitle shape is authority-fed
+-- presentation only and stays). access_template_profiles, its CHECK and the
+-- N31 trigger (ba_dmo_ensure_access_template_profile) are the AUTHORITY and
+-- are NOT touched here. Fossil profile_title values and junction rows are
+-- discarded BY DESIGN (dead since N33; pre-drop backup is a rollout step of
+-- the N34-era verification protocol, audit §6.6).
+--
+-- Rules honoured:
+--   * no cascading drop option is used anywhere — dependency directions are
+--     proven zero (live audit + repository audit + fresh-build replay trace);
+--   * explicit DROP CONSTRAINT before DROP COLUMN (house style, N27 pattern);
+--   * IF EXISTS guards — idempotent, consistent with N27/N31/N33 conventions;
+--   * whole-script in its own transaction (no BEGIN/COMMIT — N28/N29/N30
+--     transaction-control debt is not repeated);
+--   * historical migrations N01-N33 are immutable and were not modified.
+--
+-- Post-N34 baseline drift resolution: the inert junction policy
+-- (drift D-A in reports/post_codex_database_rationalization_plan.md §2.3)
+-- disappears with the table on BOTH paths (chain and consolidated baseline).
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- §1. Junction mirror removal. The table's PK, both FKs, both indexes
+-- (ix_internal_user_access_templates_template, ux_internal_user_access_templates_actor),
+-- the inert RLS policy internal_user_access_templates_app_access, the
+-- assigned_at_utc default, the row type and TOAST vanish with it. No cascading.
+-- ----------------------------------------------------------------------------
+DROP TABLE IF EXISTS internal_user_access_templates;
+
+-- ----------------------------------------------------------------------------
+-- §2. Profile mirror CHECK first (explicit intent; makes the column drop
+-- obvious). The CHECK (N27) is NULL-tolerant and inert on the retired mirror —
+-- it is dropped before the column so the column drop's semantics stay visible.
+-- ----------------------------------------------------------------------------
+ALTER TABLE internal_users
+    DROP CONSTRAINT IF EXISTS ck_internal_users_functional_profile;
+
+-- ----------------------------------------------------------------------------
+-- §3. Profile mirror column (attnum 5 since N01). Fossil values are discarded
+-- by design (dead since N33; guarded by 03B parity + pre-drop backup). The N33
+-- column-level ba_dmo_app grants on internal_users are unaffected: they
+-- explicitly list the 8 canonical columns and never named profile_title.
+-- ----------------------------------------------------------------------------
+ALTER TABLE internal_users
+    DROP COLUMN IF EXISTS profile_title;
+
+-- ----------------------------------------------------------------------------
+-- §4. RESTATEMENT OF NON-DESTRUCTIVE-TO-AUTHORITY BOUNDS (self-documenting).
+-- Nothing below removes, renames or reshapes the AUTHORITY chain or any other
+-- schema object:
+--   access_templates                    (untouched)
+--   access_template_profiles            (untouched — the D-1 functional
+--                                        authority; its CHECK and the N31
+--                                        trigger remain exactly as shipped)
+--   internal_users                      (only profile_title removed; the 8
+--                                        canonical columns and the N33
+--                                        column-level grants are intact)
+--   internal_users.modules_override     (dormant N26 column — NOT in scope;
+--                                        planned N38)
+-- The removal is one-way (destructive). Recovery contract: pre-drop backup
+-- plus the N34-era parity gates (reports/schema_rationalization_N34_legacy_mirror_removal_audit.md
+-- §6.6); no runtime dependency exists, so rollback is recorded-restore rather
+-- than schema-restore.
+-- ============================================================================

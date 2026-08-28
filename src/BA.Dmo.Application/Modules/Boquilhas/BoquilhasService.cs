@@ -137,6 +137,15 @@ public sealed class BoquilhasService
             await uow.CommitAsync(ct);
             return Result<Guid, DomainError>.Success(lote.BqLoteId);
         }
+        catch (BqLoteDuplicateException)
+        {
+            // uq_bq_lotes_reference_batch raced (audit BQ-15): the same
+            // (reference, batch) was created concurrently — same clean conflict
+            // as the fast-path pre-check.
+            return Result<Guid, DomainError>.Failure(DomainError.DomainConflict(
+                "BQ_DUPLICATE_LOT",
+                $"Já existe um lote {batchCode} para a referência {reference}."));
+        }
         catch (Exception)
         {
             return Result<Guid, DomainError>.Failure(DomainError.Unexpected(

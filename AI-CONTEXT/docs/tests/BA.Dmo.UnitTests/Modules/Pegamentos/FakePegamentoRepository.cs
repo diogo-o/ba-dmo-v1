@@ -1,4 +1,5 @@
 using BA.Dmo.Application.Modules.Pegamentos;
+using BA.Dmo.Application.Shared.Persistence;
 using BA.Dmo.Domain.Modules.Pegamentos;
 
 namespace BA.Dmo.UnitTests.Modules.Pegamentos;
@@ -6,7 +7,9 @@ namespace BA.Dmo.UnitTests.Modules.Pegamentos;
 /// <summary>
 /// In-memory fake of the Pegamentos persistence port (confined to tests/*).
 /// Tracks controls, measurements and document metadata so use-case tests can
-/// assert persistence behavior without a live DB.
+/// assert persistence behavior without a live DB. Write methods accept a
+/// no-op in-memory <see cref="IDbUnitOfWork"/> (atomicity is exercised by the
+/// Dapper layer / real-PG tests).
 /// </summary>
 public sealed class FakePegamentoRepository : IPegamentoRepository
 {
@@ -16,13 +19,19 @@ public sealed class FakePegamentoRepository : IPegamentoRepository
 
     public Dictionary<Guid, PegamentoDocumento> Documents { get; } = new();
 
-    public Task<Guid> CreateAsync(PegamentoControlo control, CancellationToken ct = default)
+    public Task<Guid> CreateAsync(IDbUnitOfWork uow, PegamentoControlo control, CancellationToken ct = default)
     {
         Controls[control.PegamentoControloId] = control;
         return Task.FromResult(control.PegamentoControloId);
     }
 
     public Task<PegamentoControlo?> GetByIdAsync(Guid id, CancellationToken ct = default)
+        => Task.FromResult(GetByIdInternal(id));
+
+    public Task<PegamentoControlo?> GetByIdInTransactionAsync(IDbUnitOfWork uow, Guid id, CancellationToken ct = default)
+        => Task.FromResult(GetByIdInternal(id));
+
+    private PegamentoControlo? GetByIdInternal(Guid id)
     {
         if (Controls.TryGetValue(id, out var control))
         {
@@ -47,7 +56,7 @@ public sealed class FakePegamentoRepository : IPegamentoRepository
                 }
             }
         }
-        return Task.FromResult(Controls.GetValueOrDefault(id));
+        return Controls.GetValueOrDefault(id);
     }
 
     public Task<IReadOnlyList<PegamentoControlo>> GetByRevisionAsync(Guid jobOnRevisionId, CancellationToken ct = default)
@@ -67,13 +76,13 @@ public sealed class FakePegamentoRepository : IPegamentoRepository
             (from is null || c.CreatedAtUtc >= from) &&
             (to is null || c.CreatedAtUtc <= to)).ToList());
 
-    public Task UpdateAsync(PegamentoControlo control, CancellationToken ct = default)
+    public Task UpdateAsync(IDbUnitOfWork uow, PegamentoControlo control, CancellationToken ct = default)
     {
         if (control is not null) Controls[control.PegamentoControloId] = control;
         return Task.CompletedTask;
     }
 
-    public Task<Guid> AddMeasurementAsync(Guid controloId, PegamentoMedicao medicao, string actorId, CancellationToken ct = default)
+    public Task<Guid> AddMeasurementAsync(IDbUnitOfWork uow, Guid controloId, PegamentoMedicao medicao, string actorId, CancellationToken ct = default)
     {
         if (!Measurements.TryGetValue(controloId, out var list))
         {
@@ -87,12 +96,12 @@ public sealed class FakePegamentoRepository : IPegamentoRepository
     public Task<IReadOnlyList<PegamentoMedicao>> GetMeasurementsAsync(Guid controloId, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<PegamentoMedicao>>((Measurements.GetValueOrDefault(controloId) ?? new()).ToList());
 
-    public Task UpsertDocumentAsync(PegamentoDocumento document, CancellationToken ct = default)
+    public Task UpsertDocumentAsync(IDbUnitOfWork uow, PegamentoDocumento document, CancellationToken ct = default)
     {
         Documents[document.PegamentoControloId] = document;
         return Task.CompletedTask;
     }
 
-    public Task<PegamentoDocumento?> GetDocumentAsync(Guid controloId, CancellationToken ct = default)
+    public Task<PegamentoDocumento?> GetDocumentAsync(IDbUnitOfWork uow, Guid controloId, CancellationToken ct = default)
         => Task.FromResult(Documents.GetValueOrDefault(controloId));
 }

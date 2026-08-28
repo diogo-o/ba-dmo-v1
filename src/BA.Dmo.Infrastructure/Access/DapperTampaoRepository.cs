@@ -5,6 +5,7 @@ using BA.Dmo.Application.Shared.Persistence;
 using BA.Dmo.Domain.Modules.Tampoes;
 using BA.Dmo.Infrastructure.Persistence;
 using Dapper;
+using Npgsql;
 
 namespace BA.Dmo.Infrastructure.Access;
 
@@ -201,11 +202,21 @@ FROM tampao_saldos WHERE tampao_configuration_id = @Id;";
         const string sql = @"
 INSERT INTO tampao_configurations (tampao_configuration_id, values_json, active, created_at_utc, created_by)
 VALUES (@Id, @ValuesJson, @Active, @CreatedAtUtc, @CreatedBy);";
-        await Db.ExecuteAsync(uow.Connection, sql, new
+        try
         {
-            Id = config.TampaoConfigurationId, ValuesJson = valuesJson, config.Active, config.CreatedAtUtc,
-            CreatedBy = (object?)config.CreatedBy ?? DBNull.Value
-        }, uow.Transaction, ct);
+            await Db.ExecuteAsync(uow.Connection, sql, new
+            {
+                Id = config.TampaoConfigurationId, ValuesJson = valuesJson, config.Active, config.CreatedAtUtc,
+                CreatedBy = (object?)config.CreatedBy ?? DBNull.Value
+            }, uow.Transaction, ct);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            // uq_tampao_configurations_values — a concurrent transformation already
+            // created a configuration with these values (audit TP-06).
+            throw new TampaoConfigurationDuplicateException(
+                "Já existe uma configuração com estes valores.");
+        }
         return config.TampaoConfigurationId;
     }
 

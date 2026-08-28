@@ -87,7 +87,7 @@ public sealed class MigrationDiscoveryTests : IDisposable
     }
 
     [Fact]
-    public void ShippedFreshBuildFamily_IsComplete_N01ThroughN33()
+    public void ShippedFreshBuildFamily_ContainsApprovedHeadIncludingN42()
     {
         var familyDirectory = ResolveRepositoryMigrationsDirectory();
 
@@ -100,7 +100,7 @@ public sealed class MigrationDiscoveryTests : IDisposable
                 "N09_armazem.sql", "N10_tampoes.sql", "N11_partilhado.sql", "N12_rls.sql",
                 "N13_jobon_production_folder.sql", "N14_pegamentos_documents.sql",
                 "N15_pegamentos_tool_number.sql", "N16_pegamentos_component_nominals.sql",
-                "N17_pegamentos_notas.sql", "N18_bq_repairer.sql", "N19_tool_usage.sql", "N20_repairer_repair_types.sql", "N21_tampoes_machines.sql", "N22_reparacao_interna_context.sql", "N23_controlo_folha.sql", "N24_jobon_user_current.sql", "N25_remediation.sql", "N26_user_modules_override.sql", "N27_access_convergence.sql", "N28_reparacao_interna_cm_mf_only.sql", "N29_jobon_reference_images.sql", "N30_jobon_reference_image_updated_by_index.sql", "N31_template_profiles_single_assignment.sql", "N32_access_authority_convergence.sql", "N33_legacy_access_mirror_quiescence.sql"
+                "N17_pegamentos_notas.sql", "N18_bq_repairer.sql", "N19_tool_usage.sql", "N20_repairer_repair_types.sql", "N21_tampoes_machines.sql", "N22_reparacao_interna_context.sql", "N23_controlo_folha.sql", "N24_jobon_user_current.sql", "N25_remediation.sql", "N26_user_modules_override.sql", "N27_access_convergence.sql", "N28_reparacao_interna_cm_mf_only.sql", "N29_jobon_reference_images.sql", "N30_jobon_reference_image_updated_by_index.sql", "N31_template_profiles_single_assignment.sql", "N32_access_authority_convergence.sql", "N33_legacy_access_mirror_quiescence.sql", "N34_legacy_access_mirror_removal.sql", "N35_index_rationalization.sql", "N36_ba_dmo_app_access_policy_rename.sql", "N37_peso_previous_comparison_removal.sql", "N38_dormant_column_removal.sql", "N39_pegamentos_contra_costura_nullable.sql", "N40_peso_leituras_approved_guard.sql", "N41_warehouse_active_position_unique.sql", "N42_tool_check_occurrences_removal.sql"
             ],
             discovered.Select(m => m.FileName).ToArray());
     }
@@ -295,6 +295,270 @@ public sealed class MigrationDiscoveryTests : IDisposable
         Assert.DoesNotContain("DROP INDEX", sql, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DROP SCHEMA", sql, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DELETE FROM", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("BEGIN;", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("COMMIT;", sql, StringComparison.Ordinal);
+    }
+
+    // ------------------------------------------------------------------
+    // N34 — legacy access mirror REMOVAL (SCHEMA-RAT-03B → N34).
+    // Source guards only: they read the migration FILE. Executed
+    // PostgreSQL behaviour (catalog absence + 42P01/42703) is covered by the
+    // env-guarded RemediationGuardTests.N34_* probes (BA_DMO_TEST_DATABASE).
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void N34_RemovesBothLegacyAccessMirrors_Explicitly_NoCascade()
+    {
+        var sql = File.ReadAllText(Path.Combine(
+            ResolveRepositoryMigrationsDirectory(),
+            "N34_legacy_access_mirror_removal.sql"));
+
+        // Option A statement set (N34 audit §5): junction drop, explicit
+        // constraint drop BEFORE the column drop, then the column drop.
+        Assert.Contains(
+            "DROP TABLE IF EXISTS internal_user_access_templates",
+            sql, StringComparison.Ordinal);
+        var tableDrop = sql.IndexOf(
+            "DROP TABLE IF EXISTS internal_user_access_templates", StringComparison.Ordinal);
+        var constraintDrop = sql.IndexOf(
+            "DROP CONSTRAINT IF EXISTS ck_internal_users_functional_profile",
+            StringComparison.Ordinal);
+        var columnDrop = sql.IndexOf(
+            "DROP COLUMN IF EXISTS profile_title", StringComparison.Ordinal);
+        Assert.True(tableDrop >= 0 && constraintDrop > tableDrop && columnDrop > constraintDrop,
+            "N34 must drop the junction, then the CHECK constraint, then the column (explicit Option A order).");
+
+        // No CASCADE anywhere; the column drop follows the explicit constraint
+        // drop (same-table dependent-object removal is never relied on).
+        Assert.DoesNotContain("CASCADE", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP TABLE IF EXISTS internal_user_access_templates CASCADE",
+            sql, StringComparison.OrdinalIgnoreCase);
+
+        // The authority chain is NOT touched: no DROP targets
+        // access_template_profiles / access_templates and no incidental
+        // policy/function/trigger drops exist.
+        Assert.DoesNotContain("DROP TABLE IF EXISTS access_template_profiles", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("DROP TABLE access_templates", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("DROP POLICY", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP FUNCTION", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP TRIGGER", sql, StringComparison.OrdinalIgnoreCase);
+
+        // No transaction-control debt; no data rewrites.
+        Assert.DoesNotContain("BEGIN;", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("COMMIT;", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("DELETE FROM", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ------------------------------------------------------------------
+    // N35 — safe index / constraint rationalization (BQ-16 + redundant drop).
+    // Source guards only: they read the migration FILE. Executed catalog
+    // verification (index present/absent) is covered by the env-guarded
+    // RemediationGuardTests.N35_* probes (BA_DMO_TEST_DATABASE).
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void N35_AddsBqRepairerIndex_AndDropsRedundantPegamentoDocumentosIndex()
+    {
+        var sql = File.ReadAllText(Path.Combine(
+            ResolveRepositoryMigrationsDirectory(),
+            "N35_index_rationalization.sql"));
+
+        // BQ-16 additive index on bq_movements (noted_repairer_id).
+        Assert.Contains("ix_bq_movements_noted_repairer", sql, StringComparison.Ordinal);
+        Assert.Contains("ON bq_movements (noted_repairer_id)", sql, StringComparison.Ordinal);
+        Assert.Contains("CREATE INDEX IF NOT EXISTS", sql, StringComparison.Ordinal);
+
+        // Redundant pegamento_documentos index removal (duplicates the UNIQUE).
+        Assert.Contains(
+            "DROP INDEX IF EXISTS ix_pegamento_documentos_controlo",
+            sql, StringComparison.Ordinal);
+
+        // N35 must NOT widen into owner-gated items: no table/column drops, no
+        // CHECK rewrites (the optional BQ-10 'fim' CHECK trim is OD-16, not
+        // SAFE NOW, and is deliberately excluded).
+        Assert.DoesNotContain("DROP TABLE", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP COLUMN", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP CONSTRAINT", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ck_bq_movements_type", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("'fim'", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("CASCADE", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("BEGIN;", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("COMMIT;", sql, StringComparison.Ordinal);
+    }
+
+    // ------------------------------------------------------------------
+    // N36 — D-15 RLS policy-name convention (access_template_profiles_app_access
+    // → ba_dmo_app_access). Source guards only: they read the migration FILE.
+    // Executed policy-inventory equality is covered by the env-guarded
+    // RemediationGuardTests.N36_* probes (BA_DMO_TEST_DATABASE).
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void N36_UnifiesPolicyNaming_WithIdenticalSemantics()
+    {
+        var sql = File.ReadAllText(Path.Combine(
+            ResolveRepositoryMigrationsDirectory(),
+            "N36_ba_dmo_app_access_policy_rename.sql"));
+
+        // Old divergent name dropped, canonical name (re)created.
+        Assert.Contains(
+            "DROP POLICY IF EXISTS access_template_profiles_app_access",
+            sql, StringComparison.Ordinal);
+        Assert.Contains("CREATE POLICY ba_dmo_app_access", sql, StringComparison.Ordinal);
+
+        // Semantics preserved byte-for-byte: FOR ALL TO ba_dmo_app, USING
+        // (TRUE), WITH CHECK (TRUE) — the N12/N25/N29 convention.
+        Assert.Contains("FOR ALL TO ba_dmo_app", sql, StringComparison.Ordinal);
+        Assert.Contains("USING (TRUE)", sql, StringComparison.Ordinal);
+        Assert.Contains("WITH CHECK (TRUE)", sql, StringComparison.Ordinal);
+
+        // Security naming rationalization ONLY: no permission surface is
+        // touched (DML entitlements were issued by N31) and no table/object
+        // drops occur (the junction policy died with its table in N34, so N36
+        // never renames it).
+        Assert.DoesNotContain("GRANT", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("REVOKE", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("DROP TABLE", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CASCADE", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("BEGIN;", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("COMMIT;", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void N37_RemovesOnlyEmptyLegacyPesoComparisonTable_NoCascade()
+    {
+        var sql = File.ReadAllText(Path.Combine(
+            ResolveRepositoryMigrationsDirectory(),
+            "N37_peso_previous_comparison_removal.sql"));
+
+        Assert.Contains("SELECT EXISTS (SELECT 1 FROM public.peso_comparacao_anterior)", sql, StringComparison.Ordinal);
+        Assert.Contains("RAISE EXCEPTION", sql, StringComparison.Ordinal);
+        Assert.Contains("DROP TABLE IF EXISTS peso_comparacao_anterior", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("CASCADE", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("previous_control", sql.Split("DROP TABLE IF EXISTS", StringSplitOptions.None)[1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void N41_AddsOnlyPerPositionActiveOccupationUniqueIndex()
+    {
+        var sql = File.ReadAllText(Path.Combine(
+            ResolveRepositoryMigrationsDirectory(),
+            "N41_warehouse_active_position_unique.sql"));
+
+        Assert.Contains("CREATE UNIQUE INDEX IF NOT EXISTS uq_warehouse_stock_active_position", sql, StringComparison.Ordinal);
+        Assert.Contains("ON warehouse_stock (warehouse_location_id)", sql, StringComparison.Ordinal);
+        Assert.Contains("WHERE released_at_utc IS NULL", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("DROP ", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CASCADE", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void N38_DropsOnlyDormantColumns_AndReissuesCanonicalGrants()
+    {
+        var sql = File.ReadAllText(Path.Combine(
+            ResolveRepositoryMigrationsDirectory(),
+            "N38_dormant_column_removal.sql"));
+
+        Assert.Contains("WHERE modules_override IS NOT NULL", sql, StringComparison.Ordinal);
+        Assert.Contains("WHERE image_asset_id IS NOT NULL", sql, StringComparison.Ordinal);
+        Assert.Contains("DROP COLUMN IF EXISTS modules_override", sql, StringComparison.Ordinal);
+        Assert.Contains("DROP COLUMN IF EXISTS image_asset_id", sql, StringComparison.Ordinal);
+        Assert.Contains("GRANT SELECT (actor_id, auth_user_id, template_id, display_name, active, created_at_utc, updated_at_utc)", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("modules_override) ON internal_users TO ba_dmo_app", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("CASCADE", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ------------------------------------------------------------------
+    // N39 — pegamento_medicoes.contra_costura nullable (one-sided
+    // measurements NON-blocking; owner D-12/OD-2). Source guards only;
+    // executed behavior is covered by the env-guarded probes in
+    // RemediationGuardTests.N39_* and PegamentoPersistencePostgresTests.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void N39_WidensContraCosturaOnly_NeverTouchesData()
+    {
+        var sql = File.ReadAllText(Path.Combine(
+            ResolveRepositoryMigrationsDirectory(),
+            "N39_pegamentos_contra_costura_nullable.sql"));
+
+        Assert.Contains("ALTER TABLE pegamento_medicoes", sql, StringComparison.Ordinal);
+        Assert.Contains("ALTER COLUMN contra_costura DROP NOT NULL", sql, StringComparison.Ordinal);
+
+        // Absence must never become a DB blocker: the widening is the WHOLE
+        // change — no new CHECK, no other column/tables touched, no data
+        // rewrites, no transaction-control debt.
+        Assert.DoesNotContain("CHECK", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("DROP COLUMN", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP TABLE", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DELETE FROM", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("UPDATE ", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("BEGIN;", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("COMMIT;", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("CASCADE", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ------------------------------------------------------------------
+    // N40 — approved Peso readings protection (owner D-10/OD-3 Go; refined
+    // design). Source guards only; executed behavior is covered by the
+    // env-guarded RemediationGuardTests.N40_* probes.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void N40_AddsReadingsApprovedGuard_WithoutTouchingOtherObjects()
+    {
+        var sql = File.ReadAllText(Path.Combine(
+            ResolveRepositoryMigrationsDirectory(),
+            "N40_peso_leituras_approved_guard.sql"));
+
+        Assert.Contains("ba_dmo_guard_peso_leituras_approved", sql, StringComparison.Ordinal);
+        Assert.Contains("BEFORE INSERT OR UPDATE OR DELETE ON peso_leituras", sql, StringComparison.Ordinal);
+        Assert.Contains("trg_peso_leituras_approved_guard", sql, StringComparison.Ordinal);
+        Assert.Contains("parent_status = 'aprovado'", sql, StringComparison.Ordinal);
+        Assert.Contains("RAISE EXCEPTION", sql, StringComparison.Ordinal);
+
+        // The guard must not be a naive trigger that breaks approve/reopen:
+        // it is the readings backstop only — no DDL on peso_controlos, no
+        // policy/grant changes, no drops of unrelated objects.
+        Assert.DoesNotContain("ALTER TABLE peso_controlos", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("DROP TABLE", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP COLUMN", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("GRANT", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("REVOKE", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("BEGIN;", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("COMMIT;", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("CASCADE", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ------------------------------------------------------------------
+    // N42 — tool_check_occurrences removal (owner OD-6/PA-01: REMOVE).
+    // Source guards only; executed catalog absence is covered by the
+    // env-guarded RemediationGuardTests.N42_* probes.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void N42_RemovesOnlyTheOccurrenceTwin_WithRowCountGuard()
+    {
+        var sql = File.ReadAllText(Path.Combine(
+            ResolveRepositoryMigrationsDirectory(),
+            "N42_tool_check_occurrences_removal.sql"));
+
+        // Fail-closed data guard before any drop.
+        Assert.Contains("SELECT EXISTS (SELECT 1 FROM public.tool_check_occurrences)", sql, StringComparison.Ordinal);
+        Assert.Contains("RAISE EXCEPTION", sql, StringComparison.Ordinal);
+        Assert.Contains("DROP TABLE IF EXISTS tool_check_occurrences", sql, StringComparison.Ordinal);
+
+        // Only the twin is removed: no CASCADE, no other DROP targets, no
+        // grants/policies touched, no transaction-control debt.
+        Assert.DoesNotContain("CASCADE", sql, StringComparison.OrdinalIgnoreCase);
+        var drops = sql.Split('\n')
+            .Where(line => line.TrimStart().StartsWith("DROP TABLE", StringComparison.OrdinalIgnoreCase))
+            .Select(line => line.Trim())
+            .ToList();
+        Assert.Single(drops);
+        Assert.Contains("DROP TABLE IF EXISTS tool_check_occurrences", drops[0], StringComparison.Ordinal);
+        Assert.DoesNotContain("GRANT", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("REVOKE", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("BEGIN;", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("COMMIT;", sql, StringComparison.Ordinal);
     }

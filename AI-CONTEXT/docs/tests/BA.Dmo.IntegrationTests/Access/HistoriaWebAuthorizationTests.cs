@@ -261,10 +261,6 @@ public class HistoriaWebAuthorizationTests :
                 Task.FromResult(true);
             public Task<bool> SetUserActiveAsync(string actorId, bool active, DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc, CancellationToken ct = default) =>
                 Task.FromResult(true);
-            public Task SetUserModulesOverrideAsync(string actorId, string modulesJson, DateTimeOffset expectedUpdatedAt, DateTimeOffset updatedAtUtc, CancellationToken ct = default) =>
-                Task.CompletedTask;
-            public Task<int> CountActiveAdminsAsync(string? excludeActorId = null, CancellationToken ct = default) =>
-                Task.FromResult(1);
             public Task<IReadOnlyList<AdminTemplateRow>> ListTemplatesAsync(CancellationToken ct = default) =>
                 Task.FromResult<IReadOnlyList<AdminTemplateRow>>(Array.Empty<AdminTemplateRow>());
             public Task<AdminTemplateRow?> GetTemplateAsync(string templateId, CancellationToken ct = default) =>

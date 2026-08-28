@@ -17,8 +17,8 @@ namespace BA.Dmo.Application.Shared.Identity;
 ///                                SCHEMA-RAT-03B (the legacy user-level
 ///                                profile mirror column is no longer read).
 ///                                Never a functional-access authority.
-///   * ModulesOverrideJson     — dormant N26 legacy data; never consulted by
-///                                resolution.
+///   * ModulesOverrideJson     — compatibility slot, always NULL after N38;
+///                                never consulted by resolution.
 ///
 /// actor_id is the stable application identity (authorship); auth_user_id is
 /// the logical Supabase Auth link (uuid, no FK to auth.users).

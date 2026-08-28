@@ -31,15 +31,6 @@ public sealed class AdminUserService
     /// </summary>
     private const int PasswordPolicyMinLength = 8;
 
-    // User-safe message for a missing required schema migration (N26). No SQL,
-    // table/column names, SQLSTATE, connection details or stack traces — the
-    // technical cause stays server-side (log only). Matches the established
-    // BackendUnavailable path used by identity resolution.
-    private const string SchemaMigrationUnavailableCode = "SCHEMA_MIGRATION_REQUIRED";
-    private const string SchemaMigrationUnavailableMessage =
-        "A configuração do sistema de administração está incompleta. " +
-        "Contacte um administrador para aplicar as migrações de base de dados em falta.";
-
     private readonly AdminAuthorizationGate _gate;
     private readonly IAdminRepository _repository;
     private readonly IAdminProvisioningAdapter _provisioning;
@@ -64,21 +55,7 @@ public sealed class AdminUserService
         if (gate.IsFailure)
             return Result<IReadOnlyList<AdminUserRow>, DomainError>.Failure(gate.Error);
 
-        IReadOnlyList<AdminUserRow> users;
-        try
-        {
-            users = await _repository.ListUsersAsync(search, cancellationToken);
-        }
-        catch (SchemaMigrationRequiredException)
-        {
-            // N26 not applied: a schema/configuration failure -> safe
-            // BackendUnavailable error. NEVER an empty list (would hide the
-            // problem) and never a false "not found". The Portuguese message
-            // leaks no technical detail.
-            return Result<IReadOnlyList<AdminUserRow>, DomainError>.Failure(
-                DomainError.BackendUnavailable(
-                    SchemaMigrationUnavailableCode, SchemaMigrationUnavailableMessage));
-        }
+        var users = await _repository.ListUsersAsync(search, cancellationToken);
         if (users.Count == 0)
             return Result<IReadOnlyList<AdminUserRow>, DomainError>.Success(users);
 
@@ -122,20 +99,7 @@ public sealed class AdminUserService
         if (gate.IsFailure)
             return Result<AdminUserRow, DomainError>.Failure(gate.Error);
 
-        AdminUserRow? user;
-        try
-        {
-            user = await _repository.GetUserAsync(actorId, cancellationToken);
-        }
-        catch (SchemaMigrationRequiredException)
-        {
-            // N26 not applied: a schema/configuration failure -> safe
-            // BackendUnavailable. NEVER a false not-found (would suggest the
-            // user does not exist); the message leaks no technical detail.
-            return Result<AdminUserRow, DomainError>.Failure(
-                DomainError.BackendUnavailable(
-                    SchemaMigrationUnavailableCode, SchemaMigrationUnavailableMessage));
-        }
+        var user = await _repository.GetUserAsync(actorId, cancellationToken);
         if (user is null)
             return Result<AdminUserRow, DomainError>.Failure(DomainError.NotFound(
                 "INTERNAL_USER_NOT_FOUND", "Utilizador interno não encontrado."));
@@ -219,14 +183,26 @@ public sealed class AdminUserService
 
         var now = _clock.UtcNow;
         var actorId = provisioned.Value.AuthUserId.ToString();
-        await _repository.CreateInternalUserAsync(
-            actorId,
-            provisioned.Value.AuthUserId,
-            request.DisplayName.Trim(),
-            request.TemplateId.Trim(),
-            request.Active,
-            now,
-            cancellationToken);
+        try
+        {
+            await _repository.CreateInternalUserAsync(
+                actorId,
+                provisioned.Value.AuthUserId,
+                request.DisplayName.Trim(),
+                request.TemplateId.Trim(),
+                request.Active,
+                now,
+                cancellationToken);
+        }
+        catch (InternalUserAuthDuplicateException)
+        {
+            // uq_internal_users_auth_user raced (audit ADM-06/ON-02): the same
+            // Auth account was linked concurrently — same clean conflict as the
+            // fast-path pre-check.
+            return Result<AdminUserRow, DomainError>.Failure(DomainError.DomainConflict(
+                "ADMIN_USER_ALREADY_REGISTERED",
+                "Já existe um utilizador interno associado a esta conta de autenticação."));
+        }
 
         await AuditAsync(gate.Value, "create", "internal_user", actorId,
             request.DisplayName.Trim(), "succeeded", null, now, cancellationToken);

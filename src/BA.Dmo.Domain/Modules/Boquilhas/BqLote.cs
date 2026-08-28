@@ -25,36 +25,3 @@ public sealed class BqLote
 
     public DateTimeOffset UpdatedAtUtc { get; set; }
 }
-
-/// <summary>
-/// U-19 — Final immutable snapshot captured when a trace/lot is CLOSED
-/// (BOQUILHAS_INTERFACE_BEHAVIOR §5 + GLM-BQ-05): opening/config summary,
-/// current-state (saldos), close metadata (who/when/reason). Future repairer,
-/// line or configuration edits NEVER mutate the closed snapshot.
-/// </summary>
-public sealed class BqCloseSnapshot
-{
-    public Guid BqLoteId { get; set; }
-
-    public string Reference { get; set; } = string.Empty;
-
-    public string BatchCode { get; set; } = string.Empty;
-
-    public BqTracePurpose Purpose { get; set; }
-
-    public string? StartLine { get; set; }
-
-    public IReadOnlyList<string> AllowedLines { get; set; } = Array.Empty<string>();
-
-    /// <summary>Serialized current-state (saldos) at close time.</summary>
-    public string SaldosJson { get; set; } = string.Empty;
-
-    /// <summary>Total count of recorded movements at close time.</summary>
-    public int MovementCount { get; set; }
-
-    public string? Reason { get; set; }
-
-    public string? ClosedBy { get; set; }
-
-    public DateTimeOffset ClosedAtUtc { get; set; }
-}

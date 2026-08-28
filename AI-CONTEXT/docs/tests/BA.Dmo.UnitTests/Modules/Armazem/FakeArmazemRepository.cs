@@ -40,14 +40,8 @@ public sealed class FakeArmazemRepository : IArmazemRepository
     public Task<WarehouseStock?> GetActiveStockByToolIdAsync(Guid toolId, CancellationToken ct = default)
         => Task.FromResult(Stocks.Where(s => s.ToolId == toolId && s.IsActive).OrderBy(s => s.OccupiedSinceUtc).FirstOrDefault());
 
-    public Task<IReadOnlyList<WarehouseStock>> GetActiveStocksAsync(CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<WarehouseStock>>(Stocks.Where(s => s.IsActive).ToList());
-
     public Task<IReadOnlyList<WarehouseStock>> GetStockByLocationAsync(Guid warehouseLocationId, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<WarehouseStock>>(Stocks.Where(s => s.WarehouseLocationId == warehouseLocationId).ToList());
-
-    public Task<IReadOnlyList<WarehouseStock>> GetStockByToolIdAsync(Guid toolId, CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<WarehouseStock>>(Stocks.Where(s => s.ToolId == toolId).ToList());
 
     public Task<Guid> RegisterEntradaAsync(WarehouseStock stock, WarehouseMovement movement, CancellationToken ct = default)
     {
@@ -81,21 +75,6 @@ public sealed class FakeArmazemRepository : IArmazemRepository
             stock.ReleasedBy = releasedBy;
         }
         Movements.Add(ToMovementWithStock(movement, stockId));
-        return Task.CompletedTask;
-    }
-
-    public Task ReplaceOccupationAsync(Guid currentStockId, WarehouseStock newStock, WarehouseMovement outMovement, WarehouseMovement inMovement, CancellationToken ct = default)
-    {
-        if (FailAtomicWrite) throw new InvalidOperationException("simulated atomic write failure");
-        var current = Stocks.FirstOrDefault(s => s.WarehouseStockId == currentStockId);
-        if (current is not null)
-        {
-            current.ReleasedAtUtc = newStock.OccupiedSinceUtc;
-            current.ReleasedBy = newStock.OccupiedBy;
-        }
-        Stocks.Add(newStock);
-        Movements.Add(ToMovementWithStock(outMovement, currentStockId));
-        Movements.Add(ToMovementWithStock(inMovement, newStock.WarehouseStockId));
         return Task.CompletedTask;
     }
 

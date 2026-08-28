@@ -1,6 +1,7 @@
 using System.Text;
 using BA.Dmo.Application.Modules.Admin;
 using BA.Dmo.Application.Shared.Persistence;
+using BA.Dmo.Domain.Shared.Access;
 using BA.Dmo.Infrastructure.Persistence;
 using Dapper;
 using Npgsql;
@@ -32,12 +33,6 @@ public sealed class DapperAdminRepository : IAdminRepository
 {
     private const string AdminGrantPatternJson = "[{\"moduleId\":\"admin\"}]";
 
-    // PostgreSQL SQLSTATE 42703 = undefined_column. Detected internally ONLY to
-    // recognise the N26-not-applied schema condition (internal_users.modules_override);
-    // it is translated to SchemaMigrationRequiredException and the user is shown a
-    // safe Portuguese message — the SQLSTATE itself is never surfaced.
-    private const string UndefinedColumnSqlState = "42703";
-
     private const string UserColumns =
         """
         u.actor_id        AS ActorId,
@@ -48,7 +43,7 @@ public sealed class DapperAdminRepository : IAdminRepository
         u.active          AS Active,
         u.updated_at_utc  AS UpdatedAtUtc,
         NULL::text        AS AuthEmail,
-        u.modules_override::text AS ModulesOverrideJson
+        NULL::text        AS ModulesOverrideJson
         , ARRAY[u.template_id] AS TemplateIds
         """;
 
@@ -96,16 +91,6 @@ public sealed class DapperAdminRepository : IAdminRepository
                 connection, sql, parameters, cancellationToken: cancellationToken);
             return rows;
         }
-        catch (PostgresException ex) when (ex.SqlState == UndefinedColumnSqlState)
-        {
-            // The projection references internal_users.modules_override (N26),
-            // which is missing — a schema/migration configuration failure, NOT
-            // absence of data. Surface it as a typed internal signal for the
-            // use case to translate into a safe backend-unavailable error.
-            // Only this exact condition (42703) is mapped; every other database
-            // error continues to propagate through its established handling.
-            throw new SchemaMigrationRequiredException();
-        }
         finally
         {
             await DisposeAsync(connection);
@@ -123,12 +108,6 @@ public sealed class DapperAdminRepository : IAdminRepository
                 $"SELECT {UserColumns} FROM internal_users u LEFT JOIN access_template_profiles pt ON pt.template_id = u.template_id WHERE u.actor_id = @ActorId;",
                 new { ActorId = actorId },
                 cancellationToken: cancellationToken);
-        }
-        catch (PostgresException ex) when (ex.SqlState == UndefinedColumnSqlState)
-        {
-            // Same schema-migration-not-applied condition as ListUsersAsync:
-            // translate to a typed internal signal, never to a false not-found.
-            throw new SchemaMigrationRequiredException();
         }
         finally
         {
@@ -172,27 +151,38 @@ public sealed class DapperAdminRepository : IAdminRepository
             // retired mirror — N33 makes the column nullable; deploy order is
             // migrate N33 BEFORE this build's first user write) and the
             // junction mirror is no longer written at all.
-            await Db.ExecuteAsync(connection,
-                """
-                INSERT INTO internal_users (actor_id, auth_user_id, template_id,
-                                            display_name, active,
-                                            created_at_utc, updated_at_utc)
-                VALUES (@ActorId, @AuthUserId, @TemplateId,
-                        @DisplayName,
-                        @Active,
-                        @CreatedAtUtc, @CreatedAtUtc)
-                ON CONFLICT (actor_id) DO NOTHING;
-                """,
-                new
-                {
-                    ActorId = actorId,
-                    AuthUserId = authUserId,
-                    TemplateId = templateId,
-                    DisplayName = displayName,
-                    Active = active,
-                    CreatedAtUtc = createdAtUtc
-                },
-                cancellationToken: cancellationToken);
+            try
+            {
+                await Db.ExecuteAsync(connection,
+                    """
+                    INSERT INTO internal_users (actor_id, auth_user_id, template_id,
+                                                display_name, active,
+                                                created_at_utc, updated_at_utc)
+                    VALUES (@ActorId, @AuthUserId, @TemplateId,
+                            @DisplayName,
+                            @Active,
+                            @CreatedAtUtc, @CreatedAtUtc)
+                    ON CONFLICT (actor_id) DO NOTHING;
+                    """,
+                    new
+                    {
+                        ActorId = actorId,
+                        AuthUserId = authUserId,
+                        TemplateId = templateId,
+                        DisplayName = displayName,
+                        Active = active,
+                        CreatedAtUtc = createdAtUtc
+                    },
+                    cancellationToken: cancellationToken);
+            }
+            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+            {
+                // uq_internal_users_auth_user — the (actor_id) ON CONFLICT does not
+                // absorb a same-Auth-user duplicate with a different actor_id
+                // (audit ADM-06/ON-02).
+                throw new InternalUserAuthDuplicateException(
+                    "Já existe um utilizador interno associado a esta conta de autenticação.");
+            }
         }
         finally
         {
@@ -304,48 +294,6 @@ public sealed class DapperAdminRepository : IAdminRepository
             cancellationToken);
 
     /// <summary>
-    /// Guarded write of the per-user module override (N26 — DORMANT legacy).
-    /// Writes ONLY modules_override (+ updated_at) for THIS actor; template
-    /// rows are never touched (other users on the same template unaffected).
-    /// Optimistic concurrency via updated_at (GLM-ACC-12); the module grant
-    /// surface does not participate in the self-lockout count (admin.gerir
-    /// still resolves through the shared template) so no admins-count guard.
-    /// Runtime identity/access resolution never consumes this column.
-    /// </summary>
-    public async Task SetUserModulesOverrideAsync(
-        string actorId,
-        string modulesJson,
-        DateTimeOffset expectedUpdatedAt,
-        DateTimeOffset updatedAtUtc,
-        CancellationToken cancellationToken = default)
-    {
-        var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
-        try
-        {
-            var rows = await Db.ExecuteAsync(connection,
-                """
-                UPDATE internal_users
-                SET modules_override = @ModulesJson::jsonb,
-                    updated_at_utc = @UpdatedAtUtc
-                WHERE actor_id = @ActorId AND updated_at_utc = @ExpectedUpdatedAt;
-                """,
-                new
-                {
-                    ActorId = actorId,
-                    ModulesJson = modulesJson,
-                    UpdatedAtUtc = updatedAtUtc,
-                    ExpectedUpdatedAt = expectedUpdatedAt
-                },
-                cancellationToken: cancellationToken);
-            ConcurrencyGuard.EnsureSingleRowUpdated(rows, "utilizador interno");
-        }
-        finally
-        {
-            await DisposeAsync(connection);
-        }
-    }
-
-    /// <summary>
     /// Optimistic update + self-lockout invariant in ONE transaction:
     /// apply the write, count surviving active admins, roll back on zero.
     /// Concurrency violations propagate as ConcurrencyConflictException.
@@ -375,21 +323,6 @@ public sealed class DapperAdminRepository : IAdminRepository
         catch (LockoutViolationException)
         {
             return false;
-        }
-    }
-
-    public async Task<int> CountActiveAdminsAsync(
-        string? excludeActorId = null, CancellationToken cancellationToken = default)
-    {
-        var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
-        try
-        {
-            return await CountActiveAdminsOnAsync(
-                connection, transaction: null, excludeActorId, cancellationToken);
-        }
-        finally
-        {
-            await DisposeAsync(connection);
         }
     }
 
@@ -663,8 +596,12 @@ public sealed class DapperAdminRepository : IAdminRepository
                     entry.EntityLabelSnapshot,
                     entry.Result,
                     entry.Reason,
-                    BeforeSummary = (string?)null,
-                    AfterSummary = (string?)null
+                    // Defensive jsonb hardening (audit PC-11/ADM-08): summaries
+                    // are normalized through AuditJson.Normalize so a future
+                    // non-null NON-JSON payload can never 22P02 against the
+                    // ::jsonb cast. NULL stays NULL (Manual-compliant).
+                    BeforeSummary = AuditJson.Normalize(entry.BeforeSummary),
+                    AfterSummary = AuditJson.Normalize(entry.AfterSummary)
                 },
                 cancellationToken: cancellationToken);
         }

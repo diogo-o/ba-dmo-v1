@@ -18,9 +18,7 @@ public interface IArmazemRepository
     // ---- Stock -------------------------------------------------------------
     Task<WarehouseStock?> GetActiveStockByLocationAsync(Guid warehouseLocationId, CancellationToken ct = default);
     Task<WarehouseStock?> GetActiveStockByToolIdAsync(Guid toolId, CancellationToken ct = default);
-    Task<IReadOnlyList<WarehouseStock>> GetActiveStocksAsync(CancellationToken ct = default);
     Task<IReadOnlyList<WarehouseStock>> GetStockByLocationAsync(Guid warehouseLocationId, CancellationToken ct = default);
-    Task<IReadOnlyList<WarehouseStock>> GetStockByToolIdAsync(Guid toolId, CancellationToken ct = default);
 
     // ---- Writes (atomic) ---------------------------------------------------
     Task<Guid> RegisterEntradaAsync(
@@ -28,12 +26,6 @@ public interface IArmazemRepository
     Task RegisterSaidaAsync(
         Guid stockId, string? releasedBy, DateTimeOffset releasedAtUtc,
         WarehouseMovement movement, CancellationToken ct = default);
-    Task ReplaceOccupationAsync(
-        Guid currentStockId,
-        WarehouseStock newStock,
-        WarehouseMovement outMovement,
-        WarehouseMovement inMovement,
-        CancellationToken ct = default);
     Task CorrectLocationAsync(
         Guid? currentStockId,
         WarehouseStock? correctedStock,

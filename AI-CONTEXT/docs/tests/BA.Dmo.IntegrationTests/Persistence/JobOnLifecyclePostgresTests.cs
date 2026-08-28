@@ -159,8 +159,8 @@ public sealed class JobOnLifecyclePostgresTests
                 INSERT INTO access_templates (template_id, name, modules, active)
                 VALUES (@TemplateId, @TemplateName, '["jobon"]'::jsonb, TRUE);
                 INSERT INTO internal_users
-                    (actor_id, auth_user_id, template_id, display_name, profile_title, active)
-                VALUES (@ActorId, @AuthUserId, @TemplateId, @DisplayName, 'Admin', TRUE);
+                    (actor_id, auth_user_id, template_id, display_name, active)
+                VALUES (@ActorId, @AuthUserId, @TemplateId, @DisplayName, TRUE);
                 """, connection);
             command.Parameters.AddWithValue("TemplateId", templateId);
             command.Parameters.AddWithValue("TemplateName", "JOBON-01 " + suffix);

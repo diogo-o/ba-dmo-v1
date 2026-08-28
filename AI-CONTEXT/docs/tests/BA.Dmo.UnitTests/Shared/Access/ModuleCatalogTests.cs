@@ -85,13 +85,4 @@ public class ModuleCatalogTests
         Assert.Throws<ArgumentNullException>(() => new ModuleCatalog(null!));
         Assert.Throws<ArgumentNullException>(() => new ModuleCatalog([null!]));
     }
-
-    [Fact]
-    public void FunctionalAreaKind_IsRepresented()
-    {
-        var controlo = new ModuleDefinition("controlo", "Controlo", ModuleKind.FunctionalArea, 20, "/controlo");
-
-        Assert.Equal(ModuleKind.FunctionalArea, controlo.Kind);
-        Assert.Empty(controlo.Capabilities);
-    }
 }

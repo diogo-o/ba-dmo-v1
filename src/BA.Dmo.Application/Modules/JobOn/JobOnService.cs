@@ -109,7 +109,17 @@ public sealed class JobOnService
             request.PlannedEndAt,
             Array.Empty<JobOnRevision>());
 
-        var id = await _repository.CreateAsync(jobOn, cancellationToken);
+        Guid id;
+        try
+        {
+            id = await _repository.CreateAsync(jobOn, cancellationToken);
+        }
+        catch (JobOnIdentityDuplicateException)
+        {
+            return Result<Guid, DomainError>.Failure(DomainError.DomainConflict(
+                "JOB_ON_IDENTITY_DUPLICATE",
+                "Já existe um Job On não cancelado com esta produção e máquina."));
+        }
         await _repository.InsertAuditEventAsync(
             id, null, "jobon.criar", null, null, gate.Value.ActorId, cancellationToken);
         return Result<Guid, DomainError>.Success(id);
@@ -161,8 +171,18 @@ public sealed class JobOnService
 
         // The whole new Job On + revision + children + current link + audit commit as ONE
         // logical transaction: no partially duplicated Job On can remain on failure.
-        var id = await _repository.DuplicateAtomicallyAsync(
-            duplicated, revision, request.SourceJobOnId, gate.Value.ActorId, cancellationToken);
+        Guid id;
+        try
+        {
+            id = await _repository.DuplicateAtomicallyAsync(
+                duplicated, revision, request.SourceJobOnId, gate.Value.ActorId, cancellationToken);
+        }
+        catch (JobOnIdentityDuplicateException)
+        {
+            return Result<Guid, DomainError>.Failure(DomainError.DomainConflict(
+                "JOB_ON_IDENTITY_DUPLICATE",
+                "Já existe um Job On não cancelado com esta produção e máquina."));
+        }
 
         return Result<Guid, DomainError>.Success(id);
     }

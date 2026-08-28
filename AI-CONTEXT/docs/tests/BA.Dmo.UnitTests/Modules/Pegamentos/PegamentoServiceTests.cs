@@ -24,7 +24,7 @@ public class PegamentoServiceTests
     {
         _gate = new PegamentoAuthorizationGate(FakeAuthorshipAccessor.Authorized());
         _service = new PegamentoService(
-            _repository, _lookup, _gate, new FixedClock(Now),
+            _repository, new FakePegamentoUnitOfWorkFactory(), _lookup, _gate, new FixedClock(Now),
             new FakeSettings("D:\\Documentos"), _folderResolver);
     }
 
@@ -127,7 +127,7 @@ public class PegamentoServiceTests
     {
         // Unauthorized gate resolves null actor => fails closed.
         var unauthorizedService = new PegamentoService(
-            _repository, _lookup, new PegamentoAuthorizationGate(FakeAuthorshipAccessor.Anonymous()),
+            _repository, new FakePegamentoUnitOfWorkFactory(), _lookup, new PegamentoAuthorizationGate(FakeAuthorshipAccessor.Anonymous()),
             new FixedClock(Now), new FakeSettings(null), _folderResolver);
 
         var result = await unauthorizedService.CreateControlAsync(
@@ -154,5 +154,68 @@ public class PegamentoServiceTests
         var measurement = _repository.Measurements[created.Value].Single();
         Assert.Equal(0.30m, measurement.Ovalizacao);
         Assert.Equal(52.15m, measurement.Media);
+    }
+
+    // ---- N39: one-sided CM measurement (contra_costura absent) -----------
+    // The absence of contra costura must NEVER block the measurement (no
+    // service/validation blocker); the calculation falls back to
+    // ovalização absent + média = single value.
+
+    [Fact]
+    public async Task AddMeasurement_OneSidedCm_WithoutContraCostura_IsNonBlocking()
+    {
+        var revisionId = Guid.NewGuid();
+        _lookup.ContextByRevision[revisionId] = PegamentoContextBuilder.Complete(Guid.NewGuid(), revisionId);
+        var created = await _service.CreateControlAsync(new CreatePegamentoRequest(revisionId, null, null));
+        Assert.True(created.IsSuccess);
+
+        var added = await _service.AddMeasurementAsync(
+            new AddMeasurementRequest(created.Value, PegamentoComponentKey.CM, 7, 52.30m, null));
+
+        Assert.True(added.IsSuccess, "a one-sided measurement must never be blocked (N39)");
+        var measurement = _repository.Measurements[created.Value].Single();
+        Assert.Null(measurement.ContraCostura);
+        Assert.Null(measurement.Ovalizacao);      // fallback: ovalização absent
+        Assert.Equal(52.30m, measurement.Media);  // fallback: média = single value
+    }
+
+    // ---- PG-04: closed-control rule inside the atomic measurement flow ----
+
+    [Fact]
+    public async Task AddMeasurement_OnClosedControl_IsBlockedAndPersistsNothing()
+    {
+        var revisionId = Guid.NewGuid();
+        _lookup.ContextByRevision[revisionId] = PegamentoContextBuilder.Complete(Guid.NewGuid(), revisionId);
+        var created = await _service.CreateControlAsync(new CreatePegamentoRequest(revisionId, null, null));
+        Assert.True(created.IsSuccess);
+
+        var closed = await _service.CloseControlAsync(new CloseControlRequest(created.Value));
+        Assert.True(closed.IsSuccess);
+
+        var added = await _service.AddMeasurementAsync(
+            new AddMeasurementRequest(created.Value, PegamentoComponentKey.CM, 42, 52.30m, 52.00m));
+
+        Assert.True(added.IsFailure);
+        Assert.Equal("PEGAMENTO_CONTROL_CLOSED", added.Error.Code);
+        Assert.False(_repository.Measurements.ContainsKey(created.Value));
+    }
+
+    [Fact]
+    public async Task UpdateControl_OnClosedControl_IsBlocked()
+    {
+        var revisionId = Guid.NewGuid();
+        _lookup.ContextByRevision[revisionId] = PegamentoContextBuilder.Complete(Guid.NewGuid(), revisionId);
+        var created = await _service.CreateControlAsync(new CreatePegamentoRequest(revisionId, null, null));
+        Assert.True(created.IsSuccess);
+
+        var closed = await _service.CloseControlAsync(new CloseControlRequest(created.Value));
+        Assert.True(closed.IsSuccess);
+
+        var updated = await _service.UpdateControlAsync(
+            new UpdatePegamentoRequest(created.Value, 0.30m, "nova nota"));
+
+        Assert.True(updated.IsFailure);
+        Assert.Equal("PEGAMENTO_CONTROL_CLOSED", updated.Error.Code);
+        Assert.Equal(0.20m, _repository.Controls[created.Value].Tolerance); // untouched
     }
 }

@@ -4,17 +4,17 @@
 -- Purpose
 --   Fresh-install baseline that produces — directly and in one pass — the
 --   FINAL effective schema that results from applying the full forward-only
---   migration family N01 … N24 in order.
+--   migration family N01 … N42 in order.
 --
 --   It is NOT a migration: it must live OUTSIDE database/migrations/ because
 --   the BA DMO migration runner (MigrationDiscovery) requires every *.sql file
 --   in that directory to match the fresh-build family pattern 'N##_<name>.sql';
 --   placing this file there would break discovery and the
---   ShippedFreshBuildFamily_IsComplete_N01ThroughN24 test. The historical
---   chain N01…N24 stays intact (database/migrations/) as the upgrade path.
+--   ShippedFreshBuildFamily tests. The historical chain N01…N42 stays intact
+--   (database/migrations/) as the upgrade path.
 --
 -- Target environments
---   * Full PostgreSQL (local/dev)   — reproduces the exact N01–N24 catalog,
+--   * Full PostgreSQL (local/dev)   — reproduces the exact N01–N42 catalog,
 --     including the runtime role + default-privileges contract.
 --   * Supabase Hosted               — the same file runs cleanly with only the
 --     privileges that the project role has. All privilege-heavy statements
@@ -23,10 +23,38 @@
 --     entitlement is unavailable, so nothing schema-critical is skipped and
 --     nothing privilege-heavy fails the run.
 --
--- Equivalence scope (verified in /reports/consolidated_schema_equivalence.md)
---   tables / columns / types / nullability / PK / FK / unique / check /
---   indexes / defaults / functions / triggers / RLS / policies / grants /
---   auth-related mappings — all reproduce the N01…N24 final state.
+-- Parity scope
+--   Reproduces the chain end-state N01…N42 (audit CB-01…CB-05 closure,
+--   reports/post_codex_database_contract_audit.md §4; N34-N42 implemented in
+--   the N34-N42 implementation reports):
+--     * N31 objects (access_template_profiles + ensure trigger + unique
+--       actor index + profile sync) for Admin template editing (42P01 fix);
+--     * N29 RLS/policy/grant stanza on article_reference_images;
+--     * post-N33 security posture for the legacy access mirrors (REVOKEs +
+--       column-level internal_users grants);
+--     * N34 final state: the legacy access mirrors are REMOVED
+--       (internal_user_access_templates + internal_users.profile_title + its
+--       CHECK) — drift D-A (the inert junction policy absent here) is resolved
+--       by construction on both paths;
+--     * N35 final state: index `ix_bq_movements_noted_repairer` present and
+--       the redundant `ix_pegamento_documentos_controlo` absent;
+--     * N36 final state: the single policy-name convention `ba_dmo_app_access`
+--       everywhere (access_template_profiles included);
+--     * N37 final state: `peso_comparacao_anterior` removed (previous-control
+--       snapshot lives in `peso_controlos.previous_control`);
+--     * N38 final state: `internal_users.modules_override` and
+--       `job_on_revision.image_asset_id` removed; internal_users column-level
+--       grants re-issued for the seven surviving canonical columns;
+--     * N39 final state: `pegamento_medicoes.contra_costura` nullable
+--       (one-sided measurements non-blocking);
+--     * N40 final state: `trg_peso_leituras_approved_guard` backstop
+--       (approved Peso readings are not silently rewritable);
+--     * N41 final state: per-position active-occupation unique index;
+--     * N42 final state: `tool_check_occurrences` removed (Job-On-level
+--       `job_on_verification_occurrence` is the single occurrence surface).
+--   Reconciliation DML of N27/N28/N29/N31/N32 is included where meaningful on
+--   a fresh (empty) database; on a populated partial database the chain
+--   migrations remain the authority.
 -- ============================================================================
 
 -- ============================================================================
@@ -59,8 +87,7 @@ $$;
 -- ALTER DEFAULT PRIVILEGES FOR ROLE ba_dmo_migrate IN SCHEMA public
 --     GRANT USAGE, SELECT ON SEQUENCES TO ba_dmo_app;
 -- (Comment-kept for provenance. ALTER DEFAULT PRIVILEGES is privilege-heavy and
---  is intentionally NOT emitted unguarded in the Supabase-hosted baseline; see
---  the Supabase compatibility notes in /reports/consolidated_schema_equivalence.md.)
+--  is intentionally NOT emitted unguarded in the Supabase-hosted baseline.)
 
 CREATE OR REPLACE FUNCTION ba_dmo_guard_append_only()
 RETURNS trigger
@@ -105,9 +132,7 @@ CREATE TABLE IF NOT EXISTS internal_users (
     auth_user_id    uuid        NULL,
     template_id     text        NOT NULL REFERENCES access_templates (template_id),
     display_name    text        NOT NULL,
-    profile_title   text        NULL,
     active          boolean     NOT NULL DEFAULT TRUE,
-    modules_override jsonb      NULL,
     created_at_utc  timestamptz NOT NULL DEFAULT now(),
     updated_at_utc  timestamptz NOT NULL DEFAULT now()
 );
@@ -238,6 +263,11 @@ CREATE TABLE IF NOT EXISTS bq_movements (
 
 CREATE INDEX IF NOT EXISTS ix_bq_movements_trace ON bq_movements (bq_trace_id);
 CREATE INDEX IF NOT EXISTS ix_bq_movements_occurred ON bq_movements (occurred_at_utc);
+-- N35 §1 (BQ-16): repairer-filtered Boquilhas History (ListMovementsAsync /
+-- CountMovementsAsync "noted_repairer_id = @RepairerId" predicate). Not a
+-- prefix of any existing composite; append-only table -> negligible write cost.
+CREATE INDEX IF NOT EXISTS ix_bq_movements_noted_repairer
+    ON bq_movements (noted_repairer_id);
 
 DROP TRIGGER IF EXISTS trg_bq_movements_append_only ON bq_movements;
 CREATE TRIGGER trg_bq_movements_append_only
@@ -369,28 +399,6 @@ CREATE TABLE IF NOT EXISTS tool_check_rules (
 
 CREATE INDEX IF NOT EXISTS ix_tool_check_rules_lote ON tool_check_rules (tool_lote_id);
 
-CREATE TABLE IF NOT EXISTS tool_check_occurrences (
-    tool_check_occurrence_id uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-    tool_check_rule_id       uuid        NOT NULL REFERENCES tool_check_rules (tool_check_rule_id),
-    job_on_id                uuid        NULL,
-    job_on_component_id      uuid        NULL,
-    status                   text        NOT NULL DEFAULT 'pendente',
-    completion_source        text        NOT NULL DEFAULT 'manual_job_on',
-    completed_by             text        NULL REFERENCES internal_users (actor_id),
-    completed_at_utc         timestamptz NULL,
-    created_at_utc           timestamptz NOT NULL DEFAULT now(),
-    created_by               text        NULL REFERENCES internal_users (actor_id),
-    updated_at_utc           timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT ck_tool_check_occurrences_status CHECK (
-        status IN ('pendente', 'confirmada', 'reposta', 'desativada')),
-    CONSTRAINT ck_tool_check_occurrences_source CHECK (completion_source = 'manual_job_on'),
-    CONSTRAINT ck_tool_check_occurrences_completed CHECK (
-        (status IN ('confirmada', 'reposta')) = (completed_at_utc IS NOT NULL))
-);
-
-CREATE INDEX IF NOT EXISTS ix_tool_check_occurrences_rule ON tool_check_occurrences (tool_check_rule_id);
-CREATE INDEX IF NOT EXISTS ix_tool_check_occurrences_job_on ON tool_check_occurrences (job_on_id);
-
 -- ============================================================================
 -- 5. Job On (N05) — mandatory revision FK is circular; added after both tables.
 --    job_on includes N13 additive production_folder.
@@ -437,7 +445,6 @@ CREATE TABLE IF NOT EXISTS job_on_revision (
     weight_snapshot     jsonb       NULL,
     process_snapshot    jsonb       NULL,
     general_notes       text        NULL,
-    image_asset_id      text        NULL, -- legacy/dormant; active association is reference-owned below
     change_reason       text        NULL,
     saved_by            text        NULL REFERENCES internal_users (actor_id),
     saved_at_utc        timestamptz NOT NULL DEFAULT now(),
@@ -468,6 +475,27 @@ CREATE TABLE IF NOT EXISTS article_reference_images (
 
 CREATE INDEX IF NOT EXISTS ix_article_reference_images_updated_by
     ON article_reference_images (updated_by);
+
+-- N29 RLS + policy + grant stanza for article_reference_images (parity with
+-- database/migrations/N29_jobon_reference_images.sql §N29:139-155; audit
+-- CB-02). On a consolidated-built DB the table was previously RLS-less.
+ALTER TABLE article_reference_images ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ba_dmo_app') THEN
+        GRANT SELECT, INSERT, UPDATE, DELETE
+            ON article_reference_images TO ba_dmo_app;
+
+        DROP POLICY IF EXISTS ba_dmo_app_access ON article_reference_images;
+        CREATE POLICY ba_dmo_app_access
+            ON article_reference_images
+            FOR ALL
+            TO ba_dmo_app
+            USING (true)
+            WITH CHECK (true);
+    END IF;
+END $$;
 
 -- Circular link job_on.current_revision_id → job_on_revision (as in N05).
 ALTER TABLE job_on
@@ -667,14 +695,6 @@ CREATE TABLE IF NOT EXISTS peso_leituras (
     CONSTRAINT uq_peso_leituras_controlo_cm UNIQUE (peso_controlo_id, cm_number)
 );
 
-CREATE TABLE IF NOT EXISTS peso_comparacao_anterior (
-    peso_controlo_id           uuid        PRIMARY KEY REFERENCES peso_controlos (peso_controlo_id) ON DELETE CASCADE,
-    previous_peso_controlo_id  uuid        NULL REFERENCES peso_controlos (peso_controlo_id),
-    previous_snapshot          jsonb       NULL,
-    deltas                     jsonb       NULL,
-    resolved_at_utc            timestamptz NOT NULL DEFAULT now()
-);
-
 CREATE TABLE IF NOT EXISTS peso_day_approvals (
     peso_day_approval_id uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     mold_number          text        NOT NULL,
@@ -730,7 +750,7 @@ CREATE TABLE IF NOT EXISTS pegamento_medicoes (
     pegamento_controlo_id uuid        NOT NULL REFERENCES pegamento_controlos (pegamento_controlo_id),
     component_key         text        NOT NULL,
     costura               numeric(18,4) NOT NULL,
-    contra_costura        numeric(18,4) NOT NULL,
+    contra_costura        numeric(18,4) NULL,
     measured_at_utc       timestamptz NOT NULL DEFAULT now(),
     actor_id              text        NULL REFERENCES internal_users (actor_id),
     tool_number           integer     NULL                                         -- N15
@@ -759,9 +779,9 @@ CREATE TABLE IF NOT EXISTS pegamento_documentos (
     generated_at_utc            timestamptz NOT NULL DEFAULT now(),
     generated_by                text        NULL REFERENCES internal_users (actor_id)
 );
-
-CREATE INDEX IF NOT EXISTS ix_pegamento_documentos_controlo
-    ON pegamento_documentos (pegamento_controlo_id);
+-- (N35 §2: the redundant standalone index ix_pegamento_documentos_controlo —
+-- N14 created both it and UNIQUE (pegamento_controlo_id); the constraint
+-- index covers the column, so the duplicate is NOT reproduced here.)
 
 -- ============================================================================
 -- 8. Repair (N08) — internal_repair_records includes N22 additive columns.
@@ -921,6 +941,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_warehouse_stock_active_occupation
     WHERE released_at_utc IS NULL;
 CREATE INDEX IF NOT EXISTS ix_warehouse_stock_location ON warehouse_stock (warehouse_location_id);
 CREATE INDEX IF NOT EXISTS ix_warehouse_stock_tool_lote ON warehouse_stock (tool_lote_id);
+
+-- N41 (D-14): at most one ACTIVE occupation per position. The C# FOR UPDATE
+-- locking stays the concurrency backstop; this index adds the DB invariant.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_warehouse_stock_active_position
+    ON warehouse_stock (warehouse_location_id)
+    WHERE released_at_utc IS NULL;
 
 CREATE TABLE IF NOT EXISTS warehouse_movements (
     warehouse_movement_id uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1232,13 +1258,13 @@ DECLARE
         'bq_lotes', 'bq_traces', 'bq_movements', 'bq_discrepancies',
         'bq_lifecycle_history', 'bq_utilisation_readings',
         'tool_references', 'tool_lotes', 'physical_pieces',
-        'tool_check_rules', 'tool_check_occurrences',
+        'tool_check_rules',
         'job_on', 'job_on_revision', 'job_on_component',
         'job_on_component_field', 'job_on_component_row',
         'job_on_verification_occurrence', 'job_on_audit_event',
         'job_on_field_option',
         'peso_references', 'peso_lotes', 'peso_controlos', 'peso_leituras',
-        'peso_comparacao_anterior', 'peso_day_approvals', 'peso_settings',
+        'peso_day_approvals', 'peso_settings',
         'pegamento_controlos', 'pegamento_medicoes',
         'repairers', 'line_repairer_defaults', 'repair_exits',
         'repair_exit_items', 'repair_events', 'internal_repair_records',
@@ -1291,13 +1317,13 @@ DECLARE
         'bq_lotes', 'bq_traces', 'bq_movements', 'bq_discrepancies',
         'bq_lifecycle_history', 'bq_utilisation_readings',
         'tool_references', 'tool_lotes', 'physical_pieces',
-        'tool_check_rules', 'tool_check_occurrences',
+        'tool_check_rules',
         'job_on', 'job_on_revision', 'job_on_component',
         'job_on_component_field', 'job_on_component_row',
         'job_on_verification_occurrence', 'job_on_audit_event',
         'job_on_field_option',
         'peso_references', 'peso_lotes', 'peso_controlos', 'peso_leituras',
-        'peso_comparacao_anterior', 'peso_day_approvals', 'peso_settings',
+        'peso_day_approvals', 'peso_settings',
         'pegamento_controlos', 'pegamento_medicoes',
         'repairers', 'line_repairer_defaults', 'repair_exits',
         'repair_exit_items', 'repair_events', 'internal_repair_records',
@@ -1490,6 +1516,42 @@ CREATE TRIGGER trg_peso_controlos_approved_guard
     EXECUTE FUNCTION ba_dmo_guard_peso_approved();
 
 -- ----------------------------------------------------------------------------
+-- N40 (D-10): approved Peso READINGS protection. N25 protects the approved
+-- control ROW; this sibling guard makes any INSERT/UPDATE/DELETE on
+-- peso_leituras fail while the parent control is approved. The same-release
+-- service pairing confines readings DML to the draft-edit path and routes
+-- submit/approve/reject/reopen/decide through header-only updates, so the
+-- guard never fires on a legitimate flow (including approve/reopen).
+-- Mirrors database/migrations/N40_peso_leituras_approved_guard.sql.
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION ba_dmo_guard_peso_leituras_approved()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    parent_status text;
+BEGIN
+    SELECT status INTO parent_status
+      FROM peso_controlos
+     WHERE peso_controlo_id = COALESCE(NEW.peso_controlo_id, OLD.peso_controlo_id);
+
+    IF parent_status = 'aprovado' THEN
+        RAISE EXCEPTION
+            'BA DMO: readings of approved peso control % cannot be inserted, updated or deleted; reopen the control first',
+            COALESCE(NEW.peso_controlo_id, OLD.peso_controlo_id);
+    END IF;
+
+    RETURN COALESCE(NEW, OLD);
+END
+$$;
+
+DROP TRIGGER IF EXISTS trg_peso_leituras_approved_guard ON peso_leituras;
+CREATE TRIGGER trg_peso_leituras_approved_guard
+    BEFORE INSERT OR UPDATE OR DELETE ON peso_leituras
+    FOR EACH ROW
+    EXECUTE FUNCTION ba_dmo_guard_peso_leituras_approved();
+
+-- ----------------------------------------------------------------------------
 -- §1.8 INT-07: job_on_verification_occurrence completed-state consistency
 -- (mirrors ck_tool_check_occurrences_completed from the N04 sibling table).
 -- ----------------------------------------------------------------------------
@@ -1608,37 +1670,106 @@ CREATE INDEX IF NOT EXISTS ix_audit_events_module_time
 -- ----------------------------------------------------------------------------
 -- N26 (owner contract §6): per-user module grant override. Nullable jsonb on
 -- internal_users; when non-null it replaces the template grants at identity
--- resolution (template rows untouched — per-user isolation). Additive and
--- idempotent; mirrors database/migrations/N26_user_modules_override.sql for
--- existing databases running only this consolidated baseline.
+-- resolution (template rows untouched — per-user isolation).
+-- NOT reproduced here: the column was REMOVED by N38 (dormant legacy surface;
+-- N38_dormant_column_removal.sql). On an existing N01-N25 database the chain's
+-- N26 adds it and N38 removes it; this final-state baseline simply never
+-- creates it.
 -- ----------------------------------------------------------------------------
-ALTER TABLE internal_users
-    ADD COLUMN IF NOT EXISTS modules_override jsonb;
 
 -- ----------------------------------------------------------------------------
--- N27: final access convergence for clean installs.
+-- N27/N33/N34 — final access posture (mirrors removed).
+-- The N27 junction table (internal_user_access_templates), its index,
+-- RLS/policy/grants and the internal_users.profile_title mirror column (+ its
+-- N27 CHECK) were physically REMOVED by N34 (chain: N34_legacy_access_mirror_removal.sql).
+-- This final-state baseline does NOT reproduce them — a fresh install lands
+-- directly in the post-N34 state (drift D-A from the N33 parity audit is
+-- resolved on both paths).
+-- The N33 §3 column-level grant refactor IS reproduced: ba_dmo_app's
+-- table-level SELECT/INSERT/UPDATE on internal_users stays revoked and the
+-- same three privileges are granted at COLUMN level for the exact canonical
+-- column set (profile_title is gone and modules_override was REMOVED by N38,
+-- so the explicit list is the seven surviving canonical columns).
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS internal_user_access_templates (
-    actor_id        text        NOT NULL REFERENCES internal_users (actor_id),
-    template_id     text        NOT NULL REFERENCES access_templates (template_id),
-    assigned_at_utc timestamptz NOT NULL DEFAULT now(),
-    assigned_by     text        NULL,
-    PRIMARY KEY (actor_id, template_id)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ba_dmo_app') THEN
+        EXECUTE 'REVOKE SELECT, INSERT, UPDATE ON internal_users FROM ba_dmo_app';
+        EXECUTE 'GRANT SELECT (actor_id, auth_user_id, template_id, display_name, active, created_at_utc, updated_at_utc) ON internal_users TO ba_dmo_app';
+        EXECUTE 'GRANT INSERT (actor_id, auth_user_id, template_id, display_name, active, created_at_utc, updated_at_utc) ON internal_users TO ba_dmo_app';
+        EXECUTE 'GRANT UPDATE (actor_id, auth_user_id, template_id, display_name, active, created_at_utc, updated_at_utc) ON internal_users TO ba_dmo_app';
+    END IF;
+END
+$$;
+
+-- ----------------------------------------------------------------------------
+-- N31 — template-owned functional profile + single effective template
+-- (mirrors database/migrations/N31_template_profiles_single_assignment.sql;
+-- audit CB-01). Adds access_template_profiles + the deterministic profile
+-- trigger so Admin template editing works on consolidated-built databases
+-- (42P01 fix). N31's mirror-sync DML (junction collapse/unique actor index and
+-- the internal_users.profile_title sync) is NOT reproduced here: those mirror
+-- structures were removed by N34 and are absent from this final-state
+-- baseline; the template profile remains the single functional authority.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS access_template_profiles (
+    template_id         text PRIMARY KEY REFERENCES access_templates (template_id) ON DELETE CASCADE,
+    functional_profile  text NOT NULL,
+    updated_at_utc      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT ck_access_template_profiles_functional_profile CHECK (
+        functional_profile IN ('Admin', 'Operador / Controlador', 'Responsável'))
 );
 
-CREATE INDEX IF NOT EXISTS ix_internal_user_access_templates_template
-    ON internal_user_access_templates (template_id, actor_id);
+-- Every newly inserted template receives a deterministic initial profile.
+CREATE OR REPLACE FUNCTION ba_dmo_ensure_access_template_profile()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO access_template_profiles (template_id, functional_profile, updated_at_utc)
+    VALUES (
+        NEW.template_id,
+        CASE
+            WHEN NEW.modules @> '[{"moduleId":"admin"}]'::jsonb THEN 'Admin'
+            ELSE 'Operador / Controlador'
+        END,
+        NEW.updated_at_utc)
+    ON CONFLICT (template_id) DO NOTHING;
+    RETURN NEW;
+END
+$$;
 
-ALTER TABLE internal_users
-    ALTER COLUMN profile_title SET NOT NULL;
-ALTER TABLE internal_users
-    DROP CONSTRAINT IF EXISTS ck_internal_users_functional_profile;
-ALTER TABLE internal_users
-    ADD CONSTRAINT ck_internal_users_functional_profile CHECK (
-        profile_title IN ('Admin', 'Operador / Controlador', 'Responsável'));
+DROP TRIGGER IF EXISTS trg_access_templates_ensure_profile ON access_templates;
+CREATE TRIGGER trg_access_templates_ensure_profile
+    AFTER INSERT ON access_templates
+    FOR EACH ROW
+    EXECUTE FUNCTION ba_dmo_ensure_access_template_profile();
 
-ALTER TABLE internal_user_access_templates ENABLE ROW LEVEL SECURITY;
+-- Backfill existing templates (no-op on a fresh empty database). The
+-- N31/N32-era fallback read internal_users.profile_title with MIN()/HAVING —
+-- that mirror column is REMOVED by N34, so only the N31-established
+-- deterministic fallback is reproduced (identical to the N32 §3 backfill).
+INSERT INTO access_template_profiles (template_id, functional_profile, updated_at_utc)
+SELECT
+    t.template_id,
+    CASE
+        WHEN t.modules @> '[{"moduleId":"admin"}]'::jsonb THEN 'Admin'
+        WHEN lower(t.name) LIKE '%respons%' THEN 'Responsável'
+        ELSE 'Operador / Controlador'
+    END,
+    t.updated_at_utc
+FROM access_templates t
+LEFT JOIN access_template_profiles p ON p.template_id = t.template_id
+WHERE p.template_id IS NULL
+ON CONFLICT (template_id) DO NOTHING;
 
+-- (N31's junction-sync steps — DELETE hybrid rows, INSERT one mirror row per
+-- user, CREATE UNIQUE INDEX ux_internal_user_access_templates_actor, and the
+-- UPDATE internal_users SET profile_title = p.functional_profile sync — are
+-- NOT reproduced: the junction and the profile_title mirror were removed by
+-- N34. On a fresh database those steps were no-ops anyway.)
+
+ALTER TABLE access_template_profiles ENABLE ROW LEVEL SECURITY;
 DO $$
 DECLARE
     role_name text;
@@ -1646,21 +1777,24 @@ BEGIN
     FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated'] LOOP
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
             EXECUTE format(
-                'REVOKE ALL ON TABLE internal_user_access_templates FROM %I', role_name);
+                'REVOKE ALL ON TABLE access_template_profiles FROM %I', role_name);
         END IF;
     END LOOP;
 END
 $$;
 
-GRANT SELECT, INSERT, UPDATE, DELETE
-    ON internal_user_access_templates TO ba_dmo_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE access_template_profiles TO ba_dmo_app;
 
-DROP POLICY IF EXISTS internal_user_access_templates_app_access
-    ON internal_user_access_templates;
-CREATE POLICY internal_user_access_templates_app_access
-    ON internal_user_access_templates
+-- N36 (D-15): policy-name convention. N31 named this policy
+-- access_template_profiles_app_access; N36 renames it to the standard
+-- ba_dmo_app_access with IDENTICAL semantics (FOR ALL TO ba_dmo_app USING
+-- (TRUE) WITH CHECK (TRUE)); this final-state baseline creates the canonical
+-- name directly.
+DROP POLICY IF EXISTS ba_dmo_app_access ON access_template_profiles;
+CREATE POLICY ba_dmo_app_access
+    ON access_template_profiles
     FOR ALL TO ba_dmo_app
     USING (TRUE)
     WITH CHECK (TRUE);
 
--- END OF CONSOLIDATED CLEAN-INSTALL BASELINE (includes N25-N27)
+-- END OF CONSOLIDATED CLEAN-INSTALL BASELINE (includes N25-N42)

@@ -1,3 +1,4 @@
+using System.Data;
 using BA.Dmo.Application.Modules.Pegamentos;
 using BA.Dmo.Application.Shared;
 using BA.Dmo.Application.Shared.Persistence;
@@ -5,6 +6,23 @@ using BA.Dmo.Domain.Modules.Pegamentos;
 using BA.Dmo.Domain.Shared.Kernel;
 
 namespace BA.Dmo.UnitTests.Modules.Pegamentos;
+
+/// <summary>No-op in-memory unit of work for the Pegamentos flows (confined to tests/*).</summary>
+public sealed class FakePegamentoUnitOfWork : IDbUnitOfWork
+{
+    public IDbConnection Connection => null!;
+    public IDbTransaction Transaction => null!;
+    public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Task RollbackAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+}
+
+/// <summary>In-memory fake of the Pegamentos unit-of-work factory (no DB).</summary>
+public sealed class FakePegamentoUnitOfWorkFactory : IPegamentoUnitOfWorkFactory
+{
+    public Task<IDbUnitOfWork> BeginAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IDbUnitOfWork>(new FakePegamentoUnitOfWork());
+}
 
 /// <summary>Fixed global output root settings reader.</summary>
 public sealed class FakeSettings(string? outputRoot) : IAppSettingsReader

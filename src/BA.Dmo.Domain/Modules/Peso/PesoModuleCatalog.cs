@@ -19,9 +19,6 @@ public static class PesoModuleCatalog
     /// <summary>Default PS glass constant (TD-12/GLM-PESO-05).</summary>
     public const decimal ConstantPs = 2.4231m;
 
-    /// <summary>Minimal length of the report subfolder relative name.</summary>
-    public const int ReportSubfolderMinLength = 1;
-
     /// <summary>Canonical allowed machine lines of a Peso lot.</summary>
     public static readonly string[] AllowedLines = ["B1", "B2", "B3", "C1", "C2", "C3"];
 }

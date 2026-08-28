@@ -11,7 +11,7 @@ namespace BA.Dmo.Infrastructure.Access;
 /// <summary>
 /// U-10 — Peso Dapper persistence (N06, GLM-PESO-08). Implements IPesoRepository.
 /// Every control/comparison stores job_on_id + job_on_revision_id (TD-18);
-/// peso_comparacao_anterior provides the cross-line previous-approved read path
+/// peso_controlos.previous_control provides the immutable previous-approved baseline
 /// (TD-13/TD-30). Multi-table writes (control + readings + audit; day approval)
 /// run inside one DapperUnitOfWork transaction (GLM-DATA-05).
 /// </summary>
@@ -325,60 +325,11 @@ ORDER BY c.control_date DESC;";
         finally { await DisposeAsync(conn); }
     }
 
-    public async Task<IReadOnlyList<PesoControl>> GetApprovedControlsForJobOnAsync(Guid jobOnId, CancellationToken ct = default)
-    {
-        const string sql = @"
-SELECT c.*, ref.mold_number AS m_mold, ref.neckring_number AS m_neck
-FROM peso_controlos c
-LEFT JOIN peso_references ref ON ref.peso_reference_id = c.peso_reference_id
-WHERE c.job_on_id = @JobOnId AND c.status = 'aprovado'
-ORDER BY c.control_date DESC;";
-        var conn = await Open(_connectionFactory, ct);
-        try
-        {
-            var rows = await Db.QueryAsync<dynamic>(conn, sql, new { JobOnId = jobOnId }, cancellationToken: ct);
-            var result = new List<PesoControl>();
-            foreach (var row in rows)
-            {
-                var control = MapControl(row);
-                control.Leituras = await GetLeiturasAsync(conn, control.PesoControloId, ct);
-                result.Add(control);
-            }
-            return result;
-        }
-        finally { await DisposeAsync(conn); }
-    }
-
     public async Task UpdateControlAsync(PesoControl control, CancellationToken ct = default)
     {
         await DapperUnitOfWork.RunAsync(_connectionFactory, async (conn, tx, token) =>
         {
-            const string update = @"
-UPDATE peso_controlos
-SET record_type = @RecordType, mold_number = @MoldNumber, neckring_number = @NeckringNumber,
-    production_code = @ProductionCode, line = @Line, lote = @Lote, control_date = @ControlDate,
-    status = @Status, measurements_snapshot = @Measurements, approval_log = @ApprovalLog,
-    comparison_decisions = @ComparisonDecisions,
-    approved_by = @ApprovedBy, approved_at_utc = @ApprovedAtUtc,
-    updated_at_utc = now()
-WHERE peso_controlo_id = @Id;";
-            await Db.ExecuteAsync(conn, update, new
-            {
-                Id = control.PesoControloId,
-                RecordType = PesoRecordTypeCodec.ToStorage(control.RecordType),
-                control.MoldNumber,
-                control.NeckringNumber,
-                control.ProductionCode,
-                control.Line,
-                control.Lote,
-                ControlDate = control.ControlDate,
-                Status = PesoControlStateCodec.ToStorage(control.Status),
-                Measurements = BuildMeasurementsSnapshot(control),
-                ApprovalLog = control.ApprovalLogJson ?? "[]",
-                ComparisonDecisions = (object?)control.ComparisonDecisionsJson ?? DBNull.Value,
-                ApprovedBy = (object?)control.ApprovedBy ?? DBNull.Value,
-                ApprovedAtUtc = control.ApprovedAtUtc?.UtcDateTime
-            }, tx, token);
+            await UpdateControlHeaderAsync(conn, tx, control, token);
 
             const string deleteLeituras = "DELETE FROM peso_leituras WHERE peso_controlo_id = @ControlId;";
             await Db.ExecuteAsync(conn, deleteLeituras, new { ControlId = control.PesoControloId }, tx, token);
@@ -401,6 +352,50 @@ VALUES (@Id, @ControlId, @CmNumber, @Readings, @CreatedBy);";
         }, ct);
     }
 
+    /// <summary>
+    /// N40 pairing: header-only update. Updates the control row and NEVER
+    /// touches peso_leituras. Used by the workflow transitions
+    /// (submit/approve/reject/reopen/decide) which carry no new measurement
+    /// data — keeping approved readings structurally immutable at the write
+    /// path level, with the N40 trigger as the DB backstop.
+    /// </summary>
+    public async Task UpdateControlHeaderAsync(PesoControl control, CancellationToken ct = default)
+    {
+        await DapperUnitOfWork.RunAsync(_connectionFactory, (conn, tx, token) =>
+            UpdateControlHeaderAsync(conn, tx, control, token), ct);
+    }
+
+    private static async Task<int> UpdateControlHeaderAsync(
+        IDbConnection conn, IDbTransaction tx, PesoControl control, CancellationToken token)
+    {
+        const string update = @"
+UPDATE peso_controlos
+SET record_type = @RecordType, mold_number = @MoldNumber, neckring_number = @NeckringNumber,
+    production_code = @ProductionCode, line = @Line, lote = @Lote, control_date = @ControlDate,
+    status = @Status, measurements_snapshot = @Measurements, approval_log = @ApprovalLog,
+    comparison_decisions = @ComparisonDecisions,
+    approved_by = @ApprovedBy, approved_at_utc = @ApprovedAtUtc,
+    updated_at_utc = now()
+WHERE peso_controlo_id = @Id;";
+        return await Db.ExecuteAsync(conn, update, new
+        {
+            Id = control.PesoControloId,
+            RecordType = PesoRecordTypeCodec.ToStorage(control.RecordType),
+            control.MoldNumber,
+            control.NeckringNumber,
+            control.ProductionCode,
+            control.Line,
+            control.Lote,
+            ControlDate = control.ControlDate,
+            Status = PesoControlStateCodec.ToStorage(control.Status),
+            Measurements = BuildMeasurementsSnapshot(control),
+            ApprovalLog = control.ApprovalLogJson ?? "[]",
+            ComparisonDecisions = (object?)control.ComparisonDecisionsJson ?? DBNull.Value,
+            ApprovedBy = (object?)control.ApprovedBy ?? DBNull.Value,
+            ApprovedAtUtc = control.ApprovedAtUtc?.UtcDateTime
+        }, tx, token);
+    }
+
     public async Task DeleteControlAsync(Guid id, CancellationToken ct = default)
     {
         await DapperUnitOfWork.RunAsync(_connectionFactory, async (conn, tx, token) =>
@@ -410,39 +405,6 @@ VALUES (@Id, @ControlId, @CmNumber, @Readings, @CreatedBy);";
             _ = affected;
             return 1;
         }, ct);
-    }
-
-    // ---- Previous resolution (TD-13/TD-30) -------------------------------
-
-    public async Task<PesoControloAnterior?> GetPreviousApprovedAsync(
-        string mold, string neckring, string productionCode, DateTime controlDate, CancellationToken ct = default)
-    {
-        const string sql = @"
-SELECT c.peso_controlo_id, c.measurements_snapshot
-FROM peso_controlos c
-WHERE c.mold_number = @Mold AND c.neckring_number = @Neck
-  AND c.status = 'aprovado'
-  AND (c.production_code < @Production OR c.control_date < @ControlDate)
-ORDER BY c.control_date DESC
-LIMIT 1;";
-        var conn = await Open(_connectionFactory, ct);
-        try
-        {
-            dynamic? row = await Db.QuerySingleOrDefaultAsync<dynamic>(conn, sql,
-                new { Mold = mold, Neck = neckring, Production = productionCode, ControlDate = controlDate },
-                cancellationToken: ct);
-            if (row is null) return new PesoControloAnterior(null, null, null, false);
-
-            var controlId = (Guid)row.peso_controlo_id;
-            var averages = ExtractSnapshotAverages(row.measurements_snapshot?.ToString());
-
-            return new PesoControloAnterior(
-                controlId,
-                averages?.PesoMedio,
-                averages?.CapacidadeMedia,
-                true);
-        }
-        finally { await DisposeAsync(conn); }
     }
 
     // ---- Day approvals + record dates --------------------------------------
@@ -537,30 +499,6 @@ VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'peso', @Action,
     }
 
     // ---- mapping helpers ------------------------------------------------------
-
-    // ---- previous resolution helpers (measurements_snapshot deserializer) ---
-
-    /// <summary>
-    /// Deserializes measurements_snapshot to extract persisted average values.
-    /// Used by GetPreviousApprovedAsync to avoid recomputing historical data.
-    /// </summary>
-    private static (decimal? PesoMedio, decimal? CapacidadeMedia)? ExtractSnapshotAverages(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json)) return null;
-        try
-        {
-            var obj = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
-            if (obj.TryGetProperty("pesoMedio", out var pm) && pm.TryGetDecimal(out var pesoVal))
-            {
-                if (obj.TryGetProperty("capacidadeMedia", out var cm) && cm.TryGetDecimal(out var capVal))
-                {
-                    return (pesoVal, capVal);
-                }
-            }
-        }
-        catch { /* malformed snapshot — best-effort only */ }
-        return null;
-    }
 
     private static PesoReference MapReference(dynamic row) => new()
     {

@@ -297,44 +297,6 @@ public class ArmazemServiceTests
         Assert.Empty(_repository.Movements);
     }
 
-    // ---- Substituir (atomic) ----------------------------------------------
-
-    [Fact]
-    public async Task Substituir_ReleasesCurrentAndOccupiesReplacement()
-    {
-        var currentId = SeedToolAt("2421", "CM-100", "1");
-        var newId = SeedTool("CM-150", "2");
-        var result = await _service.SubstituirAsync(new SubstituirRequest("2421", "CM", "CM-150", "2", null));
-        Assert.True(result.IsSuccess);
-        var currentActive = _repository.Stocks.FirstOrDefault(s => s.ToolId == currentId);
-        Assert.NotNull(currentActive);
-        Assert.False(currentActive!.IsActive);
-        var active = Assert.Single(_repository.Stocks.Where(s => s.IsActive));
-        Assert.Equal(newId, active.ToolId);
-        Assert.Equal(2, _repository.Movements.Count(m => m.WarehouseStockId.HasValue));
-    }
-
-    [Fact]
-    public async Task Substituir_AtomicFailure_LeavesBothPositionsUnchanged()
-    {
-        SeedToolAt("2421", "CM-100", "1");
-        SeedTool("CM-150", "2");
-        _repository.FailAtomicWrite = true;
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            _service.SubstituirAsync(new SubstituirRequest("2421", "CM", "CM-150", "2", null)));
-        Assert.All(_repository.Stocks, s => Assert.True(s.IsActive));
-        Assert.Empty(_repository.Movements);
-    }
-
-    [Fact]
-    public async Task Substituir_OnFreePosition_IsRejected()
-    {
-        SeedTool("CM-150", "2");
-        var result = await _service.SubstituirAsync(new SubstituirRequest("2421", "CM", "CM-150", "2", null));
-        Assert.True(result.IsFailure);
-        Assert.Equal("ARMZ_POSITION_FREE", result.Error.Code);
-    }
-
     // ---- Consulta / fora / two-ref warning --------------------------------
 
     [Fact]

@@ -12,6 +12,7 @@ namespace BA.Dmo.Application.Modules.Pegamentos;
 public sealed class PegamentoService
 {
     private readonly IPegamentoRepository _repository;
+    private readonly IPegamentoUnitOfWorkFactory _unitOfWorkFactory;
     private readonly IJobOnProductionContextLookup _contextLookup;
     private readonly PegamentoAuthorizationGate _gate;
     private readonly IClock _clock;
@@ -20,6 +21,7 @@ public sealed class PegamentoService
 
     public PegamentoService(
         IPegamentoRepository repository,
+        IPegamentoUnitOfWorkFactory unitOfWorkFactory,
         IJobOnProductionContextLookup contextLookup,
         PegamentoAuthorizationGate gate,
         IClock clock,
@@ -27,6 +29,7 @@ public sealed class PegamentoService
         IJobOnProductionFolderResolver productionFolderResolver)
     {
         _repository = repository;
+        _unitOfWorkFactory = unitOfWorkFactory;
         _contextLookup = contextLookup;
         _gate = gate;
         _clock = clock;
@@ -65,8 +68,15 @@ public sealed class PegamentoService
         if (createResult.IsFailure)
             return Result<Guid, DomainError>.Failure(createResult.Error);
 
-        var controloId = await _repository.CreateAsync(createResult.Value, ct);
-        return Result<Guid, DomainError>.Success(controloId);
+        // Single UoW for the control insert (audit PG-04): the revision-context
+        // resolution above is a Job On read (separate connection) — the write
+        // itself commits atomically.
+        await using (var uow = await _unitOfWorkFactory.BeginAsync(ct))
+        {
+            var controloId = await _repository.CreateAsync(uow, createResult.Value, ct);
+            await uow.CommitAsync(ct);
+            return Result<Guid, DomainError>.Success(controloId);
+        }
     }
 
     // ---- Load / Get -------------------------------------------------------
@@ -160,7 +170,9 @@ public sealed class PegamentoService
 
     public async Task<Result<bool, DomainError>> UpdateControlAsync(UpdatePegamentoRequest request, CancellationToken ct = default)
     {
-        var control = await _repository.GetByIdAsync(request.ControloId, ct);
+        await using var uow = await _unitOfWorkFactory.BeginAsync(ct);
+
+        var control = await _repository.GetByIdInTransactionAsync(uow, request.ControloId, ct);
         if (control is null)
             return Result<bool, DomainError>.Failure(DomainError.NotFound(
                 "PEGAMENTO_CONTROL_NOT_FOUND", "Controlo de pegamentos não encontrado."));
@@ -171,7 +183,8 @@ public sealed class PegamentoService
         if (updateResult.IsFailure)
             return Result<bool, DomainError>.Failure(updateResult.Error);
 
-        await _repository.UpdateAsync(control, ct);
+        await _repository.UpdateAsync(uow, control, ct);
+        await uow.CommitAsync(ct);
         return Result<bool, DomainError>.Success(true);
     }
 
@@ -184,7 +197,13 @@ public sealed class PegamentoService
             return Result<Guid, DomainError>.Failure(DomainError.Forbidden(
                 "PEGAMENTO_UNAUTHORIZED", "Acesso não autorizado ao módulo Pegamentos."));
 
-        var control = await _repository.GetByIdAsync(request.ControloId, ct);
+        // One UoW: the locked control read (FOR UPDATE) + the domain
+        // closed-control rule + the measurement insert commit/rollback as ONE
+        // transaction, closing the read→write race on a concurrent close
+        // (audit PG-04).
+        await using var uow = await _unitOfWorkFactory.BeginAsync(ct);
+
+        var control = await _repository.GetByIdInTransactionAsync(uow, request.ControloId, ct);
         if (control is null)
             return Result<Guid, DomainError>.Failure(DomainError.NotFound(
                 "PEGAMENTO_CONTROL_NOT_FOUND", "Controlo de pegamentos não encontrado."));
@@ -199,7 +218,8 @@ public sealed class PegamentoService
         if (addResult.IsFailure)
             return Result<Guid, DomainError>.Failure(addResult.Error);
 
-        var medicaoId = await _repository.AddMeasurementAsync(request.ControloId, addResult.Value, actorId, ct);
+        var medicaoId = await _repository.AddMeasurementAsync(uow, request.ControloId, addResult.Value, actorId, ct);
+        await uow.CommitAsync(ct);
         return Result<Guid, DomainError>.Success(medicaoId);
     }
 
@@ -207,7 +227,9 @@ public sealed class PegamentoService
 
     public async Task<Result<bool, DomainError>> CloseControlAsync(CloseControlRequest request, CancellationToken ct = default)
     {
-        var control = await _repository.GetByIdAsync(request.ControloId, ct);
+        await using var uow = await _unitOfWorkFactory.BeginAsync(ct);
+
+        var control = await _repository.GetByIdInTransactionAsync(uow, request.ControloId, ct);
         if (control is null)
             return Result<bool, DomainError>.Failure(DomainError.NotFound(
                 "PEGAMENTO_CONTROL_NOT_FOUND", "Controlo de pegamentos não encontrado."));
@@ -217,7 +239,8 @@ public sealed class PegamentoService
         if (closeResult.IsFailure)
             return Result<bool, DomainError>.Failure(closeResult.Error);
 
-        await _repository.UpdateAsync(control, ct);
+        await _repository.UpdateAsync(uow, control, ct);
+        await uow.CommitAsync(ct);
         return Result<bool, DomainError>.Success(true);
     }
 
@@ -231,30 +254,36 @@ public sealed class PegamentoService
             return Result<bool, DomainError>.Failure(DomainError.Forbidden(
                 "PEGAMENTO_UNAUTHORIZED", "Acesso não autorizado ao módulo Pegamentos."));
 
-        var control = await _repository.GetByIdAsync(controloId, ct);
-        if (control is null)
-            return Result<bool, DomainError>.Failure(DomainError.NotFound(
-                "PEGAMENTO_CONTROL_NOT_FOUND", "Controlo de pegamentos não encontrado."));
-
-        // Server derives ALL metadata from authoritative state
-        var filename = PegamentoPdfFilename.Compute(control);
-
-        // Resolve global output root from shared settings
+        // Resolve global output root from shared settings (read-only gate).
         var outputRoot = await _settings.GetOutputRootAsync(ct);
         if (string.IsNullOrWhiteSpace(outputRoot))
             return Result<bool, DomainError>.Failure(DomainError.Unexpected(
                 "PEGAMENTO_OUTPUT_ROOT_MISSING",
                 "O diretório principal de documentos não está configurado."));
 
+        // One UoW: locked control read + document read + closed-document freeze
+        // check + upsert commit/roll back atomically, closing the double-confirm
+        // race (audit PG-04).
+        await using var uow = await _unitOfWorkFactory.BeginAsync(ct);
+
+        var control = await _repository.GetByIdInTransactionAsync(uow, controloId, ct);
+        if (control is null)
+            return Result<bool, DomainError>.Failure(DomainError.NotFound(
+                "PEGAMENTO_CONTROL_NOT_FOUND", "Controlo de pegamentos não encontrado."));
+
         // Resolve Job On production folder from the exact historical context
+        // (read-only gate; uses the locked control's JobOnId).
         var productionFolder = await _productionFolderResolver.ResolveAsync(control.JobOnId, ct);
         if (string.IsNullOrWhiteSpace(productionFolder))
             return Result<bool, DomainError>.Failure(DomainError.Validation(
                 "PEGAMENTO_PRODUCTION_FOLDER_MISSING",
                 "A pasta de produção do Job On não está configurada."));
 
+        // Server derives ALL metadata from authoritative state
+        var filename = PegamentoPdfFilename.Compute(control);
+
         // Enforce closed document freeze
-        var existingDocument = await _repository.GetDocumentAsync(controloId, ct);
+        var existingDocument = await _repository.GetDocumentAsync(uow, controloId, ct);
 
         if (control.Status == PegamentoControloStatus.Fechado &&
             existingDocument is not null)
@@ -277,7 +306,8 @@ public sealed class PegamentoService
             GeneratedBy = actorId
         };
 
-        await _repository.UpsertDocumentAsync(document, ct);
+        await _repository.UpsertDocumentAsync(uow, document, ct);
+        await uow.CommitAsync(ct);
         return Result<bool, DomainError>.Success(true);
     }
 

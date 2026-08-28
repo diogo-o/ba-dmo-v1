@@ -83,29 +83,6 @@ public interface IAdminRepository
         DateTimeOffset updatedAtUtc,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Guarded write of this user's per-user module override (internal_users.
-    /// modules_override jsonb — DORMANT N26 legacy). Writes ONLY
-    /// modules_override (+ updated_at); template rows are never touched.
-    /// Kept for compatibility; runtime resolution never consumes it.
-    /// </summary>
-    Task SetUserModulesOverrideAsync(
-        string actorId,
-        string modulesJson,
-        DateTimeOffset expectedUpdatedAt,
-        DateTimeOffset updatedAtUtc,
-        CancellationToken cancellationToken = default);
-
-    // ---- self-lockout support (GLM-ACC-10) -------------------------------
-    /// <summary>
-    /// Count of ACTIVE internal users whose ACTIVE template has the Admin
-    /// functional profile (access_template_profiles) and grants admin.gerir,
-    /// optionally excluding one actor (the write target).
-    /// </summary>
-    Task<int> CountActiveAdminsAsync(
-        string? excludeActorId = null,
-        CancellationToken cancellationToken = default);
-
     // ---- access templates ------------------------------------------------
     Task<IReadOnlyList<AdminTemplateRow>> ListTemplatesAsync(
         CancellationToken cancellationToken = default);

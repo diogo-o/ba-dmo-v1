@@ -424,7 +424,7 @@ public sealed class PesoService
 
         var submit = control.Submit();
         if (submit.IsFailure) return Result<bool, DomainError>.Failure(submit.Error);
-        await _repository.UpdateControlAsync(control, ct);
+        await _repository.UpdateControlHeaderAsync(control, ct);
         await _repository.InsertAuditEventAsync(control.PesoControloId, "peso.controlo.submeter", null, null, gate.Value.ActorId, ct);
         return Result<bool, DomainError>.Success(true);
     }
@@ -454,7 +454,7 @@ public sealed class PesoService
         var approve = control.Approve(gate.Value.ActorId, _clock.UtcNow);
         if (approve.IsFailure) return Result<bool, DomainError>.Failure(approve.Error);
 
-        await _repository.UpdateControlAsync(control, ct);
+        await _repository.UpdateControlHeaderAsync(control, ct);
         await _repository.InsertAuditEventAsync(control.PesoControloId, "peso.controlo.aprovar", null, null, gate.Value.ActorId, ct);
 
         if (request.RegisterDayApproval)
@@ -476,7 +476,7 @@ public sealed class PesoService
         var reject = control.Reject(request.Justification);
         if (reject.IsFailure) return Result<bool, DomainError>.Failure(reject.Error);
 
-        await _repository.UpdateControlAsync(control, ct);
+        await _repository.UpdateControlHeaderAsync(control, ct);
         await _repository.InsertAuditEventAsync(control.PesoControloId, "peso.controlo.nao_aprovar", null, request.Justification, gate.Value.ActorId, ct);
         return Result<bool, DomainError>.Success(true);
     }
@@ -494,7 +494,7 @@ public sealed class PesoService
         var reopen = control.Reopen(request.Reason, _clock.UtcNow);
         if (reopen.IsFailure) return Result<bool, DomainError>.Failure(reopen.Error);
 
-        await _repository.UpdateControlAsync(control, ct);
+        await _repository.UpdateControlHeaderAsync(control, ct);
         await _repository.InsertAuditEventAsync(control.PesoControloId, "peso.controlo.reabrir", null, request.Reason, gate.Value.ActorId, ct);
         return Result<bool, DomainError>.Success(true);
     }
@@ -724,7 +724,7 @@ public sealed class PesoService
         };
         control.ComparisonDecisionsJson = System.Text.Json.JsonSerializer.Serialize(payload, ComparisonJsonOptions);
         control.UpdatedAtUtc = _clock.UtcNow;
-        await _repository.UpdateControlAsync(control, ct);
+        await _repository.UpdateControlHeaderAsync(control, ct);
         await _repository.InsertAuditEventAsync(control.PesoControloId, "peso.comparacao.decidir", null, control.ComparisonDecisionsJson, gate.Value.ActorId, ct);
         return Result<bool, DomainError>.Success(true);
     }

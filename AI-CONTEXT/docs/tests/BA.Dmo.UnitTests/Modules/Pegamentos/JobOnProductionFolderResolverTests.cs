@@ -35,7 +35,7 @@ public class JobOnProductionFolderResolverTests
         var repository = new FakePegamentoRepository();
         var folderResolver = new FakeJobOnProductionFolderResolver { DefaultFolder = "5447T173" };
         var service = new PegamentoService(
-            repository, lookup,
+            repository, new FakePegamentoUnitOfWorkFactory(), lookup,
             new PegamentoAuthorizationGate(FakeAuthorshipAccessor.Authorized()),
             new FixedClock(System.DateTimeOffset.MinValue),
             new FakeSettings("D:\\Documentos"), folderResolver);
@@ -61,7 +61,7 @@ public class JobOnProductionFolderResolverTests
 
         var repository = new FakePegamentoRepository();
         var service = new PegamentoService(
-            repository, lookup,
+            repository, new FakePegamentoUnitOfWorkFactory(), lookup,
             new PegamentoAuthorizationGate(FakeAuthorshipAccessor.Authorized()),
             new FixedClock(System.DateTimeOffset.MinValue),
             new FakeSettings("D:\\Documentos"),

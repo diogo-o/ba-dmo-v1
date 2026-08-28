@@ -64,4 +64,19 @@ public class PegamentoMeasurementCalculatorTests
         Assert.Equal(PegamentoToleranceStatus.Exceeded, PegamentoMeasurementCalculator.CheckTolerance(51.00m, Nominal, Tolerance));
         Assert.Equal(PegamentoToleranceStatus.Exceeded, PegamentoMeasurementCalculator.CheckTolerance(53.00m, Nominal, Tolerance));
     }
+
+    // ---- N39: one-sided measurement (contra_costura absent) ----
+    // Absence never becomes a validation blocker: Média falls back to the
+    // single value and the tolerance corridor applies to it.
+
+    [Fact]
+    public void Tolerance_OneSidedMeasurement_UsesSingleValueFallback()
+    {
+        Assert.Equal(PegamentoToleranceStatus.Ok,
+            PegamentoMeasurementCalculator.CheckTolerance(
+                PegamentoMeasurementCalculator.Media(52.10m, null)!.Value, Nominal, Tolerance));
+        Assert.Equal(PegamentoToleranceStatus.Exceeded,
+            PegamentoMeasurementCalculator.CheckTolerance(
+                PegamentoMeasurementCalculator.Media(52.30m, null)!.Value, Nominal, Tolerance));
+    }
 }

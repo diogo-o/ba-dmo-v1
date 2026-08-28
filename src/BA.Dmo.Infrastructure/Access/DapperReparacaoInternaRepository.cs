@@ -80,33 +80,6 @@ WHERE internal_repair_record_id = @Id;";
         finally { await DisposeAsync(conn); }
     }
 
-    public async Task<InternalRepairRecord?> GetChainRootAsync(Guid recordId, CancellationToken ct = default)
-    {
-        const string sql = @"
-WITH RECURSIVE root AS (
-    SELECT *
-    FROM internal_repair_records
-    WHERE internal_repair_record_id = @Id
-    UNION ALL
-    SELECT p.*
-    FROM internal_repair_records p
-    JOIN root r ON p.internal_repair_record_id = r.correction_of_id
-)
-SELECT internal_repair_record_id, line, job_on_id, job_on_revision_id, production_code,
-       reference, lot_id, tool_type, individual_number,
-       operator_id, occurred_at_utc, correction_of_id, before_snapshot,
-       correction_reason, created_at_utc, created_by
-FROM root
-WHERE correction_of_id IS NULL;";
-        var conn = await _connectionFactory.OpenConnectionAsync(ct);
-        try
-        {
-            dynamic? row = await Db.QuerySingleOrDefaultAsync<dynamic>(conn, sql, new { Id = recordId }, cancellationToken: ct);
-            return row is null ? null : MapRecord(row);
-        }
-        finally { await DisposeAsync(conn); }
-    }
-
     public async Task<IReadOnlyList<InternalRepairRecord>> GetChainAsync(Guid rootRecordId, CancellationToken ct = default)
     {
         const string sql = @"

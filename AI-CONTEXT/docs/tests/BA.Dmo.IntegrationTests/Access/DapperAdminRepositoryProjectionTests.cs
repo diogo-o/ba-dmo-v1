@@ -10,9 +10,9 @@ namespace BA.Dmo.IntegrationTests.Access;
 /// <summary>
 /// Regression guard for the admin user-list projection defect (dmo-5051):
 /// <see cref="AdminUserRow"/> carries ten constructor parameters (the last,
-/// optional <c>TemplateIds</c>, plus <c>ModulesOverrideJson</c> and
+/// optional <c>TemplateIds</c>, plus the compatibility <c>ModulesOverrideJson</c> slot and
 /// <c>AuthEmail</c>, are filled later
-/// by the per-user override column and batched service-role email enrichment),
+/// by a typed NULL and batched service-role email enrichment),
 /// yet <c>DapperAdminRepository.UserColumns</c> must return a column for every
 /// parameter so the real Dapper projection can materialize the row with
 /// <c>AuthEmail == null</c> BEFORE service enrichment.
@@ -32,9 +32,9 @@ public class DapperAdminRepositoryProjectionTests
         var updatedAt = new DateTimeOffset(2026, 8, 17, 12, 0, 0, TimeSpan.Zero);
 
         // Backing result set matching the ten AdminUserRow parameters. The
-        // AuthEmail and ModulesOverrideJson columns deliberately carry real
-        // typed columns present in the projection yet returned as NULL (no
-        // auth.users access at the runtime connection; no per-user override set):
+        // AuthEmail and ModulesOverrideJson deliberately remain typed NULL
+        // projection slots (no auth.users access; N38 removed the dormant
+        // per-user override column):
         // TemplateIds is the SINGLE canonical assignment projection
         // (ARRAY[u.template_id], SCHEMA-RAT-03A D-2 — the N27 junction is NOT
         // consulted for the effective template); ProfileTitle is the
@@ -69,6 +69,7 @@ public class DapperAdminRepositoryProjectionTests
         Assert.Contains("AS AuthEmail", connection.IssuedSql, StringComparison.Ordinal);
         Assert.Contains("NULL::text", connection.IssuedSql, StringComparison.Ordinal);
         Assert.Contains("AS ModulesOverrideJson", connection.IssuedSql, StringComparison.Ordinal);
+        Assert.DoesNotContain("u.modules_override", connection.IssuedSql, StringComparison.Ordinal);
         Assert.Contains("AS TemplateIds", connection.IssuedSql, StringComparison.Ordinal);
         // D-2: the projection derives the assignment from the canonical direct
         // FK — the N27 junction must not appear in the admin user projection.

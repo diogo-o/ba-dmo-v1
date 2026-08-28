@@ -136,9 +136,9 @@ public sealed class RepairAtomicityTests
             INSERT INTO access_templates (template_id, name, modules, active)
             VALUES (@TemplateId, 'Repair atomic test', '["reparacao_externa"]'::jsonb, TRUE);
             INSERT INTO internal_users
-                (actor_id, auth_user_id, template_id, display_name, profile_title, active)
+                (actor_id, auth_user_id, template_id, display_name, active)
             VALUES
-                (@ActorId, @AuthUserId, @TemplateId, 'Repair Atomic Test', 'Admin', TRUE);
+                (@ActorId, @AuthUserId, @TemplateId, 'Repair Atomic Test', TRUE);
             """,
             new NpgsqlParameter("TemplateId", templateId),
             new NpgsqlParameter("ActorId", actorId),

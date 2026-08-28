@@ -86,19 +86,23 @@ public static class PesoValidator
     }
 
     /// <summary>
-    /// Validates a control/workflow edit per GLM-PESO-06.6/7/8: a control may
-    /// only be edited while in rascunho or nao_aprovado; reopen from
-    /// aprovado/nao_aprovado requires a justification reason.
+    /// Validates a control/workflow edit per GLM-PESO-06.6/7/8 and the N40
+    /// approved-readings rule: readings DML (and therefore draft editing) is
+    /// confined to rascunho/nao_aprovado. An approved, pending (submitted) or
+    /// otherwise non-draft sheet can never be edited in place — even with a
+    /// change reason — because that would silently rewrite an approved
+    /// baseline; the explicit audited reopen (revision+1, mandatory reason)
+    /// is the only correction path (Manual 20:441-452, 20:477-485).
     /// </summary>
     public static PesoValidationError? ValidateControlEditable(string currentState, string? reason)
     {
         if (currentState is not ("rascunho" or "nao_aprovado"))
         {
-            // Reopening an approved/nao_aprovado control always creates a new
-            // revision (revision+1) and requires a justified reason.
-            if (string.IsNullOrWhiteSpace(reason))
-                return new PesoValidationError("PESO_CONTROL_REOPEN_REASON",
-                    "Reabrir um controlo aprovado/no não aprovado exige justificação obrigatória.");
+            // A non-empty reason alone no longer unlocks an in-place edit: the
+            // sheet must be explicitly reopened to rascunho first.
+            _ = reason;
+            return new PesoValidationError("PESO_CONTROL_REOPEN_REASON",
+                "Editar um controlo submetido, aprovado ou não aprovado exige reabertura explícita para rascunho; reabra o controlo antes de editar.");
         }
 
         return null;

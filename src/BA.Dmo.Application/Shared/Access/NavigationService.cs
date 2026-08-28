@@ -15,19 +15,6 @@ public sealed record NavigationTab(string Id, string Label, string Route, bool I
     : NavigationItem(Id, Label, Route, IsActive);
 
 /// <summary>
-/// Compatibility model for internal functional-area routing. The shared shell
-/// now renders Controlo as one top-level tab; its technical children remain
-/// available inside the Controlo workspace, never as global navigation tabs.
-/// </summary>
-public sealed record NavigationArea(
-    string Id,
-    string Label,
-    string Route,
-    bool IsActive,
-    IReadOnlyList<NavigationTab> Children)
-    : NavigationItem(Id, Label, Route, IsActive);
-
-/// <summary>
 /// Derived shell navigation (GLM-SHL-03): operational tabs on the left in
 /// canonical catalog order; Administração is a separate right-aligned entry.
 /// </summary>

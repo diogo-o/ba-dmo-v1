@@ -230,6 +230,46 @@ public class FerramentasServiceTests
     // ---- Rule lookup consumed by Job On ----
 
     [Fact]
+    public async Task RegisterPiece_ConcurrentDuplicate_Raw23505_MapsToCleanDomainConflict()
+    {
+        var created = await _service.CreateReferenceWithFirstLoteAsync(ValidCreate());
+        Assert.True(created.IsSuccess);
+        var lote = _repository.Lotes.Values.Single(l => l.ToolReferenceId == created.Value.ReferenceId);
+        _repository.FailPieceDuplicate = true; // uq_physical_pieces_lote_number raced (audit ON-02)
+
+        var result = await _service.RegisterPieceAsync(new RegisterPieceRequest(lote.ToolLoteId, 1, "42"));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ErrorCategory.DomainConflict, result.Error.Category);
+        Assert.Equal("FERRAMENTAS_PIECE_DUPLICATE", result.Error.Code);
+        Assert.DoesNotContain(lote.ToolLoteId, _repository.Pieces.Keys);
+        Assert.DoesNotContain(_repository.AuditEvents, a => a.eventType == "ferramentas.peca.registar");
+    }
+
+    [Fact]
+    public async Task DuplicateLote_IsAtomic_NoPartialStateOnFailure()
+    {
+        // Create reference + first lot with a rule.
+        var created = await _service.CreateReferenceWithFirstLoteAsync(ValidCreate());
+        Assert.True(created.IsSuccess);
+        var baseLote = _repository.Lotes.Values.Single(l => l.ToolReferenceId == created.Value.ReferenceId);
+        var addRuleGate = new FerramentasAuthorizationGate(FakeCurrentUser.Configurator(), new FakeAuthorshipAccessor("ferr-actor"));
+        var configService = new FerramentasService(_repository, _ruleLookup, addRuleGate, new FixedClock(Now));
+        await configService.AddCheckRuleAsync(new CheckRuleRequest(baseLote.ToolLoteId, "Verificar encaixe", FerramentasCheckFrequency.OncePerLot));
+
+        // Simulate a mid-transaction failure of the atomic duplication (audit FA-03):
+        // the lot + copied rules + audit must all roll back together.
+        _repository.FailAtomicCreate = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.CreateLoteFromBaseAsync(new CreateLoteFromBaseRequest(
+                baseLote.ToolLoteId, "5", 6, new[] { "B2" }, "CR-01", "B")));
+
+        Assert.Single(_repository.Lotes); // only the base lot remains
+        Assert.Single(_repository.CheckRules.Values.SelectMany(r => r)); // only the base rule
+        Assert.DoesNotContain(_repository.AuditEvents, a => a.eventType == "ferramentas.lote.duplicar");
+    }
+
+    [Fact]
     public async Task ResolveActiveRules_ReturnsRuleLookupResult()
     {
         _ruleLookup.Rules = new[]

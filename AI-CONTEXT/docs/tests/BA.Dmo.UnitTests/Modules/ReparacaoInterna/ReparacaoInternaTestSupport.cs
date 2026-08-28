@@ -89,16 +89,6 @@ public sealed class FakeReparacaoInternaRepository : IReparacaoInternaRepository
     public Task<InternalRepairRecord?> GetByIdAsync(Guid recordId, CancellationToken ct = default)
         => Task.FromResult(Records.FirstOrDefault(r => r.InternalRepairRecordId == recordId));
 
-    public Task<InternalRepairRecord?> GetChainRootAsync(Guid recordId, CancellationToken ct = default)
-    {
-        var node = Records.FirstOrDefault(r => r.InternalRepairRecordId == recordId);
-        if (node is null) return Task.FromResult<InternalRepairRecord?>(null);
-        var root = node;
-        while (root.CorrectionOfId is not null)
-            root = Records.First(r => r.InternalRepairRecordId == root.CorrectionOfId.Value);
-        return Task.FromResult<InternalRepairRecord?>(root);
-    }
-
     public Task<IReadOnlyList<InternalRepairRecord>> GetChainAsync(Guid rootRecordId, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<InternalRepairRecord>>(
             Records

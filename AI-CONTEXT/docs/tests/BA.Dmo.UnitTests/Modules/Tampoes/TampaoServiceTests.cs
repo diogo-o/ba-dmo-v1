@@ -189,6 +189,26 @@ public class TampaoServiceTests
         Assert.Empty(repo.Movements);
     }
 
+    [Fact]
+    public async Task AlterarConfiguracao_DestinationDuplicate_Raw23505_MapsToCleanDomainConflict()
+    {
+        var (service, repo) = Build();
+        var origin = repo.SeedConfiguration("28,95", "4", enchidos: 25);
+        repo.FailConfigurationDuplicate = true; // concurrent uq_tampao_configurations_values (audit TP-06)
+
+        var result = await service.AlterarConfiguracaoAsync(new AlterarConfiguracaoRequest(
+            origin.TampaoConfigurationId,
+            new Dictionary<string, decimal> { ["Diâmetro"] = 28.95m, ["Profundidade/Calote"] = 7m },
+            25));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("TAMPAO_CONFIGURATION_DUPLICATE", result.Error.Code);
+        // Nothing persisted: no movement, no balance change, no new configuration.
+        Assert.Empty(repo.Movements);
+        Assert.Equal(25, repo.Saldos.Single(s => s.TampaoConfigurationId == origin.TampaoConfigurationId).Enchidos);
+        Assert.Single(repo.Configurations);
+    }
+
     // ---- Planeamento (planear ≠ reservar) ------------------------------------------
 
     [Fact]

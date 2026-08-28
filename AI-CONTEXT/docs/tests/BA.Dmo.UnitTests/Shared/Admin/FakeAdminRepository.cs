@@ -1,5 +1,6 @@
 using BA.Dmo.Application.Modules.Admin;
 using BA.Dmo.Application.Shared.Persistence;
+using BA.Dmo.Domain.Shared.Access;
 
 namespace BA.Dmo.UnitTests.Shared.Admin;
 
@@ -31,23 +32,17 @@ public sealed class FakeAdminRepository : IAdminRepository
     /// <summary>When true, the next internal-user create throws (simulates a DB failure after Auth provisioning).</summary>
     public bool FailCreateInternalOnce { get; set; }
 
+    /// <summary>When true, CreateInternalUserAsync throws InternalUserAuthDuplicateException (audit ADM-06 mapping test).</summary>
+    public bool FailAuthDuplicate { get; set; }
+
     /// <summary>When true, the next guarded write throws a concurrency conflict.</summary>
     public bool ConcurrencyNextWrite { get; set; }
-
-    /// <summary>
-    /// When true, ListUsersAsync/GetUserAsync throw
-    /// <see cref="SchemaMigrationRequiredException"/> — simulates the
-    /// N26-not-applied condition (missing internal_users.modules_override).
-    /// </summary>
-    public bool ThrowSchemaMigrationRequired { get; set; }
 
     public int ActiveAdminCount { get; set; } = 1;
 
     public Task<IReadOnlyList<AdminUserRow>> ListUsersAsync(
         string? search, CancellationToken cancellationToken = default)
     {
-        if (ThrowSchemaMigrationRequired)
-            throw new SchemaMigrationRequiredException();
         IEnumerable<AdminUserRow> rows = Users.Values;
         if (!string.IsNullOrWhiteSpace(search))
             rows = rows.Where(u =>
@@ -58,8 +53,6 @@ public sealed class FakeAdminRepository : IAdminRepository
     public Task<AdminUserRow?> GetUserAsync(
         string actorId, CancellationToken cancellationToken = default)
     {
-        if (ThrowSchemaMigrationRequired)
-            throw new SchemaMigrationRequiredException();
         return Task.FromResult(Users.TryGetValue(actorId, out var user) ? user : null);
     }
 
@@ -72,6 +65,9 @@ public sealed class FakeAdminRepository : IAdminRepository
         string templateId, bool active, DateTimeOffset createdAtUtc,
         CancellationToken cancellationToken = default)
     {
+        if (FailAuthDuplicate)
+            throw new InternalUserAuthDuplicateException(
+                "Já existe um utilizador interno associado a esta conta de autenticação.");
         if (FailCreateInternalOnce)
         {
             FailCreateInternalOnce = false;
@@ -152,21 +148,6 @@ public sealed class FakeAdminRepository : IAdminRepository
         Users[actorId] = user with { Active = active, UpdatedAtUtc = updatedAtUtc };
         return Task.FromResult(true);
     }
-
-    public Task SetUserModulesOverrideAsync(
-        string actorId, string modulesJson, DateTimeOffset expectedUpdatedAt,
-        DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default)
-    {
-        ThrowIfConcurrencySimulated();
-        Writes.Add($"set_modules_override:{actorId}");
-        var user = Users[actorId];
-        Users[actorId] = user with { ModulesOverrideJson = modulesJson, UpdatedAtUtc = updatedAtUtc };
-        return Task.CompletedTask;
-    }
-
-    public Task<int> CountActiveAdminsAsync(
-        string? excludeActorId = null, CancellationToken cancellationToken = default) =>
-        Task.FromResult(ActiveAdminCount);
 
     public Task<IReadOnlyList<AdminTemplateRow>> ListTemplatesAsync(
         CancellationToken cancellationToken = default) =>

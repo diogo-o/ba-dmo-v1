@@ -1,0 +1,55 @@
+-- ============================================================================
+-- BA DMO N35 — safe index / constraint rationalization (post-N34 baseline
+-- wave). Classified SAFE NOW in reports/post_codex_database_rationalization_plan.md
+-- §8.1/§8.2 (I1/I2); no data/owner dependency. Changes:
+--
+--   §1 ADD     ix_bq_movements_noted_repairer  (BQ-16, deferred by Queue A)
+--              on bq_movements (noted_repairer_id).
+--
+--              Query pattern: Boquilhas History filter by repairer —
+--              DapperBoquilhasRepository.ListMovementsAsync / CountMovementsAsync
+--              "AND (@RepairerId IS NULL OR m.noted_repairer_id = @RepairerId)"
+--              over "WHERE t.bq_lote_id = @LoteId … ORDER BY m.occurred_at_utc DESC".
+--              The only existing usable indexes (ix_bq_movements_trace,
+--              ix_bq_movements_occurred) do not cover noted_repairer_id, so a
+--              repairer-filtered history scan walks the full movement set; a
+--              single-column btree turns the filter into an index scan. Write
+--              cost: one index on an insert-only (append-only) table —
+--              negligible. Redundancy check: no index on noted_repairer_id
+--              exists and it is not a prefix of any existing composite
+--              (verified against the 81-index inventory, plan §8.5).
+--
+--   §2 REMOVE  ix_pegamento_documentos_controlo  (redundant index).
+--
+--              pegamento_documentos.pegamento_controlo_id is already covered by
+--              the UNIQUE constraint index created by "UNIQUE (pegamento_controlo_id)"
+--              (N14:12); the separate index (N14:20-21) has the identical
+--              leading column and zero additional coverage. Removing it
+--              eliminates double write maintenance on every document upsert
+--              (insert + ON CONFLICT update) with zero read loss.
+--
+-- NOT INCLUDED (explicitly): the optional BQ-10 CHECK trim (removing the
+-- unused FIM movement value from the bq_movements movement-type CHECK) —
+-- owner decision OD-16 in the rationalization plan §11 classifies it as
+-- "owner choice", NOT SAFE NOW, and implementing it here would require making
+-- an owner decision. It stays parked (Df-9) / requires OD-16.
+--
+-- Rules honoured:
+--   * additive/removal-only, fully reversible (CREATE/DROP INDEX back);
+--   * IF EXISTS guards — idempotent, consistent with N27/N31/N33 conventions;
+--   * no cascading option, no table/column drops, no data backfill;
+--   * whole-script in its own transaction (no BEGIN/COMMIT);
+--   * historical migrations N01-N34 are immutable and were not modified.
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- §1. ADD — ix_bq_movements_noted_repairer (BQ-16).
+-- ----------------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS ix_bq_movements_noted_repairer
+    ON bq_movements (noted_repairer_id);
+
+-- ----------------------------------------------------------------------------
+-- §2. REMOVE — ix_pegamento_documentos_controlo (duplicates the UNIQUE
+-- (pegamento_controlo_id) constraint index; N14 created both).
+-- ----------------------------------------------------------------------------
+DROP INDEX IF EXISTS ix_pegamento_documentos_controlo;

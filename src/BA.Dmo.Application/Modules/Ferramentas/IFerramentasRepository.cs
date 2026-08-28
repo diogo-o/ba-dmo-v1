@@ -35,12 +35,8 @@ public interface IFerramentasRepository
     Task UpdateCheckRuleAsync(ToolCheckRule rule, CancellationToken ct = default);
     Task ToggleCheckRuleActiveAsync(Guid ruleId, bool active, CancellationToken ct = default);
     Task DeleteCheckRuleAsync(Guid ruleId, CancellationToken ct = default);
-    Task<Guid?> CopyCheckRuleAsync(Guid sourceRuleId, Guid targetLoteId, CancellationToken ct = default);
     Task<IReadOnlyList<ToolCheckRule>> GetCheckRulesByLoteAsync(Guid loteId, CancellationToken ct = default);
     Task<ToolCheckRule?> GetCheckRuleByIdAsync(Guid ruleId, CancellationToken ct = default);
-
-    // ---- Occurrences (read / consultation on the lot card) ------------------
-    Task<IReadOnlyList<ToolCheckOccurrence>> GetOccurrencesByRuleAsync(Guid ruleId, CancellationToken ct = default);
 
     // ---- Utilisation (R003: append-only, per tool_lote) ---------------------
     Task RecordUtilisationReadingAsync(ToolUtilisationReading reading, CancellationToken ct = default);
@@ -49,6 +45,19 @@ public interface IFerramentasRepository
     // ---- Atomic multi-write -------------------------------------------------
     /// <summary>Creates a reference + its first lote in ONE transaction.</summary>
     Task<(Guid ReferenceId, Guid LoteId)> CreateReferenceWithFirstLoteAsync(ToolReference reference, ToolLote lote, CancellationToken ct = default);
+
+    /// <summary>
+    /// Creates a NEW lot and copies the given verification-rule configuration
+    /// (never occurrences/checks/history) together with the "lote duplicar"
+    /// audit event in ONE transaction (audit FA-03 — no partial duplicate can
+    /// remain). Returns the new lot id.
+    /// </summary>
+    Task<Guid> CreateLoteWithRulesAtomicallyAsync(
+        ToolLote lote,
+        IReadOnlyList<ToolCheckRule> copiedRules,
+        Guid? sourceLoteId,
+        string actorId,
+        CancellationToken ct = default);
 
     // ---- Audit --------------------------------------------------------------
     Task InsertAuditEventAsync(Guid? entityId, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken ct = default);

@@ -200,6 +200,23 @@ public class AdminUserServiceTests
         Assert.Equal("ADMIN_USER_ALREADY_REGISTERED", result.Error.Code);
     }
 
+    [Fact]
+    public async Task CreateUser_ConcurrentAuthDuplicate_Raw23505_MapsToSameCleanConflict()
+    {
+        // uq_internal_users_auth_user raced between the pre-check and the insert
+        // (audit ADM-06/ON-02): the insert throws and the service maps it to the
+        // SAME clean conflict as the fast-path pre-check.
+        _repository.FailAuthDuplicate = true;
+
+        var result = await _service.CreateUserAsync(new CreateAdminUserRequest(
+            "novo@ba-dmo.example", "password", "Novo", "tpl-active"));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("ADMIN_USER_ALREADY_REGISTERED", result.Error.Code);
+        Assert.DoesNotContain(_repository.Users, u => u.Key == NewAuthUserId.ToString());
+        Assert.Empty(_repository.Audits);
+    }
+
     // ---- B8: partial failure (Auth created, internal insert fails) ----------
     // The irreversible Auth provisioning happens first; the internal insert then
     // throws. The smallest safe recovery in this architecture (Postgres + external
@@ -368,40 +385,26 @@ public class AdminUserServiceTests
         Assert.DoesNotContain(_repository.Writes, w => w.StartsWith("change_templates:", StringComparison.Ordinal));
     }
 
-    // ---- schema migration guard (N26 missing, GLM-DSN/owner decision) -------
-    // A missing modules_override column (N26 not applied) is a backend/config
-    // failure. It must surface as a BackendUnavailable error — NEVER as an
-    // empty list or a false "not found".
-
     [Fact]
-    public async Task ListAsync_MissingSchema_IsAFailure_NotAnEmptyList()
+    public async Task ListAsync_EmptyRepository_ReturnsEmptySuccess()
     {
-        _repository.ThrowSchemaMigrationRequired = true;
+        _repository.Users.Clear();
 
         var result = await _service.ListAsync(null);
 
-        Assert.True(result.IsFailure);
-        Assert.Equal(ErrorCategory.BackendUnavailable, result.Error.Category);
-        Assert.Equal("SCHEMA_MIGRATION_REQUIRED", result.Error.Code);
-        // The user-safe Portuguese message must not leak technical detail.
-        Assert.DoesNotContain("modules_override", result.Error.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("internal_users", result.Error.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("42703", result.Error.Message, StringComparison.Ordinal);
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value);
+        Assert.Empty(_provisioning.EmailLookupCalls);
     }
 
     [Fact]
-    public async Task GetAsync_MissingSchema_IsAFailure_NotANotFound()
+    public async Task GetAsync_UnknownUser_ReturnsNotFound()
     {
-        _repository.ThrowSchemaMigrationRequired = true;
-
-        var result = await _service.GetAsync("user-1");
+        var result = await _service.GetAsync("unknown-user");
 
         Assert.True(result.IsFailure);
-        Assert.Equal(ErrorCategory.BackendUnavailable, result.Error.Category);
-        Assert.Equal("SCHEMA_MIGRATION_REQUIRED", result.Error.Code);
-        Assert.NotEqual("INTERNAL_USER_NOT_FOUND", result.Error.Code);
-        Assert.DoesNotContain("modules_override", result.Error.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("42703", result.Error.Message, StringComparison.Ordinal);
+        Assert.Equal(ErrorCategory.NotFound, result.Error.Category);
+        Assert.Equal("INTERNAL_USER_NOT_FOUND", result.Error.Code);
     }
 
     // ---- password reset (privileged adapter path) ---------------------------

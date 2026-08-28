@@ -71,7 +71,7 @@ public class PegamentoPdfTests
     {
         _lookup.ContextByRevision[revisionId] ??= PegamentoContextBuilder.Complete(Guid.NewGuid(), revisionId);
         var service = new PegamentoService(
-            _repository, _lookup, new PegamentoAuthorizationGate(FakeAuthorshipAccessor.Authorized()),
+            _repository, new FakePegamentoUnitOfWorkFactory(), _lookup, new PegamentoAuthorizationGate(FakeAuthorshipAccessor.Authorized()),
             new FixedClock(System.DateTimeOffset.MinValue), new FakeSettings("D:\\Documentos"),
             new FakeJobOnProductionFolderResolver { DefaultFolder = "5447T173" });
         var created = await service.CreateControlAsync(new CreatePegamentoRequest(revisionId, null, null));

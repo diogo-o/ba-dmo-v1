@@ -32,8 +32,4 @@ public sealed class TampaoMovement
     public string? ActorId { get; set; }
 
     public DateTimeOffset OccurredAtUtc { get; set; } = DateTimeOffset.UtcNow;
-
-    /// <summary>Whether this is a single-balance movement (adicionar/remover).</summary>
-    public bool IsSingleBalance =>
-        MovementType is TampaoMovementType.Adicionar or TampaoMovementType.Remover;
 }

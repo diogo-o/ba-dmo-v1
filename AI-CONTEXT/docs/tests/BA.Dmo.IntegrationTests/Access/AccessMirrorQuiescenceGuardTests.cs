@@ -10,12 +10,12 @@ namespace BA.Dmo.IntegrationTests.Access;
 ///     internal_users (snake_case; the PascalCase <c>ProfileTitle</c> property
 ///     and record slot remain — they are presentation/compatibility shape).
 ///
-/// Allow-list for the identifiers: the historical and quiescence migration
-/// files under <c>database/migrations/</c> (N27…N33 — they must still mention
-/// the objects they created/revoked) and the documentation tree
-/// (<c>AI-CONTEXT/</c>, <c>reports/</c> — not scanned here). Executed
-/// PostgreSQL behaviour of the N33 revoke is covered by the env-guarded
-/// <c>RemediationGuardTests.N33_*</c> probes (BA_DMO_TEST_DATABASE).
+/// Allow-list for the identifiers: the historical, quiescence and removal
+/// migration files under <c>database/migrations/</c> (N27…N34 — they must
+/// still mention the objects they created, revoked and finally removed) and
+/// the documentation tree (<c>AI-CONTEXT/</c>, <c>reports/</c> — not scanned
+/// here). Executed PostgreSQL behaviour of the N34 removal is covered by the
+/// env-guarded <c>RemediationGuardTests.N34_*</c> probes (BA_DMO_TEST_DATABASE).
 /// </summary>
 public sealed class AccessMirrorQuiescenceGuardTests
 {

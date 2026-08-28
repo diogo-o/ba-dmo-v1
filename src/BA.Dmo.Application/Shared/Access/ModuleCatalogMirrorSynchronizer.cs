@@ -27,20 +27,6 @@ public sealed class ModuleCatalogMirrorSynchronizer
     }
 
     /// <summary>
-    /// Mirror rows derived from the canonical catalog (canonical order,
-    /// all active). Used to sync code → DB.
-    /// </summary>
-    public IReadOnlyList<ModuleCatalogMirrorRow> BuildSyncRows(DateTimeOffset syncedAtUtc) =>
-        _catalog.Modules
-            .Select((module, index) => new ModuleCatalogMirrorRow(
-                module.ModuleId,
-                module.DisplayName,
-                module.CanonicalOrder,
-                Active: true,
-                syncedAtUtc))
-            .ToList();
-
-    /// <summary>
     /// Validates mirror rows against the catalog: rows for unknown modules are
     /// invalid and reported (discarded), never accepted.
     /// </summary>

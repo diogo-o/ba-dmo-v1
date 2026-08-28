@@ -173,8 +173,8 @@ public sealed class ArmazemReturnPostgresTests
             INSERT INTO access_templates (template_id, name, modules, active)
             VALUES (@TemplateId, @TemplateName, '["armazem","reparacao_externa"]'::jsonb, TRUE);
             INSERT INTO internal_users
-                (actor_id, auth_user_id, template_id, display_name, profile_title, active)
-            VALUES (@ActorId, @AuthUserId, @TemplateId, @DisplayName, 'Admin', TRUE);
+                (actor_id, auth_user_id, template_id, display_name, active)
+            VALUES (@ActorId, @AuthUserId, @TemplateId, @DisplayName, TRUE);
             INSERT INTO tool_references
                 (tool_reference_id, tool_type, ref_code, created_by)
             VALUES (@ReferenceId, 'CM', @Reference, @ActorId);

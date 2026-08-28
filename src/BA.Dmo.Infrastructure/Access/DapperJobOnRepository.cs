@@ -5,6 +5,7 @@ using BA.Dmo.Infrastructure.Persistence;
 using BA.Dmo.Application.Modules.JobOn;
 using BA.Dmo.Application.Shared.Persistence;
 using Dapper;
+using Npgsql;
 
 using JobOnEntity = BA.Dmo.Domain.Modules.JobOn.JobOn;
 
@@ -50,8 +51,18 @@ RETURNING job_on_id;";
         var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
         try
         {
-            var id = await Db.ExecuteScalarAsync<Guid>(connection, sql, parameters, cancellationToken: cancellationToken);
-            return id;
+            // Unique-violation mapping (audit JA-03/ON-02): uq_job_on_identity —
+            // a NON-canceled job with the same (production, machine) exists.
+            try
+            {
+                var id = await Db.ExecuteScalarAsync<Guid>(connection, sql, parameters, cancellationToken: cancellationToken);
+                return id;
+            }
+            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+            {
+                throw new JobOnIdentityDuplicateException(
+                    "Já existe um Job On não cancelado com esta produção e máquina.");
+            }
         }
         finally
         {
@@ -218,12 +229,12 @@ INSERT INTO job_on_revision (
     job_on_revision_id, job_on_id, revision_number,
     production_snapshot, reference_snapshot, machine_snapshot, dates_snapshot,
     sections, drop_count, type_snapshot, stop_snapshot, weight_snapshot, process_snapshot,
-    general_notes, image_asset_id, change_reason, saved_by, saved_at_utc)
+    general_notes, change_reason, saved_by, saved_at_utc)
 VALUES (
     @JobOnRevisionId, @JobOnId, @RevisionNumber,
     @ProductionSnapshot, @ReferenceSnapshot, @MachineSnapshot, @DatesSnapshot,
     @Sections, @DropCount, @TypeSnapshot, @StopSnapshot, @WeightSnapshot, @ProcessSnapshot,
-    @GeneralNotes, @ImageAssetId, @ChangeReason, @SavedBy, @SavedAtUtc);";
+    @GeneralNotes, @ChangeReason, @SavedBy, @SavedAtUtc);";
 
         var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
         try
@@ -244,7 +255,6 @@ VALUES (
                 WeightSnapshot = SerializeWeight(revision.WeightSnapshot),
                 ProcessSnapshot = (object?)revision.ProcessSnapshot ?? DBNull.Value,
                 GeneralNotes = revision.GeneralNotes,
-                ImageAssetId = (object?)revision.ImageAssetId ?? DBNull.Value,
                 ChangeReason = revision.ChangeReason,
                 SavedBy = revision.SavedBy,
                 SavedAtUtc = revision.SavedAtUtc
@@ -274,7 +284,6 @@ SELECT
     weight_snapshot,
     process_snapshot,
     general_notes,
-    image_asset_id,
     change_reason,
     saved_by,
     saved_at_utc
@@ -563,12 +572,12 @@ INSERT INTO job_on_revision (
     job_on_revision_id, job_on_id, revision_number,
     production_snapshot, reference_snapshot, machine_snapshot, dates_snapshot,
     sections, drop_count, type_snapshot, stop_snapshot, weight_snapshot, process_snapshot,
-    general_notes, image_asset_id, change_reason, saved_by, saved_at_utc)
+    general_notes, change_reason, saved_by, saved_at_utc)
 VALUES (
     @JobOnRevisionId, @JobOnId, @RevisionNumber,
     @ProductionSnapshot, @ReferenceSnapshot, @MachineSnapshot, @DatesSnapshot,
     @Sections, @DropCount, @TypeSnapshot, @StopSnapshot, @WeightSnapshot, @ProcessSnapshot,
-    @GeneralNotes, @ImageAssetId, @ChangeReason, @SavedBy, @SavedAtUtc);";
+    @GeneralNotes, @ChangeReason, @SavedBy, @SavedAtUtc);";
 
             await Db.ExecuteAsync(connection, insertRevisionSql, new
             {
@@ -586,7 +595,6 @@ VALUES (
                 WeightSnapshot = SerializeWeight(newRevision.WeightSnapshot),
                 ProcessSnapshot = (object?)newRevision.ProcessSnapshot ?? DBNull.Value,
                 GeneralNotes = newRevision.GeneralNotes,
-                ImageAssetId = (object?)newRevision.ImageAssetId ?? DBNull.Value,
                 ChangeReason = newRevision.ChangeReason,
                 SavedBy = newRevision.SavedBy,
                 SavedAtUtc = newRevision.SavedAtUtc
@@ -671,8 +679,10 @@ VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot::jsonb, @AfterSnapshot:
         string actorId,
         CancellationToken cancellationToken = default)
     {
-        return await DapperUnitOfWork.RunAsync<Guid>(_connectionFactory, async (connection, transaction, ct) =>
+        try
         {
+            return await DapperUnitOfWork.RunAsync<Guid>(_connectionFactory, async (connection, transaction, ct) =>
+            {
             var newJobOnId = await InsertJobOnCoreAsync(connection, transaction, newJobOn, ct);
 
             // Re-pin the copied revision (and its children) to the new job_on id.
@@ -701,7 +711,15 @@ VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot::jsonb, @AfterSnapshot:
                 null, sourceJobOnId.ToString(), actorId, ct);
 
             return newJobOnId;
-        }, cancellationToken);
+            }, cancellationToken);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            // uq_job_on_identity — a NON-canceled job with the same identity
+            // already exists (audit JA-03/ON-02). The UoW already rolled back.
+            throw new JobOnIdentityDuplicateException(
+                "Já existe um Job On não cancelado com esta produção e máquina.");
+        }
     }
 
     /// <summary>
@@ -719,12 +737,12 @@ INSERT INTO job_on_revision (
     job_on_revision_id, job_on_id, revision_number,
     production_snapshot, reference_snapshot, machine_snapshot, dates_snapshot,
     sections, drop_count, type_snapshot, stop_snapshot, weight_snapshot, process_snapshot,
-    general_notes, image_asset_id, change_reason, saved_by, saved_at_utc)
+    general_notes, change_reason, saved_by, saved_at_utc)
 VALUES (
     @JobOnRevisionId, @JobOnId, @RevisionNumber,
     @ProductionSnapshot, @ReferenceSnapshot, @MachineSnapshot, @DatesSnapshot,
     @Sections, @DropCount, @TypeSnapshot, @StopSnapshot, @WeightSnapshot, @ProcessSnapshot,
-    @GeneralNotes, @ImageAssetId, @ChangeReason, @SavedBy, @SavedAtUtc);";
+    @GeneralNotes, @ChangeReason, @SavedBy, @SavedAtUtc);";
 
         await Db.ExecuteAsync(connection, insertRevisionSql, new
         {
@@ -742,7 +760,6 @@ VALUES (
             WeightSnapshot = SerializeWeight(revision.WeightSnapshot),
             ProcessSnapshot = (object?)revision.ProcessSnapshot ?? DBNull.Value,
             GeneralNotes = revision.GeneralNotes,
-            ImageAssetId = (object?)revision.ImageAssetId ?? DBNull.Value,
             ChangeReason = revision.ChangeReason,
             SavedBy = revision.SavedBy,
             SavedAtUtc = revision.SavedAtUtc
@@ -1017,7 +1034,6 @@ SELECT
     weight_snapshot,
     process_snapshot,
     general_notes,
-    image_asset_id,
     change_reason,
     saved_by,
     saved_at_utc
@@ -1252,7 +1268,7 @@ TypeSnapshot = (string?)row.type_snapshot,
             WeightSnapshot = ParseWeight(row.weight_snapshot),
             ProcessSnapshot = (string?)row.process_snapshot,
             GeneralNotes = row.general_notes,
-            ImageAssetId = row.image_asset_id,
+            ImageAssetId = null,
             ChangeReason = row.change_reason,
             SavedBy = row.saved_by,
             SavedAtUtc = row.saved_at_utc

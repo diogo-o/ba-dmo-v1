@@ -265,6 +265,101 @@ public class PesoServiceTests
         Assert.Equal("PESO_CONTROL_DELETE_UNAUTHORIZED", del.Error.Code);
     }
 
+    // ---- N40: write-path split -------------------------------------------
+    // Draft editing rewrites readings (full write); workflow transitions
+    // (submit/approve/reject/reopen/decide) are header-only and never touch
+    // readings — so an approved baseline can never be silently re-written.
+
+    [Fact]
+    public async Task SaveControl_DraftEdit_UsesFullRewrite_AndPersistsLeituras()
+    {
+        var jobOnId = SeedJobOn();
+        SeedReference();
+        var create = await _service.CreateControlAsync(new CreateControlRequest(
+            jobOnId, new DateTime(2026, 8, 17), 20m, "Novo", null, [new PesoLeituraInput("12", 152.43m)]));
+
+        var save = await _service.SaveControlAsync(new SaveControlRequest(
+            create.Value, 21m, "Novo", "nota", [new PesoLeituraInput("12", 153.00m)], null));
+        Assert.True(save.IsSuccess);
+        Assert.Equal(1, _repository.FullWrites);
+        Assert.Equal(0, _repository.HeaderOnlyWrites);
+        Assert.Single(_repository.Controls[create.Value].Leituras);
+        Assert.Equal(21m, _repository.Controls[create.Value].TemperaturaC);
+    }
+
+    [Fact]
+    public async Task WorkflowTransitions_UseHeaderOnlyWritePath_NeverRewriteReadings()
+    {
+        var jobOnId = SeedJobOn();
+        SeedReference();
+        var create = await _service.CreateControlAsync(new CreateControlRequest(
+            jobOnId, new DateTime(2026, 8, 17), 20m, "Novo", null, [new PesoLeituraInput("12", 152.43m)]));
+        Assert.Equal(0, _repository.FullWrites);
+        Assert.Equal(0, _repository.HeaderOnlyWrites);
+
+        var submit = await _service.SubmitControlAsync(new SubmitControlRequest(create.Value));
+        Assert.True(submit.IsSuccess);
+
+        _identity.GrantResponsavel();
+        var approve = await _service.ApproveControlAsync(new ApproveControlRequest(create.Value));
+        Assert.True(approve.IsSuccess);
+
+        var reopen = await _service.ReopenControlAsync(new ReopenControlRequest(create.Value, "Ajustar leitura"));
+        Assert.True(reopen.IsSuccess);
+
+        // submit + approve + reopen were all header-only: zero readings
+        // rewrites (the N40 DB guard is the backstop at the store level).
+        Assert.Equal(0, _repository.FullWrites);
+        Assert.Equal(3, _repository.HeaderOnlyWrites);
+    }
+
+    [Fact]
+    public async Task SaveControl_OnApprovedControl_IsRejected_WithoutAnyWrite()
+    {
+        var jobOnId = SeedJobOn();
+        SeedReference();
+        var create = await _service.CreateControlAsync(new CreateControlRequest(
+            jobOnId, new DateTime(2026, 8, 17), 20m, "Novo", null, [new PesoLeituraInput("12", 152.43m)]));
+        await _service.SubmitControlAsync(new SubmitControlRequest(create.Value));
+        _identity.GrantResponsavel();
+        await _service.ApproveControlAsync(new ApproveControlRequest(create.Value));
+
+        var writesBefore = _repository.FullWrites + _repository.HeaderOnlyWrites;
+        _identity.GrantOperador();
+
+        // Even with a change reason the approved baseline is not editable in
+        // place — the explicit reopen is the only path (Manual 20:441-452).
+        var save = await _service.SaveControlAsync(new SaveControlRequest(
+            create.Value, 21m, "Novo", "tentativa", [new PesoLeituraInput("12", 153.00m)], "razão não basta"));
+        Assert.True(save.IsFailure);
+        Assert.Equal("PESO_CONTROL_REOPEN_REASON", save.Error.Code);
+        Assert.Equal(PesoControlState.Aprovado, _repository.Controls[create.Value].Status);
+        Assert.Equal(writesBefore, _repository.FullWrites + _repository.HeaderOnlyWrites);
+    }
+
+    [Fact]
+    public async Task ReopenThenDraftEdit_Works_AndReadingsRemainEditable()
+    {
+        var jobOnId = SeedJobOn();
+        SeedReference();
+        var create = await _service.CreateControlAsync(new CreateControlRequest(
+            jobOnId, new DateTime(2026, 8, 17), 20m, "Novo", null, [new PesoLeituraInput("12", 152.43m)]));
+        await _service.SubmitControlAsync(new SubmitControlRequest(create.Value));
+        _identity.GrantResponsavel();
+        await _service.ApproveControlAsync(new ApproveControlRequest(create.Value));
+
+        var reopen = await _service.ReopenControlAsync(new ReopenControlRequest(create.Value, "Ajustar leituras"));
+        Assert.True(reopen.IsSuccess);
+
+        _identity.GrantOperador();
+        var save = await _service.SaveControlAsync(new SaveControlRequest(
+            create.Value, 21m, "Novo", null, [new PesoLeituraInput("12", 154.00m)], null));
+        Assert.True(save.IsSuccess);
+        Assert.Equal(PesoControlState.Rascunho, _repository.Controls[create.Value].Status);
+        Assert.Equal(2, _repository.Controls[create.Value].Revision);
+        Assert.Single(_repository.Controls[create.Value].Leituras);
+    }
+
     // ---- comparison (GLM-PESO-06.4/5) ------------------------------------------
 
     [Fact]

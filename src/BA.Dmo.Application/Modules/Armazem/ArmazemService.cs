@@ -124,61 +124,6 @@ public sealed class ArmazemService
         return Result<bool, DomainError>.Success(true);
     }
 
-    /// <summary>Substitui a ferramenta que ocupa uma posição (UM comando atómico).</summary>
-    public async Task<Result<bool, DomainError>> SubstituirAsync(
-        SubstituirRequest request, CancellationToken ct = default)
-    {
-        var gate = _gate.Require();
-        if (gate.IsFailure) return Result<bool, DomainError>.Failure(gate.Error);
-
-        var position = WarehouseLocation.NormalizePositionCode(request.PositionCode);
-        if (!WarehouseLocation.IsValidPositionCode(position))
-            return Result<bool, DomainError>.Failure(DomainError.Validation(
-                "ARMZ_LOCATION_CODE", "A posição deve ter exatamente 4 dígitos."));
-
-        var newTool = await ResolveRequiredAsync(
-            request.NewToolType, request.NewReference, request.NewLot, ct);
-        if (newTool.IsFailure) return Result<bool, DomainError>.Failure(newTool.Error);
-
-        var locationId = await _repository.GetOrCreateLocationAsync(position, "tool", ct);
-        var current = await _repository.GetActiveStockByLocationAsync(locationId, ct);
-        if (current is null || !current.IsActive)
-            return Result<bool, DomainError>.Failure(DomainError.Validation(
-                "ARMZ_POSITION_FREE",
-                "A posição não tem uma ocupação registada para substituir."));
-
-        var now = _clock.UtcNow;
-        var newStock = new WarehouseStock
-        {
-            WarehouseLocationId = locationId,
-            ToolId = newTool.Value.ToolId,
-            OccupiedSinceUtc = now,
-            OccupiedBy = gate.Value.ActorId
-        };
-        var outMovement = new WarehouseMovement
-        {
-            WarehouseStockId = current.WarehouseStockId,
-            Direction = WarehouseMovementDirection.Out,
-            Destination = "substituicao",
-            ActorId = gate.Value.ActorId,
-            OccurredAtUtc = now
-        };
-        var inMovement = new WarehouseMovement
-        {
-            WarehouseStockId = null,
-            Direction = WarehouseMovementDirection.In,
-            ActorId = gate.Value.ActorId,
-            OccurredAtUtc = now
-        };
-
-        await _repository.ReplaceOccupationAsync(
-            current.WarehouseStockId, newStock, outMovement, inMovement, ct);
-        await _repository.InsertAuditEventAsync(
-            current.WarehouseStockId, "armazem.substituir", null,
-            $"{position}|{newTool.Value.Reference}|{newTool.Value.Lot}", gate.Value.ActorId, ct);
-        return Result<bool, DomainError>.Success(true);
-    }
-
     /// <summary>Consulta — pesquisa por tipo/referência/lote/posição com alertas.</summary>
     public async Task<Result<IReadOnlyList<ArmazemConsultationRow>, DomainError>> ConsultarAsync(
         ConsultarRequest request, CancellationToken ct = default)

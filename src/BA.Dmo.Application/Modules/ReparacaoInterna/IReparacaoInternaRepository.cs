@@ -19,13 +19,6 @@ public interface IReparacaoInternaRepository
     /// <summary>Loads a record by its primary key (any node in a correction chain).</summary>
     Task<InternalRepairRecord?> GetByIdAsync(Guid recordId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Loads the ORIGINAL root record of a correction chain: follows the chain
-    /// backwards to the leftmost record (correction_of_id NULL). The list always
-    /// shows the latest valid version per chain root (brief §10).
-    /// </summary>
-    Task<InternalRepairRecord?> GetChainRootAsync(Guid recordId, CancellationToken ct = default);
-
     /// <summary>Loads all records of a correction chain (oldest first).</summary>
     Task<IReadOnlyList<InternalRepairRecord>> GetChainAsync(Guid rootRecordId, CancellationToken ct = default);
 

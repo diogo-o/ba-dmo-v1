@@ -198,6 +198,7 @@ builder.Services.AddSingleton<IPdfRenderer, PesoSingleFilePdfRenderer>();
 // Pegamentos module (U-11): Application services + persistence port +
 // Job On production context lookup + shared settings + PDF renderer.
 builder.Services.AddScoped<IPegamentoRepository, DapperPegamentoRepository>();
+builder.Services.AddScoped<IPegamentoUnitOfWorkFactory, DapperPegamentoUnitOfWorkFactory>();
 builder.Services.AddScoped<IJobOnProductionContextLookup, DapperJobOnProductionContextLookup>();
 builder.Services.AddScoped<PegamentoAuthorizationGate>();
 builder.Services.AddScoped<PegamentoService>();

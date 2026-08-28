@@ -32,8 +32,14 @@ public sealed class FakeJobOnRepository : IJobOnRepository
 
     public List<(Guid OccurrenceId, string Status, string? CompletedBy, DateTime? CompletedAt)> VerificationUpdates { get; } = [];
 
+    /// <summary>When true, create/duplicate throw JobOnIdentityDuplicateException (audit JA-03 mapping test).</summary>
+    public bool FailIdentityDuplicate { get; set; }
+
     public Task<Guid> CreateAsync(JobOnEntity jobOn, CancellationToken cancellationToken = default)
     {
+        if (FailIdentityDuplicate)
+            throw new JobOnIdentityDuplicateException(
+                "Já existe um Job On não cancelado com esta produção e máquina.");
         var id = Guid.NewGuid();
         jobOn.SetId(id);
         JobOns[id] = jobOn;
@@ -167,6 +173,9 @@ public sealed class FakeJobOnRepository : IJobOnRepository
         string actorId,
         CancellationToken cancellationToken = default)
     {
+        if (FailIdentityDuplicate)
+            throw new JobOnIdentityDuplicateException(
+                "Já existe um Job On não cancelado com esta produção e máquina.");
         var newId = Guid.NewGuid();
 
         // Construct the duplicated header via its public constructor, then hydrate the

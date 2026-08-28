@@ -22,7 +22,7 @@ public class PegamentoHistoricalRelationshipTests
     {
         var gate = new PegamentoAuthorizationGate(FakeAuthorshipAccessor.Authorized());
         _service = new PegamentoService(
-            _repository, _lookup, gate, new FixedClock(Now),
+            _repository, new FakePegamentoUnitOfWorkFactory(), _lookup, gate, new FixedClock(Now),
             new FakeSettings("D:\\Documentos"),
             new FakeJobOnProductionFolderResolver { DefaultFolder = "5447T173" });
     }

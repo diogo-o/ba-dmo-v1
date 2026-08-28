@@ -4,14 +4,17 @@ using BA.Dmo.Application.Shared.Persistence;
 using BA.Dmo.Domain.Modules.Ferramentas;
 using BA.Dmo.Infrastructure.Persistence;
 using Dapper;
+using Npgsql;
 
 namespace BA.Dmo.Infrastructure.Access;
 
 /// <summary>
 /// U-12 — Ferramentas Dapper persistence (N04, GLM-FERR-08). Implements
 /// IFerramentasRepository. Owns Ferramentas persistence only. The atomic
-/// reference+lote and lot-duplication-with-rule-copy operations run inside one
-/// DapperUnitOfWork transaction (GLM-DATA-05).
+/// reference+lote creation (CreateReferenceWithFirstLoteAsync) and the
+/// lot duplication with its copied verification-rule configuration +
+/// audit event (CreateLoteWithRulesAtomicallyAsync) each run inside ONE
+/// DapperUnitOfWork transaction (GLM-DATA-05; audit FA-03).
 /// </summary>
 public sealed class DapperFerramentasRepository : IFerramentasRepository
 {
@@ -251,17 +254,27 @@ VALUES
         var conn = await Open(_connectionFactory, ct);
         try
         {
-            await Db.ExecuteAsync(conn, sql, new
+            try
             {
-                Id = piece.PhysicalPieceId,
-                LoteId = piece.ToolLoteId,
-                Sequence = piece.Sequence,
-                Number = piece.Number,
-                Status = ToolConditionCodec.ToStorage(piece.Condition),
-                CreatedAtUtc = piece.CreatedAtUtc,
-                CreatedBy = (object?)piece.CreatedBy ?? DBNull.Value,
-                UpdatedAtUtc = piece.UpdatedAtUtc
-            }, cancellationToken: ct);
+                await Db.ExecuteAsync(conn, sql, new
+                {
+                    Id = piece.PhysicalPieceId,
+                    LoteId = piece.ToolLoteId,
+                    Sequence = piece.Sequence,
+                    Number = piece.Number,
+                    Status = ToolConditionCodec.ToStorage(piece.Condition),
+                    CreatedAtUtc = piece.CreatedAtUtc,
+                    CreatedBy = (object?)piece.CreatedBy ?? DBNull.Value,
+                    UpdatedAtUtc = piece.UpdatedAtUtc
+                }, cancellationToken: ct);
+            }
+            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+            {
+                // uq_physical_pieces_lote_number — the same (lot, number) already
+                // exists under concurrency (audit ON-02 / approved mapping).
+                throw new PhysicalPieceDuplicateException(
+                    $"O número {piece.Number} já está registado neste lote.");
+            }
             return piece.PhysicalPieceId;
         }
         finally { await DisposeAsync(conn); }
@@ -316,22 +329,24 @@ VALUES
         var conn = await Open(_connectionFactory, ct);
         try
         {
-            await Db.ExecuteAsync(conn, sql, new
-            {
-                Id = rule.ToolCheckRuleId,
-                LoteId = rule.ToolLoteId,
-                RuleText = rule.RuleText,
-                Frequency = FerramentasCheckFrequencyCodec.ToStorage(rule.Frequency),
-                Active = rule.Active,
-                CopiedFrom = (object?)rule.CopiedFromRuleId ?? DBNull.Value,
-                CreatedAtUtc = rule.CreatedAtUtc,
-                CreatedBy = (object?)rule.CreatedBy ?? DBNull.Value,
-                UpdatedAtUtc = rule.UpdatedAtUtc
-            }, cancellationToken: ct);
+            await Db.ExecuteAsync(conn, sql, ToRuleParams(rule), cancellationToken: ct);
             return rule.ToolCheckRuleId;
         }
         finally { await DisposeAsync(conn); }
     }
+
+    private static object ToRuleParams(ToolCheckRule rule) => new
+    {
+        Id = rule.ToolCheckRuleId,
+        LoteId = rule.ToolLoteId,
+        RuleText = rule.RuleText,
+        Frequency = FerramentasCheckFrequencyCodec.ToStorage(rule.Frequency),
+        Active = rule.Active,
+        CopiedFrom = (object?)rule.CopiedFromRuleId ?? DBNull.Value,
+        CreatedAtUtc = rule.CreatedAtUtc,
+        CreatedBy = (object?)rule.CreatedBy ?? DBNull.Value,
+        UpdatedAtUtc = rule.UpdatedAtUtc
+    };
 
     public async Task UpdateCheckRuleAsync(ToolCheckRule rule, CancellationToken ct = default)
     {
@@ -380,18 +395,6 @@ UPDATE tool_check_rules SET active = FALSE WHERE tool_check_rule_id = @Id;";
         finally { await DisposeAsync(conn); }
     }
 
-    public async Task<Guid?> CopyCheckRuleAsync(Guid sourceRuleId, Guid targetLoteId, CancellationToken ct = default)
-    {
-        var rule = await GetCheckRuleByIdAsync(sourceRuleId, ct);
-        if (rule is null) return null;
-
-        var copyResult = ToolCheckRule.Create(
-            targetLoteId, rule.RuleText, rule.Frequency, sourceRuleId, DateTimeOffset.UtcNow, rule.CreatedBy);
-        if (copyResult.IsFailure) return null;
-
-        return await AddCheckRuleAsync(copyResult.Value, ct);
-    }
-
     public async Task<IReadOnlyList<ToolCheckRule>> GetCheckRulesByLoteAsync(Guid loteId, CancellationToken ct = default)
     {
         const string sql = @"
@@ -418,24 +421,6 @@ FROM tool_check_rules WHERE tool_check_rule_id = @Id;";
         {
             dynamic? row = await Db.QuerySingleOrDefaultAsync<dynamic>(conn, sql, new { Id = ruleId }, cancellationToken: ct);
             return row is null ? null : MapCheckRule(row);
-        }
-        finally { await DisposeAsync(conn); }
-    }
-
-    // ---- Occurrences (read) ------------------------------------------------
-
-    public async Task<IReadOnlyList<ToolCheckOccurrence>> GetOccurrencesByRuleAsync(Guid ruleId, CancellationToken ct = default)
-    {
-        const string sql = @"
-SELECT tool_check_occurrence_id, tool_check_rule_id, job_on_id, job_on_component_id,
-       status, completion_source, completed_by, completed_at_utc,
-       created_at_utc, created_by, updated_at_utc
-FROM tool_check_occurrences WHERE tool_check_rule_id = @RuleId ORDER BY created_at_utc;";
-        var conn = await Open(_connectionFactory, ct);
-        try
-        {
-            var rows = await Db.QueryAsync<dynamic>(conn, sql, new { RuleId = ruleId }, cancellationToken: ct);
-            return rows.Select<dynamic, ToolCheckOccurrence>(r => MapOccurrence(r)).ToList().AsReadOnly();
         }
         finally { await DisposeAsync(conn); }
     }
@@ -467,6 +452,60 @@ VALUES
             await Db.ExecuteAsync(conn, insertLote, ToLoteParams(lote), transaction: tx, cancellationToken: token);
 
             return (reference.ToolReferenceId, lote.ToolLoteId);
+        }, ct);
+    }
+
+    /// <summary>
+    /// Duplicates a lot: the new lot header + the copied verification-rule
+    /// configuration (never occurrences/checks/history — the rules carry the
+    /// source rule id as copied_from_rule_id) + the "lote duplicar" audit
+    /// event commit/roll back as ONE transaction (audit FA-03). No partially
+    /// duplicated lot can remain on failure.
+    /// </summary>
+    public async Task<Guid> CreateLoteWithRulesAtomicallyAsync(
+        ToolLote lote,
+        IReadOnlyList<ToolCheckRule> copiedRules,
+        Guid? sourceLoteId,
+        string actorId,
+        CancellationToken ct = default)
+    {
+        return await DapperUnitOfWork.RunAsync(_connectionFactory, async (conn, tx, token) =>
+        {
+            const string insertLote = @"
+INSERT INTO tool_lotes
+    (tool_lote_id, tool_reference_id, lote, qty, allowed_lines,
+     drawing_code, drawing_revision, processo, created_at_utc, created_by, updated_at_utc)
+VALUES
+    (@Id, @ReferenceId, @Lote, @Qty, @AllowedLines,
+     @DrawingCode, @DrawingRevision, @Processo, @CreatedAtUtc, @CreatedBy, @UpdatedAtUtc);";
+
+            const string insertRule = @"
+INSERT INTO tool_check_rules
+    (tool_check_rule_id, tool_lote_id, rule_text, frequency, active,
+     copied_from_rule_id, created_at_utc, created_by, updated_at_utc)
+VALUES
+    (@Id, @LoteId, @RuleText, @Frequency, @Active,
+     @CopiedFrom, @CreatedAtUtc, @CreatedBy, @UpdatedAtUtc);";
+
+            await Db.ExecuteAsync(conn, insertLote, ToLoteParams(lote), transaction: tx, cancellationToken: token);
+            foreach (var rule in copiedRules ?? Array.Empty<ToolCheckRule>())
+                await Db.ExecuteAsync(conn, insertRule, ToRuleParams(rule), transaction: tx, cancellationToken: token);
+
+            const string insertAudit = @"
+INSERT INTO audit_events (occurred_at_utc, year, actor_user_id, module_id, action_code,
+                          entity_type, entity_id, result, before_summary, after_summary)
+VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'ferramentas', @Action,
+        'ferramenta', @EntityId, 'succeeded', @Before, @After);";
+            await Db.ExecuteAsync(conn, insertAudit, new
+            {
+                Actor = actorId,
+                Action = "ferramentas.lote.duplicar",
+                EntityId = sourceLoteId?.ToString(),
+                Before = sourceLoteId?.ToString(),
+                After = lote.ToolLoteId.ToString()
+            }, transaction: tx, cancellationToken: token);
+
+            return lote.ToolLoteId;
         }, ct);
     }
 
@@ -617,21 +656,6 @@ VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'ferramentas', @Action,
         Frequency = FerramentasCheckFrequencyCodec.FromStorage(row.frequency),
         Active = row.active,
         CopiedFromRuleId = row.copied_from_rule_id as Guid?,
-        CreatedAtUtc = row.created_at_utc,
-        CreatedBy = row.created_by as string,
-        UpdatedAtUtc = row.updated_at_utc
-    };
-
-    private static ToolCheckOccurrence MapOccurrence(dynamic row) => new()
-    {
-        ToolCheckOccurrenceId = row.tool_check_occurrence_id,
-        ToolCheckRuleId = row.tool_check_rule_id,
-        JobOnId = row.job_on_id as Guid?,
-        JobOnComponentId = row.job_on_component_id as Guid?,
-        Status = row.status,
-        CompletionSource = row.completion_source,
-        CompletedBy = row.completed_by as string,
-        CompletedAtUtc = row.completed_at_utc as DateTimeOffset?,
         CreatedAtUtc = row.created_at_utc,
         CreatedBy = row.created_by as string,
         UpdatedAtUtc = row.updated_at_utc

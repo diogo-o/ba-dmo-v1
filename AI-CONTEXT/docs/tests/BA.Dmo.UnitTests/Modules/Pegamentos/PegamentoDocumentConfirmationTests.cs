@@ -23,7 +23,7 @@ public class PegamentoDocumentConfirmationTests
     public PegamentoDocumentConfirmationTests()
     {
         _service = new PegamentoService(
-            _repository, _lookup,
+            _repository, new FakePegamentoUnitOfWorkFactory(), _lookup,
             new PegamentoAuthorizationGate(FakeAuthorshipAccessor.Authorized()),
             new FixedClock(Now), new FakeSettings("D:\\Documentos"), _folderResolver);
     }
@@ -54,7 +54,7 @@ public class PegamentoDocumentConfirmationTests
         _lookup.ContextByRevision[revisionId] = PegamentoContextBuilder.Complete(Guid.NewGuid(), revisionId);
 
         var noOutput = new PegamentoService(
-            _repository, _lookup,
+            _repository, new FakePegamentoUnitOfWorkFactory(), _lookup,
             new PegamentoAuthorizationGate(FakeAuthorshipAccessor.Authorized()),
             new FixedClock(Now), new FakeSettings(null), _folderResolver);
         var controloId = await CreateControl(revisionId);
@@ -73,7 +73,7 @@ public class PegamentoDocumentConfirmationTests
         _lookup.ContextByRevision[revisionId] = PegamentoContextBuilder.Complete(Guid.NewGuid(), revisionId);
 
         var noFolder = new PegamentoService(
-            _repository, _lookup,
+            _repository, new FakePegamentoUnitOfWorkFactory(), _lookup,
             new PegamentoAuthorizationGate(FakeAuthorshipAccessor.Authorized()),
             new FixedClock(Now), new FakeSettings("D:\\Documentos"),
             new FakeJobOnProductionFolderResolver());

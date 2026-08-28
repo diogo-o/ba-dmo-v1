@@ -306,15 +306,6 @@ public class AdminUserListResetTests : IClassFixture<AdminUserListResetTests.Res
             DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default) =>
             Task.FromResult(true);
 
-        public Task SetUserModulesOverrideAsync(
-            string actorId, string modulesJson, DateTimeOffset expectedUpdatedAt,
-            DateTimeOffset updatedAtUtc, CancellationToken cancellationToken = default) =>
-            Task.CompletedTask;
-
-        public Task<int> CountActiveAdminsAsync(
-            string? excludeActorId = null, CancellationToken cancellationToken = default) =>
-            Task.FromResult(1);
-
         public Task<IReadOnlyList<AdminTemplateRow>> ListTemplatesAsync(
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<AdminTemplateRow>>([new AdminTemplateRow(

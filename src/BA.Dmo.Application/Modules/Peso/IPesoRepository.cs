@@ -6,7 +6,7 @@ namespace BA.Dmo.Application.Modules.Peso;
 /// Peso read/write port (N06, GLM-PESO-08). All CRUD and queries go through
 /// this interface; implementation uses Dapper against peso_* tables.
 /// Every control/comparison stores <c>job_on_id</c> + <c>job_on_revision_id</c>
-/// (TD-18). <c>peso_comparacao_anterior</c> provides the full read path (TD-13).
+/// (TD-18). <c>peso_controlos.previous_control</c> is the immutable comparison baseline (TD-13).
 /// </summary>
 public interface IPesoRepository
 {
@@ -28,15 +28,16 @@ public interface IPesoRepository
     Task<IReadOnlyList<PesoControl>> GetControlsAsync(
         Guid? referenceId, string? search, string? status, PesoRecordType? type,
         DateTime? from, DateTime? to, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<PesoControl>> GetApprovedControlsForJobOnAsync(
-        Guid jobOnId, CancellationToken cancellationToken = default);
     Task UpdateControlAsync(PesoControl control, CancellationToken cancellationToken = default);
-    Task DeleteControlAsync(Guid id, CancellationToken cancellationToken = default);
 
-    // ---- Previous resolution (TD-13/TD-30, cross-line) ----------------------
-    Task<PesoControloAnterior?> GetPreviousApprovedAsync(
-        string mold, string neckring, string productionCode, DateTime countrolDate,
-        CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Header-only update of a control (N40 pairing). Rewrites NO readings —
+    /// used by the workflow transitions (submit/approve/reject/reopen/decide)
+    /// so an approved baseline is never re-written through the readings table;
+    /// the N40 DB guard backs this up at the store level.
+    /// </summary>
+    Task UpdateControlHeaderAsync(PesoControl control, CancellationToken cancellationToken = default);
+    Task DeleteControlAsync(Guid id, CancellationToken cancellationToken = default);
 
     // ---- Day approvals -----------------------------------------------------
     Task SaveDayApprovalAsync(

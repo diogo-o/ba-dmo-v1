@@ -23,6 +23,9 @@ public sealed class FakeFerramentasRepository : IFerramentasRepository
 
     public bool FailAtomicCreate { get; set; }
 
+    /// <summary>When true, RegisterPieceAsync throws PhysicalPieceDuplicateException (audit ON-02 mapping test).</summary>
+    public bool FailPieceDuplicate { get; set; }
+
     public Task<Guid> CreateReferenceAsync(ToolReference reference, CancellationToken ct = default)
     {
         References[reference.ToolReferenceId] = reference;
@@ -74,6 +77,9 @@ public sealed class FakeFerramentasRepository : IFerramentasRepository
 
     public Task<Guid> RegisterPieceAsync(PhysicalPiece piece, CancellationToken ct = default)
     {
+        if (FailPieceDuplicate)
+            throw new PhysicalPieceDuplicateException(
+                $"O número {piece.Number} já está registado neste lote.");
         if (!Pieces.TryGetValue(piece.ToolLoteId, out var list))
         {
             list = new List<PhysicalPiece>();
@@ -124,17 +130,11 @@ public sealed class FakeFerramentasRepository : IFerramentasRepository
         return Task.CompletedTask;
     }
 
-    public Task<Guid?> CopyCheckRuleAsync(Guid sourceRuleId, Guid targetLoteId, CancellationToken ct = default)
-        => Task.FromResult<Guid?>(Guid.NewGuid());
-
     public Task<IReadOnlyList<ToolCheckRule>> GetCheckRulesByLoteAsync(Guid loteId, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<ToolCheckRule>>((CheckRules.GetValueOrDefault(loteId) ?? new()).ToList());
 
     public Task<ToolCheckRule?> GetCheckRuleByIdAsync(Guid ruleId, CancellationToken ct = default)
         => Task.FromResult(CheckRules.Values.SelectMany(l => l).FirstOrDefault(r => r.ToolCheckRuleId == ruleId));
-
-    public Task<IReadOnlyList<ToolCheckOccurrence>> GetOccurrencesByRuleAsync(Guid ruleId, CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<ToolCheckOccurrence>>(Array.Empty<ToolCheckOccurrence>());
 
     public Task<(Guid ReferenceId, Guid LoteId)> CreateReferenceWithFirstLoteAsync(ToolReference reference, ToolLote lote, CancellationToken ct = default)
     {
@@ -143,6 +143,25 @@ public sealed class FakeFerramentasRepository : IFerramentasRepository
         References[reference.ToolReferenceId] = reference;
         Lotes[lote.ToolLoteId] = lote;
         return Task.FromResult((reference.ToolReferenceId, lote.ToolLoteId));
+    }
+
+    public Task<Guid> CreateLoteWithRulesAtomicallyAsync(
+        ToolLote lote, IReadOnlyList<ToolCheckRule> copiedRules, Guid? sourceLoteId, string actorId, CancellationToken ct = default)
+    {
+        if (FailAtomicCreate)
+            throw new InvalidOperationException("simulated atomic failure");
+        Lotes[lote.ToolLoteId] = lote;
+        foreach (var rule in copiedRules)
+        {
+            if (!CheckRules.TryGetValue(rule.ToolLoteId, out var list))
+            {
+                list = new List<ToolCheckRule>();
+                CheckRules[rule.ToolLoteId] = list;
+            }
+            list.Add(rule);
+        }
+        AuditEvents.Add((sourceLoteId, "ferramentas.lote.duplicar", sourceLoteId?.ToString(), lote.ToolLoteId.ToString(), actorId));
+        return Task.FromResult(lote.ToolLoteId);
     }
 
     public Task InsertAuditEventAsync(Guid? entityId, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken ct = default)

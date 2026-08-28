@@ -78,33 +78,31 @@ public sealed class FakePesoRepository : IPesoRepository
         return Task.FromResult<IReadOnlyList<PesoControl>>(rows);
     }
 
-    public Task<IReadOnlyList<PesoControl>> GetApprovedControlsForJobOnAsync(Guid jobOnId, CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<PesoControl>>(Controls.Values.Where(c => c.JobOnId == jobOnId && c.Status == PesoControlState.Aprovado).ToList());
-
     public Task UpdateControlAsync(PesoControl control, CancellationToken ct = default)
     {
+        FullWrites++;
         if (control is not null) Controls[control.PesoControloId] = control;
         return Task.CompletedTask;
     }
+
+    /// <summary>N40: header-only writes (submit/approve/reject/reopen/decide).</summary>
+    public Task UpdateControlHeaderAsync(PesoControl control, CancellationToken ct = default)
+    {
+        HeaderOnlyWrites++;
+        if (control is not null) Controls[control.PesoControloId] = control;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Count of full draft-rewrite writes (header + readings).</summary>
+    public int FullWrites { get; private set; }
+
+    /// <summary>Count of header-only writes (no readings DML).</summary>
+    public int HeaderOnlyWrites { get; private set; }
 
     public Task DeleteControlAsync(Guid id, CancellationToken ct = default)
     {
         Controls.Remove(id);
         return Task.CompletedTask;
-    }
-
-    public Task<PesoControloAnterior?> GetPreviousApprovedAsync(
-        string mold, string neckring, string productionCode, DateTime countrolDate, CancellationToken ct = default)
-    {
-        var prev = Controls.Values
-            .Where(c => c.MoldNumber == mold && c.NeckringNumber == neckring &&
-                        c.Status == PesoControlState.Aprovado &&
-                        (string.CompareOrdinal(c.ProductionCode, productionCode) < 0 || c.ControlDate < countrolDate))
-            .OrderByDescending(c => c.ControlDate)
-            .FirstOrDefault();
-        return Task.FromResult<PesoControloAnterior?>(prev is null
-            ? new PesoControloAnterior(null, null, null, false)
-            : new PesoControloAnterior(prev.PesoControloId, prev.PesoMedio, prev.CapacidadeMedia, true));
     }
 
     public Task SaveDayApprovalAsync(string mold, string neckring, string line, DateTime approvalDate, string approvedBy, CancellationToken ct = default)
