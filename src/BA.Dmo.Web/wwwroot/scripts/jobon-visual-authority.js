@@ -20,6 +20,20 @@
     rail.classList.add('production-rail');
     shell.appendChild(rail);
     shell.appendChild(page);
+
+    // The old split now contains only the planner; neutralize its former
+    // two-column layout so the moved rail does not leave a phantom column.
+    if (split) {
+      split.style.display = 'block';
+      split.style.width = 'auto';
+      split.style.marginLeft = '0';
+      split.style.marginRight = '0';
+    }
+    const planner = split?.querySelector('.planner');
+    if (planner) {
+      planner.style.paddingLeft = '0';
+      planner.style.paddingRight = '0';
+    }
   }
 
   // Canonical Planeamento heading: title/description on the left and Criar Job On
