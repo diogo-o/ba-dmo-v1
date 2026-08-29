@@ -10,8 +10,9 @@
         <span class="status @statusClass">@statusLabel</span>
     </header>
     <div class="tool-fields @(Model.Priority ? "" : "two")">
-        <label><span>Referência</span><input value="@(component?.ReferenceSnapshot ?? "—")" aria-label="Referência @Model.Code"></label>
-        <label><span>Lote</span><input value="@(component?.LotSnapshot ?? "—")" aria-label="Lote @Model.Code"></label>
+        @* Empty tool values render blank — never a placeholder dash (shell rule, see 11_SHELL_00_README.md). *@
+        <label><span>Referência</span><input value="@(component?.ReferenceSnapshot ?? "")" aria-label="Referência @Model.Code"></label>
+        <label><span>Lote</span><input value="@(component?.LotSnapshot ?? "")" aria-label="Lote @Model.Code"></label>
         @if (component?.Fields is { Count: > 0 })
         {
             @foreach (var field in component.Fields.OrderBy(field => field.DisplayOrder))

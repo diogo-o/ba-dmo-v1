@@ -59,7 +59,10 @@ public class IndexModel : PageModel
     public int PendingVerificationCount { get; private set; }
     public bool HasPendingVerifications => PendingVerificationCount > 0;
 
-    // ---- Derived display values (design-safe fallbacks per Design-Reference) ----
+    // ---- Derived display values ----
+    // Empty editable/input fields render BLANK when no real stored value exists.
+    // Never render "—", "--", "{}", "[]", "null" or a serialized empty string as
+    // a field value. Real values render unchanged.
     public string LifecycleDisplay => JobOn?.LifecycleState switch
     {
         JobOnLifecycleState.Rascunho => "Rascunho",
@@ -85,17 +88,24 @@ public class IndexModel : PageModel
         ArticleReferenceImageRules.ExtractReferenceCode(JobOn?.CurrentRevision?.ReferenceSnapshot)
         is { Length: > 0 } reference
             ? reference
-            : "—";
-    public string ProductionDisplay => JobOn?.ProductionCode ?? "—";
-    public string MachineDisplay => JobOn?.MachineCode ?? "—";
-    public string StartDateDisplay => JobOn?.PlannedStartAt?.ToString("yyyy-MM-dd") ?? "—";
-    public string EndDateDisplay => JobOn?.PlannedEndAt?.ToString("yyyy-MM-dd") ?? "—";
+            : "";
+    public string ProductionDisplay => JobOn?.ProductionCode ?? "";
+    // Production navigator label: "<production> · atual" when a real production is
+    // loaded; a clean no-context state otherwise (never a placeholder dash joined
+    // to "atual").
+    public string ProductionNavDisplay =>
+        string.IsNullOrWhiteSpace(JobOn?.ProductionCode)
+            ? "Sem produção"
+            : $"{JobOn.ProductionCode} · atual";
+    public string MachineDisplay => JobOn?.MachineCode ?? "";
+    public string StartDateDisplay => JobOn?.PlannedStartAt?.ToString("yyyy-MM-dd") ?? "";
+    public string EndDateDisplay => JobOn?.PlannedEndAt?.ToString("yyyy-MM-dd") ?? "";
     public string SectionsDisplay => NormalizeSectionsDisplay(JobOn?.CurrentRevision?.Sections);
-    public string DropCountDisplay => JobOn?.CurrentRevision?.DropCount?.ToString("0") ?? "—";
-    public string TypeDisplay => JobOn?.CurrentRevision?.TypeSnapshot ?? "—";
+    public string DropCountDisplay => JobOn?.CurrentRevision?.DropCount?.ToString("0") ?? "";
+    public string TypeDisplay => JobOn?.CurrentRevision?.TypeSnapshot ?? "";
     public string StopDisplay => JobOn?.CurrentRevision?.StopSnapshot ?? "";
-    public string WeightDisplay => JobOn?.CurrentRevision?.WeightSnapshot?.ToString("0.00") ?? "—";
-    public string ProcessDisplay => JobOn?.CurrentRevision?.ProcessSnapshot ?? "—";
+    public string WeightDisplay => JobOn?.CurrentRevision?.WeightSnapshot?.ToString("0.00") ?? "";
+    public string ProcessDisplay => JobOn?.CurrentRevision?.ProcessSnapshot ?? "";
     public string GeneralNotesDisplay => JobOn?.CurrentRevision?.GeneralNotes ?? "";
     public int RevisionCount => JobOn?.RevisionCount ?? 0;
     public int CurrentRevisionNumber => JobOn?.CurrentRevision?.RevisionNumber ?? 0;
@@ -133,11 +143,11 @@ public class IndexModel : PageModel
 
     public static string ComponentFieldValue(JobOnComponentField field) => field.ValueType switch
     {
-        "integer" => field.ValueInteger?.ToString(PtPt) ?? "—",
-        "decimal" => field.ValueDecimal?.ToString("0.##", PtPt) ?? "—",
-        "boolean" => field.ValueBoolean is null ? "—" : field.ValueBoolean.Value ? "Sim" : "Não",
-        "date" => field.ValueDate?.ToString("dd/MM/yyyy", PtPt) ?? "—",
-        _ => field.ValueText ?? "—"
+        "integer" => field.ValueInteger?.ToString(PtPt) ?? "",
+        "decimal" => field.ValueDecimal?.ToString("0.##", PtPt) ?? "",
+        "boolean" => field.ValueBoolean is null ? "" : field.ValueBoolean.Value ? "Sim" : "Não",
+        "date" => field.ValueDate?.ToString("dd/MM/yyyy", PtPt) ?? "",
+        _ => field.ValueText ?? ""
     };
 
     public static string ComponentFieldLabel(string fieldKey) => fieldKey switch

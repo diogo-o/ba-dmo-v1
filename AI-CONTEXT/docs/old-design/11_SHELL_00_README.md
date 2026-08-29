@@ -40,6 +40,18 @@ Logo and page identity, authenticated identity/account control, primary navigati
 
 Navigation is derived server-side from capabilities. Admin-pure shell remains isolated.
 
+### GLOBAL SHELL FREEZE
+
+Module visual-authority designs do not override the BA DMO global header,
+primary navigation, or user/profile shell unless explicitly requested by the owner.
+
+A module owns only its own secondary navigation and its workspace/content. A module's
+canonical HTML/CSS may not change the global application header, the primary module
+navigation, or the global user/profile presentation — neither by moving, restyling, or
+re-rendering those elements, nor by loading module CSS that overrides their shared
+classes (e.g. `.app-header`, `.dmo-app-header*`, `.dmo-primary-nav`, `.app-nav`).
+Pages that opt out of the normal shell must be explicitly requested by the owner.
+
 ## MUST PRESERVE
 
 Capability-derived navigation; operational Job On landing; pure-admin isolation; fail-closed gates.

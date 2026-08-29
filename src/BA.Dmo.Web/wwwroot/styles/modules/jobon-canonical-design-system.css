@@ -66,16 +66,14 @@ html body :is(.dmo-button,.button,.btn):hover,html body :is(.dmo-button,.button,
 html body :is(.dmo-button,.button,.btn).danger{--button-color:var(--dmo-danger)}
 html body :is(.dmo-button,.button,.btn).success{--button-color:var(--dmo-success)}
 html body :is(.dmo-button,.button,.btn):disabled{--button-color:var(--dmo-disabled);cursor:not-allowed}
-.dmo-primary-nav,.dmo-secondary-nav{display:flex;align-items:stretch;background:#fff;border-bottom:1px solid var(--dmo-border);overflow-x:auto}
-.dmo-primary-nav{min-height:48px;gap:22px;padding:0 22px}
+/* GLOBAL SHELL FREEZE: the global header, primary navigation and user/profile block
+   are owned by the BA DMO shell (see 11_SHELL_00_README.md). Job On owns only its
+   secondary navigation (.dmo-secondary-nav / .module-tabs) and its workspace. */
+.dmo-secondary-nav{display:flex;align-items:stretch;background:#fff;border-bottom:1px solid var(--dmo-border);overflow-x:auto}
 .dmo-secondary-nav{min-height:46px;gap:20px;padding:0 18px}
-.dmo-primary-nav :is(a,button),.dmo-secondary-nav :is(a,button){display:inline-flex;align-items:center;min-width:max-content;padding:0 5px;border:0;border-bottom:3px solid transparent;background:none;color:var(--dmo-muted);font-size:13px;font-weight:800;text-decoration:none}
-.dmo-primary-nav :is(a,button):hover,.dmo-primary-nav :is(a,button).active,.dmo-secondary-nav :is(a,button):hover,.dmo-secondary-nav :is(a,button).active{color:var(--dmo-brand-700);border-bottom-color:var(--dmo-brand-600)}
-@media(max-width:600px){.dmo-primary-nav,.dmo-secondary-nav{gap:14px;padding-inline:12px}.dmo-primary-nav :is(a,button),.dmo-secondary-nav :is(a,button){font-size:12px}}
-
-/* When both navigation levels are direct page rows, keep them stacked while scrolling. */
-body > .dmo-primary-nav{position:sticky;top:0;z-index:46}
-body > .dmo-primary-nav + .dmo-secondary-nav{position:sticky;top:48px;z-index:45}
+.dmo-secondary-nav :is(a,button){display:inline-flex;align-items:center;min-width:max-content;padding:0 5px;border:0;border-bottom:3px solid transparent;background:none;color:var(--dmo-muted);font-size:13px;font-weight:800;text-decoration:none}
+.dmo-secondary-nav :is(a,button):hover,.dmo-secondary-nav :is(a,button).active{color:var(--dmo-brand-700);border-bottom-color:var(--dmo-brand-600)}
+@media(max-width:600px){.dmo-secondary-nav{gap:14px;padding-inline:12px}.dmo-secondary-nav :is(a,button){font-size:12px}}
 
 /* Canonical page hierarchy; aliases keep older mockups aligned during migration. */
 html body :is(.dmo-page-head,.page-head,.page-heading){display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px}
