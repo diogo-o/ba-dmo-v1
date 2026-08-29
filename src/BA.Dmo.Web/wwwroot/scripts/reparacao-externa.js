@@ -60,27 +60,12 @@
     });
   });
 
-  // ---- List builder (CM / MF): search → add items → create list ----
-  function loadRepairersInto(select) {
-    api("/api/reparacao-externa/repairers").then((list) => {
-      select.innerHTML = "";
-      const emptyOpt = document.createElement("option");
-      emptyOpt.value = "";
-      emptyOpt.textContent = "— (sem associação)";
-      select.appendChild(emptyOpt);
-      (list || [])
-        .filter((r) => r.active)
-        .forEach((r) => {
-          const opt = document.createElement("option");
-          opt.value = r.repairerId;
-          opt.textContent = r.name;
-          select.appendChild(opt);
-        });
-    }).catch(() => { /* keep empty */ });
-  }
-
-  // Track selected items (physicalPieceId → {reference, lot, number}) per type.
-  const selectedItems = { CM: [], MF: [] };
+  // NOTE (F1 fix): a second `loadRepairersInto(select)` (1-arg) and a second
+  // `const selectedItems` used to be declared later in this IIFE. The duplicate
+  // const was a SyntaxError at parse time that disabled the ENTIRE module
+  // script (tabs/search/envios/historico/definicoes). The stale 1-arg function
+  // and first const are removed; the 2-arg `loadRepairersInto` below is the
+  // live implementation (later same-name declarations win).
 
   // ---- Last-seen repairer per tool type (UX default) ---------------------------
   const LAST_SEEN_KEY = "repex.lastSeenRepairer";

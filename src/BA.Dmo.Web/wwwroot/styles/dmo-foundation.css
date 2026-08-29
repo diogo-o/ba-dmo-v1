@@ -10,6 +10,13 @@
   box-sizing: border-box;
 }
 
+/* The `hidden` attribute must always win over component display rules
+   (e.g. .dmo-row-actions { display:flex } otherwise resurrects hidden
+   pagers/action groups). Global guarantee, !important to beat any class. */
+[hidden] {
+  display: none !important;
+}
+
 /* Reference body global: font 14px/1.45 Inter stack, page surface, text. */
 body {
   margin: 0;

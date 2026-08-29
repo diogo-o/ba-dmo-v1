@@ -7,11 +7,8 @@
    shared layer.
    ============================================================ */
 
-.pegamentos-page {
-  max-width: var(--dmo-page-max-width);
-  margin: 0 auto;
-  padding: var(--dmo-space-6) var(--dmo-page-gutter-desktop);
-}
+/* .pegamentos-page — no container rules: the global .app-work-area is the
+   single workspace container (fluid width + canonical gutters). */
 
 .pegamentos-tabs {
   display: flex;
@@ -158,9 +155,6 @@
 }
 
 @media (max-width: 720px) {
-  .pegamentos-page {
-    padding: var(--dmo-space-4) var(--dmo-page-gutter-mobile);
-  }
   .pegamentos-filters,
   .pegamentos-context-grid,
   .pegamentos-add-row,

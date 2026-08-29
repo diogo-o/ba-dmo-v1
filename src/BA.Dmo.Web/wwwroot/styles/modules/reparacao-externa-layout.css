@@ -6,11 +6,8 @@
    dmo-* components — those live in the shared layer.
    ============================================================ */
 
-.reparacao-externa-page {
-  max-width: var(--dmo-page-max-width);
-  margin: 0 auto;
-  padding: var(--dmo-space-6) var(--dmo-page-gutter-desktop);
-}
+/* .reparacao-externa-page — no container rules: the global .app-work-area
+   is the single workspace container (fluid width + canonical gutters). */
 
 .reparacao-externa-tabs {
   display: flex;
@@ -47,9 +44,8 @@
   gap: var(--dmo-space-2);
   margin-bottom: var(--dmo-space-4);
 }
-.reparacao-externa-action-row > .dmo-button {
-  min-height: var(--dmo-control-height);
-}
+/* Page-level actions use the shared canonical height (dmo-components.css
+   button height context map) — no local 40 px override. */
 
 .reparacao-externa-grid {
   display: grid;
@@ -64,13 +60,11 @@
 
 .reparacao-externa-deferred {
   padding: var(--dmo-space-4);
-  max-width: 720px;
 }
 
 .reparacao-externa-card {
   padding: var(--dmo-space-4);
   margin-bottom: var(--dmo-space-4);
-  max-width: 960px;
 }
 
 @media (max-width: 900px) {
@@ -80,9 +74,6 @@
 }
 
 @media (max-width: 720px) {
-  .reparacao-externa-page {
-    padding: var(--dmo-space-4) var(--dmo-page-gutter-mobile);
-  }
   .reparacao-externa-grid {
     grid-template-columns: 1fr;
   }

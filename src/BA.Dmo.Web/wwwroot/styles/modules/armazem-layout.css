@@ -7,11 +7,8 @@
    shared layer.
    ============================================================ */
 
-.armazem-page {
-  max-width: var(--dmo-page-max-width);
-  margin: 0 auto;
-  padding: var(--dmo-space-6) var(--dmo-page-gutter-desktop);
-}
+/* .armazem-page — no container rules: the global .app-work-area is the
+   single workspace container (fluid width + canonical gutters). */
 
 /* Module tabs — canonical anatomy (mirrors .boquilhas-tabs / W7A-W7B:
    gap 28px, gutter padding, 650 weight, 3px active underline, min-height).
@@ -59,14 +56,12 @@
   gap: var(--dmo-space-2);
   flex-wrap: wrap;
 }
-.armazem-action-row > .dmo-button {
-  min-height: var(--dmo-control-height);
-}
+/* Page-head actions use the shared canonical height (dmo-components.css
+   button height context map) — no local 40 px override. */
 
 .armazem-card {
   padding: var(--dmo-space-4);
   margin-bottom: var(--dmo-space-4);
-  max-width: 720px;
 }
 
 #entradaForm,
@@ -93,11 +88,8 @@
   margin: 0;
 }
 
-.armazem-empty {
-  margin-bottom: var(--dmo-space-4);
-  border: 1px dashed var(--dmo-brand-200);
-  border-radius: 10px;
-}
+/* .armazem-empty retired: page-level empty states use the shared
+   .dmo-empty-state--surface treatment (dmo-components.css). */
 
 .armazem-recent {
   max-width: none;
@@ -192,7 +184,6 @@
 .armazem-search {
   padding: var(--dmo-space-3);
   margin-bottom: var(--dmo-space-3);
-  max-width: 860px;
 }
 .armazem-search .armazem-grid {
   grid-template-columns: minmax(110px, 1fr) minmax(170px, 1.3fr) minmax(140px, 1fr) 160px;
@@ -358,9 +349,6 @@
 }
 
 @media (max-width: 720px) {
-  .armazem-page {
-    padding: var(--dmo-space-4) var(--dmo-page-gutter-mobile);
-  }
   .armazem-tabs {
     padding: 0 var(--dmo-page-gutter-mobile);
   }
@@ -427,7 +415,6 @@
   .app-nav,
   .armazem-tabs,
   .armazem-action-row,
-  .armazem-empty,
   #entradaForm,
   #saidaForm,
   #novoForm,

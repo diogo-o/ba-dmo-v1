@@ -30,16 +30,17 @@
   gap: var(--dmo-space-2);
 }
 
-/* Module navigation: derived tabs (GLM-SHL-03; DMO §7 active rule). */
+/* Module navigation: derived tabs (GLM-SHL-03; DMO §7 active rule).
+   Grid CENTER zone of the 3-zone header: the track is sized to the nav
+   content and sits between two equal 1fr tracks, so its horizontal
+   position never depends on the module title or user block widths. */
 .app-nav {
   align-self: stretch;
   display: flex;
   align-items: stretch;
   justify-content: flex-start;
-  flex: 1 1 auto;
   min-width: 0;
   gap: 20px;
-  margin-left: 22px;
   padding: 0;
   overflow-x: auto;
   scrollbar-width: thin;
@@ -98,11 +99,16 @@
   border-bottom-color: var(--dmo-brand-600);
 }
 
-/* ---------- Work area: fluid content, canonical gutters (P0-3) ---------- */
+/* ---------- Work area: fluid content, canonical gutters (P0-3) ----------
+   GLOBAL WORKSPACE WIDTH RULE: operational modules use the available
+   application viewport width with these consistent global gutters.
+   No centered max-width container: `max-width:none` is the single shared
+   default (BA DMO workspace-width normalization). Modules must NOT add
+   their own max-width / margin:auto / horizontal padding page wrappers. */
 
 .app-work-area {
-  max-width: var(--dmo-page-max-width);
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   padding: var(--dmo-space-5) var(--dmo-page-gutter-desktop) var(--dmo-space-8);
 }
 
@@ -201,6 +207,14 @@
    selector is not duplicated across files. */
 .audit-filters--auto {
   grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+/* Shared filter-form action anchoring: the form button takes its own row
+   and anchors to the card content edge (right), matching the section-head /
+   filter-row action anchoring across modules. */
+.audit-filters--auto > .dmo-button {
+  grid-column: 1 / -1;
+  justify-self: end;
 }
 
 /* Admin audit detail (reference exact). */
@@ -497,12 +511,17 @@
 }
 
 @media (max-width: 900px) {
+  /* User block leaves the grid: 2 tracks — left zone (can shrink, title
+     ellipsis) + nav filling the remaining width with internal scroll. */
+  .dmo-app-header {
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  }
+
   .dmo-app-header__user {
     display: none;
   }
 
   .app-nav {
-    margin-left: auto;
     gap: 13px;
   }
 
@@ -617,12 +636,11 @@
 
 @media (max-width: 650px) {
   .dmo-app-header {
-    overflow-x: auto;
     padding-inline: 12px;
   }
 
   .dmo-app-header__page {
-    flex: 0 0 auto;
+    min-width: 0;
   }
 
   .dmo-app-header__page h1 {
@@ -633,9 +651,9 @@
     display: none;
   }
 
+  /* Nav keeps internal horizontal scroll inside its 1fr track. */
   .app-nav {
-    min-width: max-content;
-    margin-left: 16px;
+    min-width: 0;
   }
 
   .nav-tab > a,

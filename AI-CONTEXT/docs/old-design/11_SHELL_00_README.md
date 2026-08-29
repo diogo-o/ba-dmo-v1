@@ -52,6 +52,23 @@ re-rendering those elements, nor by loading module CSS that overrides their shar
 classes (e.g. `.app-header`, `.dmo-app-header*`, `.dmo-primary-nav`, `.app-nav`).
 Pages that opt out of the normal shell must be explicitly requested by the owner.
 
+### GLOBAL HEADER LAYOUT MODEL (3-zone grid)
+
+The header is an independent, centered shell region with a fixed 3-zone CSS Grid
+(`.dmo-app-header`, styled in `dmo-components.css`, nav rules in `dmo-layout.css`):
+
+- LEFT zone: `.dmo-app-header__left` — BA logo + current module title
+- CENTER zone: the global primary navigation (`nav.dmo-primary-nav`)
+- RIGHT zone: `.dmo-app-header__user` — user name, profile title, logout
+
+Grid tracks: `minmax(0,1fr) minmax(0,auto) minmax(0,1fr)`. The two 1fr side tracks
+are always equal, so the center track — and therefore the primary navigation — stays
+exactly centered **independent of the module title width and the user block width**.
+Switching modules must never move the primary navigation; only the active tab
+underline may change. Title overflow ellipsizes inside the left zone; the nav keeps
+internal horizontal scroll when the viewport is narrow (≤900 px the user block leaves
+the grid and the nav fills the remaining track).
+
 ## MUST PRESERVE
 
 Capability-derived navigation; operational Job On landing; pure-admin isolation; fail-closed gates.

@@ -6,11 +6,8 @@
    components — those live in the shared layer.
    ============================================================ */
 
-.tampoes-page {
-  max-width: var(--dmo-page-max-width);
-  margin: 0 auto;
-  padding: var(--dmo-space-6) var(--dmo-page-gutter-desktop);
-}
+/* .tampoes-page — no container rules: the global .app-work-area is the
+   single workspace container (fluid width + canonical gutters). */
 
 .tampoes-tabs {
   display: flex;
@@ -58,12 +55,14 @@
   display: flex;
   gap: var(--dmo-space-2);
   align-items: center;
+  /* Filter-row action anchors to the card content edge (shared anchoring
+     rule, same as the section-head actions). */
+  justify-self: end;
 }
 
 .tampoes-inline-card {
   padding: var(--dmo-space-4);
   margin-bottom: var(--dmo-space-4);
-  max-width: 960px;
 }
 
 .tampoes-inline {
@@ -78,7 +77,6 @@
   grid-template-columns: 1fr 1fr;
   gap: var(--dmo-space-3);
   margin: var(--dmo-space-4) 0;
-  max-width: 960px;
 }
 .tampoes-saldo-block {
   display: flex;
@@ -128,16 +126,12 @@
 
 .tampoes-detail {
   margin-top: var(--dmo-space-4);
-  max-width: 720px;
 }
 
 /* ============================================================
    Responsive / mobile (GLM-TP-10): no horizontal scroll; transform stacks.
    ============================================================ */
 @media (max-width: 720px) {
-  .tampoes-page {
-    padding: var(--dmo-space-4) var(--dmo-page-gutter-mobile);
-  }
   .tampoes-tabs {
     gap: var(--dmo-space-4);
   }

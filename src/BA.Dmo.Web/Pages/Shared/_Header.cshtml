@@ -15,26 +15,33 @@
     // (h1 "Portal DMO" + p "Administração") instead of the module page title.
     var adminScope = ViewData["AdminScope"] is bool admin && admin;
 }
+@* Global header — 3-zone grid model (GLOBAL NAVIGATION STABILITY RULE):
+   LEFT zone (brand + current module title) | CENTER zone (global primary
+   navigation) | RIGHT zone (user block). The center track is independent of
+   the left/right track widths, so switching modules must never shift the
+   primary navigation. See 11_SHELL_00_README.md — GLOBAL SHELL FREEZE. *@
 <header class="app-header dmo-app-header">
-    <a href="/" class="app-brand" aria-label="BA DMO — início">
-        <img class="dmo-app-header__logo" src="~/assets/ba-logo.png" alt="BA" />
-    </a>
-    @if (!string.IsNullOrWhiteSpace(pageTitle))
-    {
-        if (adminScope)
+    <div class="dmo-app-header__left">
+        <a href="/" class="app-brand" aria-label="BA DMO — início">
+            <img class="dmo-app-header__logo" src="~/assets/ba-logo.png" alt="BA" />
+        </a>
+        @if (!string.IsNullOrWhiteSpace(pageTitle))
         {
-            <div class="dmo-app-header__page">
-                <h1>Portal DMO</h1>
-                <p>Administração</p>
-            </div>
+            if (adminScope)
+            {
+                <div class="dmo-app-header__page">
+                    <h1>Portal DMO</h1>
+                    <p>Administração</p>
+                </div>
+            }
+            else
+            {
+                <div class="dmo-app-header__page">
+                    <h1>@pageTitle</h1>
+                </div>
+            }
         }
-        else
-        {
-            <div class="dmo-app-header__page">
-                <h1>@pageTitle</h1>
-            </div>
-        }
-    }
+    </div>
     @* In Admin there is already a dedicated Admin tab strip inside the page.
        Do not render the global shell "Administração" tab as a second menu. *@
     @if (!adminScope)

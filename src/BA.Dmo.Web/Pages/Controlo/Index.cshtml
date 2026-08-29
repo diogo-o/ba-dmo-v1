@@ -10,6 +10,16 @@
 
 <main data-testid="page-controlo" class="controlo-page">
 
+    @* ===== Workspace tabs (shared active context) — canonical module order:
+       module tabs above the page head (hidden until a production is active). *@
+    <nav class="dmo-module-tabs controlo-tabs" aria-label="Navegação Controlo" id="workTabs" hidden>
+        <button class="dmo-module-tab tab active" data-tab="resumo" type="button">Resumo</button>
+        <button class="dmo-module-tab tab" data-tab="peso" type="button">Peso</button>
+        <button class="dmo-module-tab tab" data-tab="comparacao" type="button">Comparação</button>
+        <button class="dmo-module-tab tab" data-tab="pegamentos" type="button">Pegamentos</button>
+        <button class="dmo-module-tab tab" data-tab="historico" type="button">Histórico</button>
+    </nav>
+
     <div class="dmo-page-head">
         <div>
             <h2>Controlo</h2>
@@ -32,18 +42,11 @@
         </div>
     </div>
 
-    <div class="dmo-empty-state" id="controloEmpty" hidden>Nenhum Job On selecionado. Carregue o Job On atual ou abra uma produção no calendário do Job On.</div>
-    <div class="dmo-empty-state" id="controloLoading" hidden>A carregar…</div>
-    <div class="dmo-empty-state" id="controloError" hidden></div>
-
-    @* ===== Workspace tabs (shared active context) ===== *@
-    <nav class="dmo-module-tabs controlo-tabs" aria-label="Navegação Controlo" id="workTabs" hidden>
-        <button class="dmo-module-tab tab active" data-tab="resumo" type="button">Resumo</button>
-        <button class="dmo-module-tab tab" data-tab="peso" type="button">Peso</button>
-        <button class="dmo-module-tab tab" data-tab="comparacao" type="button">Comparação</button>
-        <button class="dmo-module-tab tab" data-tab="pegamentos" type="button">Pegamentos</button>
-        <button class="dmo-module-tab tab" data-tab="historico" type="button">Histórico</button>
-    </nav>
+    @* Page-level empty states use the shared card-surface treatment
+       (.dmo-empty-state--surface) — not bare text on the page background. *@
+    <div class="dmo-empty-state dmo-empty-state--surface" id="controloEmpty" hidden><strong>Nenhum Job On selecionado.</strong><span>Carregue o Job On atual ou abra uma produção no calendário do Job On.</span></div>
+    <div class="dmo-empty-state dmo-empty-state--surface" id="controloLoading" hidden>A carregar…</div>
+    <div class="dmo-empty-state dmo-empty-state--surface" id="controloError" hidden></div>
 
     @* ===== Resumo tab ===== *@
     <section class="controlo-tab-view active" id="view-resumo">

@@ -127,11 +127,23 @@
 }
 
 /* Compact row actions (reference admin.html .row-actions .dmo-button exact:
-   min-height 30px, 5px 8px, 11px). */
+   min-height 30px, 5px 8px, 11px). Reserved for TABLE row actions. */
 .dmo-row-actions .dmo-button {
   min-height: var(--dmo-row-action-height);
   padding: 5px 8px;
   font-size: var(--dmo-font-size-label);
+}
+
+/* Button height context map (shared rule for equivalent actions):
+   - table row actions            → 30 px compact (above);
+   - filter rows next to 40 px inputs → 40 px (filter-row rule below);
+   - page-head / section-head actions → canonical 36 px, even when wrapped
+     in .dmo-row-actions (the compact size is not a page-head variant). */
+.dmo-page-head .dmo-button,
+.dmo-section-head .dmo-button {
+  min-height: var(--dmo-button-height);
+  padding: 7px 12px;
+  font-size: var(--dmo-font-size-md);
 }
 
 /* ---------- Module tabs — one shared visual/interaction contract ---------- */
@@ -201,6 +213,22 @@
   color: var(--dmo-text);
   padding: 9px 11px;
   outline: none;
+}
+
+/* Checkbox / radio are native controls, not full-height text inputs:
+   the generic input sizing above would render them as 40 px boxes
+   (Tampões "Incluir sem resultado", Rep. Interna "Apenas corrigidos"). */
+.dmo-field input[type="checkbox"],
+.dmo-field input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  accent-color: var(--dmo-brand-600);
 }
 
 /* Compact fields — short inputs (3-4 chars, numbers, codes) */
@@ -566,14 +594,27 @@
 
 /* ---------- 10. Application header (reference exact anatomy) ---------- */
 
+/* 3-zone grid model (GLOBAL NAVIGATION STABILITY RULE): LEFT zone
+   (brand + module title) | CENTER zone (global primary navigation) |
+   RIGHT zone (user block). The two 1fr side tracks are always equal, so
+   the center track — and therefore the primary navigation — stays exactly
+   centered regardless of the module title width or the user block width. */
 .dmo-app-header {
   min-height: var(--dmo-header-height);
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr);
   align-items: center;
   gap: 13px;
   padding: 10px 28px;
   background: var(--dmo-card);
   border-bottom: var(--dmo-border-width) solid var(--dmo-border);
+}
+
+.dmo-app-header__left {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
 }
 
 .dmo-app-header__logo {
@@ -594,6 +635,9 @@
   font-size: var(--dmo-font-size-header-title);
   line-height: var(--dmo-line-height-tight);
   font-weight: var(--dmo-font-weight-extrabold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dmo-app-header__page p {
@@ -606,7 +650,8 @@
 }
 
 .dmo-app-header__user {
-  margin-left: auto;
+  justify-self: end;
+  width: fit-content;
   min-width: 150px;
   padding-left: 18px;
   text-align: right;
@@ -705,6 +750,18 @@
   padding: var(--dmo-space-6);
   text-align: center;
   color: var(--dmo-muted);
+}
+
+/* Page-level "no context yet" empty states sit on a card surface — shared
+   treatment so equivalent empty states match across modules (in-table
+   empties stay flat text). */
+.dmo-empty-state--surface,
+.dmo-error-state--surface {
+  margin-bottom: var(--dmo-space-4);
+  background: var(--dmo-card);
+  border: var(--dmo-border-width) solid var(--dmo-border);
+  border-radius: var(--dmo-r-card);
+  box-shadow: var(--dmo-shadow-card);
 }
 
 .dmo-empty-state strong,
@@ -1442,11 +1499,9 @@
   }
 }
 
-/* Filter-row button keeps its natural width (reference .filter-actions);
-   the fluid auto-fit grid would otherwise stretch it full-column. */
-.boquilhas-page .audit-filters--auto > .dmo-button {
-  justify-self: start;
-}
+/* Filter-row action buttons are right-anchored on their own row by the
+   shared .audit-filters--auto rule (dmo-layout.css) — no per-module
+   alignment override. */
 
 /* Responsive — Boquilhas grids (reference media rules: ≤980 1-col lots,
    2-col stats; ≤720 stats collapse further) */

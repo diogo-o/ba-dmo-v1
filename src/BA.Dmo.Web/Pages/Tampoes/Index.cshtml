@@ -62,23 +62,27 @@
                 <p>Clique seleciona; duplo clique abre o detalhe da configuração.</p>
             </div>
         </div>
-        <div class="tampoes-filter-row">
-            <div class="dmo-field">
-                <label for="cDiameter">Diâmetro (mm)</label>
-                <select id="cDiameter"></select>
-            </div>
-            <div class="dmo-field">
-                <label for="cCalote">Profundidade/Calote (mm)</label>
-                <select id="cCalote"></select>
-            </div>
-            <div class="dmo-field">
-                <label class="tampoes-inline">
-                    <input id="cEmpty" type="checkbox" />
-                    <span>Incluir sem resultado</span>
-                </label>
-            </div>
-            <div class="tampoes-action-row">
-                <button type="button" class="dmo-button" data-consult>Consultar</button>
+        @* Filters on the shared card surface (same pattern as Registo) —
+           not bare fields on the page background. *@
+        <div class="tampoes-inline-card dmo-card">
+            <div class="tampoes-filter-row">
+                <div class="dmo-field">
+                    <label for="cDiameter">Diâmetro (mm)</label>
+                    <select id="cDiameter"></select>
+                </div>
+                <div class="dmo-field">
+                    <label for="cCalote">Profundidade/Calote (mm)</label>
+                    <select id="cCalote"></select>
+                </div>
+                <div class="dmo-field">
+                    <label class="tampoes-inline">
+                        <input id="cEmpty" type="checkbox" />
+                        <span>Incluir sem resultado</span>
+                    </label>
+                </div>
+                <div class="tampoes-action-row">
+                    <button type="button" class="dmo-button" data-consult>Consultar</button>
+                </div>
             </div>
         </div>
 
@@ -192,27 +196,30 @@
                 <p>Movimentos imutáveis. Um clique seleciona; duplo clique abre o detalhe.</p>
             </div>
         </div>
-        <div class="tampoes-filter-row">
-            <div class="dmo-field">
-                <label for="hFrom">Data início</label>
-                <input id="hFrom" type="date" />
-            </div>
-            <div class="dmo-field">
-                <label for="hTo">Data fim</label>
-                <input id="hTo" type="date" />
-            </div>
-            <div class="dmo-field">
-                <label for="hType">Movimento</label>
-                <select id="hType">
-                    <option value="">Todos</option>
-                    <option value="Adicionar">Adicionar</option>
-                    <option value="Remover">Remover</option>
-                    <option value="AlterarEstado">Estado</option>
-                    <option value="AlterarConfiguracao">Configuração</option>
-                </select>
-            </div>
-            <div class="tampoes-action-row">
-                <button type="button" class="dmo-button" data-apply-history>Filtrar</button>
+        @* Filters on the shared card surface (same pattern as Registo). *@
+        <div class="tampoes-inline-card dmo-card">
+            <div class="tampoes-filter-row">
+                <div class="dmo-field">
+                    <label for="hFrom">Data início</label>
+                    <input id="hFrom" type="date" />
+                </div>
+                <div class="dmo-field">
+                    <label for="hTo">Data fim</label>
+                    <input id="hTo" type="date" />
+                </div>
+                <div class="dmo-field">
+                    <label for="hType">Movimento</label>
+                    <select id="hType">
+                        <option value="">Todos</option>
+                        <option value="Adicionar">Adicionar</option>
+                        <option value="Remover">Remover</option>
+                        <option value="AlterarEstado">Estado</option>
+                        <option value="AlterarConfiguracao">Configuração</option>
+                    </select>
+                </div>
+                <div class="tampoes-action-row">
+                    <button type="button" class="dmo-button" data-apply-history>Filtrar</button>
+                </div>
             </div>
         </div>
         <div class="dmo-table-card">

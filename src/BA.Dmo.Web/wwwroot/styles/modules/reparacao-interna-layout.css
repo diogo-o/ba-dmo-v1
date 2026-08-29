@@ -8,10 +8,10 @@
    components — those live in the shared layer.
    ============================================================ */
 
+/* .reparacao-interna-page — no container rules: the global .app-work-area
+   is the single workspace container (fluid width + canonical gutters). */
 .reparacao-interna-page {
-  max-width: var(--dmo-page-max-width);
-  margin: 0 auto;
-  padding: var(--dmo-space-6) var(--dmo-page-gutter-desktop);
+  /* kept as an empty scope hook for module selectors */
 }
 
 .reparacao-interna-tabs {
@@ -86,8 +86,14 @@
 }
 
 .reparacao-interna-selector {
+  padding: var(--dmo-space-4);
   margin-bottom: var(--dmo-space-4);
 }
+/* The "Linha" label and the line-card boxes are card content: 16 px inset
+   (module card rhythm, same as .reparacao-interna-context) so they align
+   cleanly with the containing surface instead of sitting flush on the
+   card border line. (h3 bottom margin comes from the global text
+   hierarchy — no local override needed.) */
 
 .reparacao-interna-context {
   padding: var(--dmo-space-4);
@@ -208,7 +214,6 @@
 .reparacao-interna-correction,
 .reparacao-interna-detail {
   margin-top: var(--dmo-space-4);
-  max-width: 720px;
 }
 
 /* ============================================================
@@ -222,9 +227,6 @@
 }
 
 @media (max-width: 720px) {
-  .reparacao-interna-page {
-    padding: var(--dmo-space-4) var(--dmo-page-gutter-mobile);
-  }
   .line-choice {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

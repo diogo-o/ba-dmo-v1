@@ -12,19 +12,21 @@
    boquilhas.js (wiring only, no business logic in JS). No Fabrico tab (NC-04). *@
 
 <main data-testid="page-boquilhas" class="boquilhas-page">
-    <div class="dmo-page-head">
-        <div>
-            <h2>Boquilhas</h2>
-            <p>Registo diário por referência + lote: entradas, saídas, não reparadas, saldos e histórico.</p>
-        </div>
-    </div>
-
+    @* Module tabs above the page head — canonical module order (shared with
+       ferramentas/armazém/tampões/reparação interna/reparação externa). *@
     <nav class="dmo-module-tabs dmo-tabs boquilhas-tabs" aria-label="Navegação Boquilhas">
         <button class="dmo-module-tab dmo-tab active" data-view="registo" type="button">Registo</button>
         <button class="dmo-module-tab dmo-tab" data-view="boquilhas" type="button">Boquilhas</button>
         <button class="dmo-module-tab dmo-tab" data-view="historico" type="button">Histórico</button>
         <button class="dmo-module-tab dmo-tab right" data-view="definicoes" type="button">Definições</button>
     </nav>
+
+    <div class="dmo-page-head">
+        <div>
+            <h2>Boquilhas</h2>
+            <p>Registo diário por referência + lote: entradas, saídas, não reparadas, saldos e histórico.</p>
+        </div>
+    </div>
 
     <div class="dmo-work-split boquilhas-layout">
         <!-- Canonical contextual sidebar (B1–C3): active reference/lot/qty. -->

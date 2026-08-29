@@ -6,12 +6,8 @@
    dmo-* components — those live in the shared layer.
    ============================================================ */
 
-/* Page container */
-.controlo-page {
-  max-width: var(--dmo-page-max-width);
-  margin: 0 auto;
-  padding: var(--dmo-space-6) var(--dmo-page-gutter-desktop);
-}
+/* Page container — the global .app-work-area owns workspace width and
+   gutters (single source); no module-level max-width/margin/padding. */
 
 /* ============================================================
    Active production card (workspace context indicator)
@@ -163,10 +159,6 @@
    ============================================================ */
 
 @media (max-width: 720px) {
-  .controlo-page {
-    padding: var(--dmo-space-4) var(--dmo-page-gutter-mobile);
-  }
-
   .controlo-active-card-body {
     grid-template-columns: 1fr;
     gap: var(--dmo-space-2);
