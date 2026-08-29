@@ -26,6 +26,7 @@
     // content wrapper. Authorization stays server-side per page.
     var adminScope = Context.Request.Path.StartsWithSegments("/admin");
     ViewData["AdminScope"] = adminScope;
+    var fullBleed = ViewData["FullBleed"] is true;
 }
 <!DOCTYPE html>
 <html lang="pt-PT">
@@ -42,7 +43,7 @@
 </head>
 <body data-can-edit-jobon="@canEdit" data-can-confirm-verifications="@canConfirm" class="@(adminScope ? "admin-scope" : null)">
     <partial name="_Header" />
-    <main class="app-work-area@(adminScope ? " admin-work-area" : "")">
+    <main class="app-work-area@(adminScope ? " admin-work-area" : "")" style="@(fullBleed ? "max-width:none;padding:0" : null)">
         @if (adminScope)
         {
             <partial name="_AdminNav" />

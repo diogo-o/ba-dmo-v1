@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using BA.Dmo.Application.Modules.JobOn;
 using BA.Dmo.Application.Shared.Access;
 using BA.Dmo.Domain.Modules.JobOn;
@@ -89,7 +90,7 @@ public class IndexModel : PageModel
     public string MachineDisplay => JobOn?.MachineCode ?? "—";
     public string StartDateDisplay => JobOn?.PlannedStartAt?.ToString("yyyy-MM-dd") ?? "—";
     public string EndDateDisplay => JobOn?.PlannedEndAt?.ToString("yyyy-MM-dd") ?? "—";
-    public string SectionsDisplay => JobOn?.CurrentRevision?.Sections ?? "—";
+    public string SectionsDisplay => NormalizeSectionsDisplay(JobOn?.CurrentRevision?.Sections);
     public string DropCountDisplay => JobOn?.CurrentRevision?.DropCount?.ToString("0") ?? "—";
     public string TypeDisplay => JobOn?.CurrentRevision?.TypeSnapshot ?? "—";
     public string StopDisplay => JobOn?.CurrentRevision?.StopSnapshot ?? "";
@@ -98,6 +99,63 @@ public class IndexModel : PageModel
     public string GeneralNotesDisplay => JobOn?.CurrentRevision?.GeneralNotes ?? "";
     public int RevisionCount => JobOn?.RevisionCount ?? 0;
     public int CurrentRevisionNumber => JobOn?.CurrentRevision?.RevisionNumber ?? 0;
+    public IReadOnlyList<JobOnComponent> Components =>
+        JobOn?.CurrentRevision?.Components ?? Array.Empty<JobOnComponent>();
+
+    private static string NormalizeSectionsDisplay(string? sections)
+    {
+        if (string.IsNullOrWhiteSpace(sections))
+        {
+            return string.Empty;
+        }
+
+        var value = sections.Trim();
+        try
+        {
+            using var document = JsonDocument.Parse(value);
+            return document.RootElement.ValueKind switch
+            {
+                JsonValueKind.Null or JsonValueKind.Undefined => string.Empty,
+                JsonValueKind.Object when !document.RootElement.EnumerateObject().Any() => string.Empty,
+                JsonValueKind.Array when document.RootElement.GetArrayLength() == 0 => string.Empty,
+                JsonValueKind.String => document.RootElement.GetString()?.Trim() ?? string.Empty,
+                _ => value
+            };
+        }
+        catch (JsonException)
+        {
+            return value;
+        }
+    }
+
+    public JobOnComponent? Component(ComponentFamily family) =>
+        Components.FirstOrDefault(component => component.Family == family);
+
+    public static string ComponentFieldValue(JobOnComponentField field) => field.ValueType switch
+    {
+        "integer" => field.ValueInteger?.ToString(PtPt) ?? "—",
+        "decimal" => field.ValueDecimal?.ToString("0.##", PtPt) ?? "—",
+        "boolean" => field.ValueBoolean is null ? "—" : field.ValueBoolean.Value ? "Sim" : "Não",
+        "date" => field.ValueDate?.ToString("dd/MM/yyyy", PtPt) ?? "—",
+        _ => field.ValueText ?? "—"
+    };
+
+    public static string ComponentFieldLabel(string fieldKey) => fieldKey switch
+    {
+        "diametro_exterior" => "Ø exterior",
+        "diametro_corpo" => "Ø corpo",
+        "diametro_pata" => "Ø pata",
+        "diametro_gargalo" => "Ø gargalo",
+        "fundo_final" => "Fundo final",
+        "folgas" => "Folgas",
+        "tipo" => "Tipo",
+        "adaptador" => "Adaptador",
+        "inversao" => "Inversão",
+        "reparador" => "Reparador",
+        "nominal" => "Nominal",
+        "bacia" => "Bacia",
+        _ => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(fieldKey.Replace('_', ' '))
+    };
 
     /// <summary>
     /// Stable planned dates carrying activity, bound to the canonical
@@ -229,9 +287,12 @@ public class IndexModel : PageModel
                 JobOnId: s.JobOnId,
                 Date: s.PlannedStartAt?.ToString("dd/MM/yyyy") ?? "—",
                 DateIso: s.PlannedStartAt?.ToString("yyyy-MM-dd") ?? "",
+                DayLabel: s.PlannedStartAt?.ToString("dd MMM", PtPt).ToUpper(PtPt) ?? "—",
+                TimeRange: $"{s.PlannedStartAt?.ToString("HH:mm") ?? "—"}–{s.PlannedEndAt?.ToString("HH:mm") ?? "—"}",
                 Reference: s.ReferenceCode ?? "—",
                 Production: s.ProductionCode,
                 Machine: s.MachineCode,
+                RevisionNumber: s.CurrentRevisionNumber,
                 LineColorKey: JobOnLineColor.GetColorKey(s.MachineCode),
                 LifecycleDisplay: s.LifecycleState switch
                 {
@@ -267,9 +328,12 @@ public sealed record PlaneamentoItem(
     Guid JobOnId,
     string Date,
     string DateIso,
+    string DayLabel,
+    string TimeRange,
     string Reference,
     string Production,
     string Machine,
+    int RevisionNumber,
     string? LineColorKey,
     string LifecycleDisplay,
     string LifecyclePillClass,
@@ -286,4 +350,13 @@ public sealed record VerificationItem(
     string StatusPillClass,
     string? CompletedBy,
     string? CompletedAt
+);
+
+public sealed record JobOnToolCardModel(
+    JobOnComponent? Component,
+    string Code,
+    string Name,
+    bool Priority,
+    bool CanEdit,
+    string? ExtraClass = null
 );

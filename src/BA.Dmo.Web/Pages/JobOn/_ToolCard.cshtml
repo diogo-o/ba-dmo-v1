@@ -1,0 +1,32 @@
+@model BA.Dmo.Web.Pages.JobOn.JobOnToolCardModel
+@{
+    var component = Model.Component;
+    var statusClass = component is null ? "neutral" : "info";
+    var statusLabel = component is null ? "Por preencher" : "Registado";
+}
+<article class="tool-card @(Model.Priority ? "priority-tool" : "") @Model.ExtraClass" data-family="@Model.Code">
+    <header>
+        <div><span class="tool-code">@Model.Code</span><small>@Model.Name</small></div>
+        <span class="status @statusClass">@statusLabel</span>
+    </header>
+    <div class="tool-fields @(Model.Priority ? "" : "two")">
+        <label><span>Referência</span><input value="@(component?.ReferenceSnapshot ?? "—")" aria-label="Referência @Model.Code"></label>
+        <label><span>Lote</span><input value="@(component?.LotSnapshot ?? "—")" aria-label="Lote @Model.Code"></label>
+        @if (component?.Fields is { Count: > 0 })
+        {
+            @foreach (var field in component.Fields.OrderBy(field => field.DisplayOrder))
+            {
+                <label><span>@BA.Dmo.Web.Pages.JobOn.IndexModel.ComponentFieldLabel(field.FieldKey)</span><input value="@BA.Dmo.Web.Pages.JobOn.IndexModel.ComponentFieldValue(field)"></label>
+            }
+        }
+        @if (component?.UsageSnapshot is not null)
+        {
+            <label><span>Utilização</span><input value="@component.UsageSnapshot.Value.ToString("0.##")%"></label>
+        }
+        <label class="notes-field span-all"><span>Notas @Model.Code</span><textarea>@(component?.Notes ?? "")</textarea><button class="expand-note" type="button">Expandir</button></label>
+    </div>
+    @if (Model.Priority && Model.CanEdit)
+    {
+        <button class="button compact edit-only tool-change" type="button" data-family="@Model.Code">Alterar @Model.Code</button>
+    }
+</article>

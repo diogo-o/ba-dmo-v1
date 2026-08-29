@@ -9,6 +9,8 @@
     // in admin scope the brand block is the reference admin-header identity
     // (h1 "Portal DMO" + p "Administração") instead of the module page title.
     var adminScope = ViewData["AdminScope"] is bool admin && admin;
+    var jobOnCanonicalShell = ViewData["JobOnCanonicalShell"] is true;
+    var subtitle = ViewData["Subtitle"] as string;
 }
 <header class="app-header dmo-app-header">
     <a href="/" class="app-brand" aria-label="BA DMO — início">
@@ -27,12 +29,16 @@
         {
             <div class="dmo-app-header__page">
                 <h1>@pageTitle</h1>
+                @if (!string.IsNullOrWhiteSpace(subtitle))
+                {
+                    <p>@subtitle</p>
+                }
             </div>
         }
     }
     @* In Admin there is already a dedicated Admin tab strip inside the page.
        Do not render the global shell "Administração" tab as a second menu. *@
-    @if (!adminScope)
+    @if (!adminScope && !jobOnCanonicalShell)
     {
         <partial name="_Navigation" />
     }
@@ -48,3 +54,7 @@
         </div>
     }
 </header>
+@if (!adminScope && jobOnCanonicalShell)
+{
+    <partial name="_Navigation" />
+}
