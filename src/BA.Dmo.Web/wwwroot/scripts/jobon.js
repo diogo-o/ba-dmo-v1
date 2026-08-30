@@ -955,6 +955,91 @@
   }));
   $("#goChecks")?.addEventListener("click", () => $("#checksSection")?.scrollIntoView({ behavior: "smooth", block: "start" }));
 
+  // =============================================================
+  // REAL VERIFICATION-CONFIRMATION FLOW — "Confirmar verificação"
+  // (POST /api/jobon/{id}/verifications/{occurrenceId}/confirm).
+  //
+  // Marking a PENDING checkbox is the ONLY confirmation surface
+  // (modules/05 §7, 05_BRIEF_VERIFICATIONS §10): the click shows
+  // processing, persists the confirmation server-side — the operator is
+  // resolved from the authenticated session and the timestamp is
+  // generated on the server, never sent by the client — and the
+  // persisted state is reloaded on success (the confirmed row, the
+  // who/when of the persisted confirmation and the pending counter
+  // all render from the server). A failed confirmation keeps the
+  // occurrence pending and visible.
+  //
+  // The checkbox is server-rendered actionable only for users with
+  // jobon.confirmar (disabled otherwise); the route-level capability
+  // policy + the service gate fail closed server-side regardless.
+  // Unchecking / cancelling performs ZERO writes.
+  // =============================================================
+  const checksSection = $("#checksSection");
+  const checkListError = $("#checkListError");
+  const jobOnIdForChecks = $("meta[name='jobon-id']")?.content;
+
+  const showCheckError = message => {
+    if (!checkListError) return;
+    checkListError.textContent = message;
+    checkListError.classList.add("visible");
+  };
+  const hideCheckError = () => {
+    if (!checkListError) return;
+    checkListError.textContent = "";
+    checkListError.classList.remove("visible");
+  };
+
+  $$(".check-row", checksSection).forEach(row => {
+    const checkbox = row.querySelector("input[type='checkbox']");
+    if (!checkbox || checkbox.disabled) return; // unauthorized: server-rendered disabled
+    const occurrenceId = row.dataset.occurrenceId;
+
+    if (row.classList.contains("confirmed")) {
+      // Persisted confirmation display: re-clicking must never uncheck it —
+      // the server-rendered state is the source of truth (zero writes).
+      checkbox.addEventListener("change", () => { checkbox.checked = true; });
+      return;
+    }
+
+    if (!occurrenceId || !jobOnIdForChecks) return;
+
+    let inflight = false;
+    checkbox.addEventListener("change", async () => {
+      if (inflight) return; // a duplicate click while processing is swallowed
+      if (!checkbox.checked) return; // unchecking = cancel — zero writes
+      inflight = true;
+      hideCheckError();
+      checkbox.disabled = true; // processing state until the server answers
+      try {
+        const response = await fetch(
+          `/api/jobon/${encodeURIComponent(jobOnIdForChecks)}/verifications/${encodeURIComponent(occurrenceId)}/confirm`,
+          { method: "POST", credentials: "same-origin" });
+        // A capability denial surfaces as a redirect (App denial contract) —
+        // treat it as a denial, never as a success.
+        if (response.redirected) throw new Error("Sem permissão para confirmar verificações.");
+        if (response.ok) {
+          // Persisted: reopen the SAME folha rendering the confirmed row,
+          // the persisted who/when and the updated pending counter.
+          window.location.assign(`/jobon?id=${encodeURIComponent(jobOnIdForChecks)}`);
+          return;
+        }
+        let message = "Não foi possível confirmar a verificação. Verifique a ligação e tente novamente.";
+        try {
+          const body = await response.json();
+          if (body && body.message) message = body.message;
+        } catch { /* keep the default message */ }
+        checkbox.checked = false; // failure keeps the occurrence pending + visible
+        showCheckError(message);
+      } catch (error) {
+        checkbox.checked = false;
+        showCheckError(error?.message || "Não foi possível confirmar a verificação. Verifique a ligação e tente novamente.");
+      } finally {
+        checkbox.disabled = false;
+        inflight = false;
+      }
+    });
+  });
+
   function esc(value) {
     const map = { "&": "&" + "amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
     return String(value ?? "").replace(/[&<>"']/g, character => map[character]);

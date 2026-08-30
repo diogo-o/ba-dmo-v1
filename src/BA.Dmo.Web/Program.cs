@@ -356,6 +356,33 @@ app.MapPost("/api/jobon/{jobOnId:guid}/date", async (
     return Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(CapabilityPolicies.JobonEdit);
 
+// "Confirmar verificação" — confirm a manual verification occurrence (modules/05
+// §7, capability jobon.confirmar). CONFIRM IS A WRITE: the route-level capability
+// policy requires jobon.confirmar (the operational capability the OPERATOR holds —
+// distinct from jobon.edit) and the service gate re-checks the canonical
+// capability server-side (fail closed), so hiding the checkbox is never the only
+// guard. The service resolves the occurrence within the CURRENT immutable
+// revision of the Job On (stale/wrong-revision occurrences are rejected), updates
+// ONLY that occurrence in place (status=confirmada, completed_by resolved from the
+// authenticated session, completed_at generated server-side) and records the
+// module audit fact — previous revisions are never modified. On success the client
+// reopens the SAME Folha Job On rendering the persisted confirmed state.
+app.MapPost("/api/jobon/{jobOnId:guid}/verifications/{occurrenceId:guid}/confirm", async (
+    Guid jobOnId,
+    Guid occurrenceId,
+    JobOnService service,
+    CancellationToken cancellationToken) =>
+{
+    var result = await service.ConfirmVerificationAsync(jobOnId, occurrenceId, cancellationToken);
+    if (result.IsSuccess)
+        return Results.Ok(new { jobOnId, occurrenceId, status = "confirmada" });
+    if (result.Error.Category == ErrorCategory.Forbidden)
+        return Results.Forbid();
+    if (result.Error.Category == ErrorCategory.NotFound)
+        return Results.NotFound(new { code = result.Error.Code, message = result.Error.Message });
+    return Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+}).RequireAuthorization(CapabilityPolicies.JobonConfirmar);
+
 // "Guardar nova revisão" — save an EDITED revision of an EXISTING Job On (TD-18).
 // SAVE IS A WRITE: the route-level capability policy requires jobon.edit and the
 // service gate re-checks the canonical capability server-side (fail closed), so an

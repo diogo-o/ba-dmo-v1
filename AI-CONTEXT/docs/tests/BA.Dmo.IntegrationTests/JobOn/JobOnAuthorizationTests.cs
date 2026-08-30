@@ -520,6 +520,186 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
         Assert.Equal("JOBON_TOOL_FAMILY_INVALID", body!.Code);
     }
 
+    // ---- "Confirmar verificação" — verification occurrences (modules/05 §7) --
+
+    [Fact]
+    public async Task UserWithoutJobOnModule_ConfirmEndpointIsForbidden()
+    {
+        // A user without the Job On module holds no jobon.confirmar: the
+        // route-level capability policy denies the WRITE before any service
+        // code runs — hiding the checkbox is never the only guard.
+        _fixture.Repository.User = _fixture.JobOnlessUser();
+        var client = await LoginAsync();
+
+        // Delta-based: the fixture is shared across the class, so assert the
+        // denied call itself performs ZERO confirm writes (never an absolute).
+        var mutationsBefore = _fixture.JobOnRepository.ConfirmMutationCount;
+        var denied = await client.PostAsync(
+            $"/api/jobon/{SomeJobOnId}/verifications/{Guid.NewGuid()}/confirm",
+            new StringContent("null"));
+        // App denial contract: an authenticated user WITHOUT the Job On module
+        // holds no jobon.confirmar — the route-level capability policy denies
+        // the WRITE in the safe /access-denied deep-link state (never a 2xx,
+        // never a data leak, never a loop).
+        Assert.Equal(HttpStatusCode.Redirect, denied.StatusCode);
+        Assert.StartsWith("/access-denied", denied.Headers.Location!.PathAndQuery);
+        Assert.Equal(mutationsBefore, _fixture.JobOnRepository.ConfirmMutationCount);
+    }
+
+    [Fact]
+    public async Task Operator_ConfirmsPendingVerification_ReloadShowsPersistedState_AndRepeatIsIdempotent()
+    {
+        // The REAL flow through the real pipeline:
+        //   1. the Responsible saves a revision carrying a PENDING verification
+        //      occurrence (the same graph the UI submits);
+        //   2. the OPERATOR (jobon.view + jobon.confirmar, NO jobon.edit) confirms
+        //      it through POST /api/jobon/{id}/verifications/{occurrenceId}/confirm —
+        //      the actor is resolved from the authenticated session, the client
+        //      sends nothing;
+        //   3. reopening the SAME folha renders the persisted confirmed state
+        //      (who/when + updated pending counter);
+        //   4. a repeated confirm (double-click / duplicate POST) is idempotent —
+        //      no second write, no duplicated confirmation state;
+        //   5. after a new revision supersedes it, the stale occurrence is
+        //      rejected with a clean 404 (previous revisions are never rewritten).
+        _fixture.Repository.User = _fixture.JobOnResponsible();
+        var responsible = await LoginAsync();
+        var jobOnId = await CreateJobOnAsync(responsible, "202608", "B1", "5447T173");
+
+        // Delta baseline: the fixture is shared across the class, so every
+        // confirm-write assertion below is relative to this test's start.
+        var mutationsBefore = _fixture.JobOnRepository.ConfirmMutationCount;
+
+        // Same transport the UI submits: the component graph is the current
+        // revision's graph (the embedded #jobon-revision-graph), so components
+        // carry the current revision id — the server re-pins them to the NEW
+        // revision on save (R-002).
+        var revisionPage = await responsible.GetAsync($"/jobon?id={jobOnId}");
+        Assert.Equal(HttpStatusCode.OK, revisionPage.StatusCode);
+        var revisionPageHtml = await revisionPage.Content.ReadAsStringAsync();
+        var revisionIdMatch = System.Text.RegularExpressions.Regex.Match(
+            revisionPageHtml, "name=\"jobon-revision-id\" content=\"([0-9a-fA-F-]{36})\"");
+        Assert.True(revisionIdMatch.Success, "The folha must embed the current revision id.");
+        var currentRevisionId = Guid.Parse(revisionIdMatch.Groups[1].Value);
+
+        var componentId = Guid.NewGuid();
+        var occurrenceId = Guid.NewGuid();
+        var saved = await responsible.PostAsJsonAsync($"/api/jobon/{jobOnId}/revision", new
+        {
+            jobOnId,
+            generalNotes = (string?)null,
+            changeReason = (string?)null,
+            imageAssetId = (string?)null,
+            components = new object[]
+            {
+                new
+                {
+                    jobOnComponentId = componentId,
+                    jobOnRevisionId = currentRevisionId,
+                    family = "MP_CM",
+                    referenceSnapshot = "5447",
+                    lotSnapshot = "1",
+                    technicalNameSnapshot = (string?)null,
+                    plannedQuantity = (decimal?)null,
+                    stockSnapshot = (decimal?)null,
+                    usageSnapshot = (decimal?)null,
+                    notes = (string?)null,
+                    displayOrder = 0,
+                    fields = Array.Empty<object>(),
+                    rows = Array.Empty<object>(),
+                    verifications = new object[]
+                    {
+                        new
+                        {
+                            jobOnVerificationOccurrenceId = occurrenceId,
+                            jobOnComponentId = componentId,
+                            sourceRuleId = (Guid?)null,
+                            ruleTextSnapshot = "Verificar junta da boquilha",
+                            status = "pendente",
+                            completionSource = "manual_job_on",
+                            completedBy = (string?)null,
+                            completedAtUtc = (DateTime?)null,
+                            createdAtUtc = new DateTime(2026, 8, 17, 12, 0, 0, DateTimeKind.Utc),
+                            updatedAtUtc = new DateTime(2026, 8, 17, 12, 0, 0, DateTimeKind.Utc)
+                        }
+                    }
+                }
+            }
+        });
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+
+        // The pending occurrence renders as an actionable check row.
+        _fixture.Repository.User = _fixture.JobOnOperator();
+        var operatorClient = await LoginAsync();
+        var before = await operatorClient.GetAsync($"/jobon?id={jobOnId}");
+        Assert.Equal(HttpStatusCode.OK, before.StatusCode);
+        var beforeHtml = await before.Content.ReadAsStringAsync();
+        Assert.Contains($"data-occurrence-id=\"{occurrenceId}\"", beforeHtml);
+        Assert.Contains("1 pendentes", beforeHtml);
+        Assert.Contains("Por confirmar", beforeHtml);
+
+        // The OPERATOR confirms through the real endpoint (jobon.confirmar).
+        var confirmed = await operatorClient.PostAsync(
+            $"/api/jobon/{jobOnId}/verifications/{occurrenceId}/confirm",
+            new StringContent("null"));
+        Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
+        var confirmedBody = await confirmed.Content.ReadFromJsonAsync<ConfirmResponse>();
+        Assert.Equal(jobOnId, confirmedBody?.JobOnId);
+        Assert.Equal(occurrenceId, confirmedBody?.OccurrenceId);
+        Assert.Equal("confirmada", confirmedBody?.Status);
+        Assert.Equal(mutationsBefore + 1, _fixture.JobOnRepository.ConfirmMutationCount);
+
+        // Reloading the SAME folha renders the persisted confirmed state: the row
+        // is confirmed, the who/when render from the persisted confirmation, and
+        // the pending counter is updated.
+        var after = await operatorClient.GetAsync($"/jobon?id={jobOnId}");
+        Assert.Equal(HttpStatusCode.OK, after.StatusCode);
+        var afterHtml = await after.Content.ReadAsStringAsync();
+        Assert.Contains("check-row confirmed", afterHtml);
+        Assert.Contains("Confirmada", afterHtml);
+        Assert.Contains(AuthUserId.ToString(), afterHtml); // who — the persisted actor
+        Assert.Contains("0 pendentes", afterHtml);
+
+        // Exactly one module audit fact for this confirmation (existing audit path).
+        Assert.Single(_fixture.JobOnRepository.AuditEvents,
+            a => a.EventType == "jobon.verificacao.confirmar" && a.JobId == jobOnId);
+
+        // A repeated confirm (double-click / duplicate POST) is idempotent: no
+        // second write, no duplicated confirmation state, no duplicated audit.
+        var repeated = await operatorClient.PostAsync(
+            $"/api/jobon/{jobOnId}/verifications/{occurrenceId}/confirm",
+            new StringContent("null"));
+        Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
+        Assert.Equal(mutationsBefore + 1, _fixture.JobOnRepository.ConfirmMutationCount);
+        Assert.Single(_fixture.JobOnRepository.AuditEvents,
+            a => a.EventType == "jobon.verificacao.confirmar" && a.JobId == jobOnId);
+
+        // A new revision supersedes it: the stale occurrence is rejected with a
+        // clean 404 and the previous revision is never rewritten. Save back as the
+        // Responsible (jobon.edit) — the fixture user was switched to the operator
+        // for the confirm phase, and identity resolves from the shared user slot.
+        _fixture.Repository.User = _fixture.JobOnResponsible();
+        var again = await responsible.PostAsJsonAsync($"/api/jobon/{jobOnId}/revision", new
+        {
+            jobOnId,
+            generalNotes = "Nova revisão",
+            changeReason = (string?)null,
+            imageAssetId = (string?)null,
+            components = Array.Empty<object>()
+        });
+        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+
+        var stale = await operatorClient.PostAsync(
+            $"/api/jobon/{jobOnId}/verifications/{occurrenceId}/confirm",
+            new StringContent("null"));
+        Assert.Equal(HttpStatusCode.NotFound, stale.StatusCode);
+        var staleBody = await stale.Content.ReadFromJsonAsync<ErrorBody>();
+        Assert.Equal("JOBON_VERIFICATION_NOT_FOUND", staleBody?.Code);
+        Assert.Equal(mutationsBefore + 1, _fixture.JobOnRepository.ConfirmMutationCount);
+    }
+
+    private sealed record ConfirmResponse(Guid JobOnId, Guid OccurrenceId, string Status);
+
     private async Task<Guid> CreateJobOnAsync(
         HttpClient client, string production, string machine, string reference)
     {
@@ -577,6 +757,8 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
     {
         public FakeIdentityRepository Repository { get; } = new();
 
+        public MemoryJobOnRepository JobOnRepository { get; } = new();
+
         public InternalUserRecord JobOnOperator() => new(
             ActorId: "jobon-operator",
             AuthUserId: AuthUserId,
@@ -627,7 +809,7 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
             {
                 ReplaceSingleton<ISupabaseAuthAdapter>(services, new FakeAuthAdapter());
                 ReplaceSingleton<IInternalUserRepository>(services, Repository);
-                ReplaceSingleton<IJobOnRepository>(services, new MemoryJobOnRepository());
+                ReplaceSingleton<IJobOnRepository>(services, JobOnRepository);
                 ReplaceSingleton<IJobOnUserContextRepository>(services, new FakeJobOnUserContextRepository());
                 ReplaceSingleton<IFerramentasIdentityLookup>(services, new FakeToolRegister());
                 services.Configure<Microsoft.AspNetCore.Mvc.RazorPages.RazorPagesOptions>(
@@ -658,10 +840,16 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
         /// so a successful create can open the newly created folha/redirect target.
         /// All other port members stay inert.
         /// </summary>
-        private sealed class MemoryJobOnRepository : IJobOnRepository
+        public sealed class MemoryJobOnRepository : IJobOnRepository
         {
             private readonly Dictionary<Guid, Domain.Modules.JobOn.JobOn> _jobOns = new();
             private readonly List<JobOnRevision> _revisions = [];
+
+            /// <summary>Module audit facts (jobon.criar / jobon.guardar / jobon.verificacao.confirmar …) for assertions.</summary>
+            public List<(Guid JobId, Guid? RevisionId, string EventType, string? Before, string? After, string ActorId)> AuditEvents { get; } = [];
+
+            /// <summary>Number of in-place confirmation writes that actually applied (idempotent repeats do not count).</summary>
+            public int ConfirmMutationCount { get; private set; }
 
             public Task<Guid> CreateAsync(Domain.Modules.JobOn.JobOn jobOn, CancellationToken cancellationToken = default)
             {
@@ -690,9 +878,20 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
             {
                 if (!_jobOns.TryGetValue(id, out var stored))
                     return Task.FromResult<Domain.Modules.JobOn.JobOn?>(null);
+                // Mirror the real repository's aggregate hydration: each revision
+                // exposes the flattened verification occurrences of its components
+                // (the same collection the folha renders).
                 var revisions = _revisions
                     .Where(r => r.JobOnId == id)
                     .OrderBy(r => r.RevisionNumber)
+                    .Select(r => r.Components is null
+                        ? r
+                        : r with
+                        {
+                            Verifications = r.Components
+                                .SelectMany(c => c.Verifications ?? Array.Empty<JobOnVerificationOccurrence>())
+                                .ToList()
+                        })
                     .ToList();
                 var jobOn = new Domain.Modules.JobOn.JobOn(
                     stored.ProductionCode,
@@ -753,6 +952,55 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
                 Guid occurrenceId, string status, string? completedBy, DateTime? completedAtUtc, CancellationToken cancellationToken = default) =>
                 Task.CompletedTask;
 
+            /// <summary>
+            /// Mirrors the real repository's optimistic guard: the in-place
+            /// confirmation only applies while the occurrence is still
+            /// 'pendente'; the stored revision graph is updated so the SAME
+            /// folha reopens rendering the persisted confirmed state.
+            /// </summary>
+            public Task<int> ConfirmVerificationOccurrenceAsync(
+                Guid occurrenceId, string completedBy, DateTime completedAtUtc, CancellationToken cancellationToken = default)
+            {
+                for (var i = 0; i < _revisions.Count; i++)
+                {
+                    var revision = _revisions[i];
+                    var component = (revision.Components ?? Array.Empty<JobOnComponent>())
+                        .FirstOrDefault(c => (c.Verifications ?? Array.Empty<JobOnVerificationOccurrence>())
+                            .Any(v => v.JobOnVerificationOccurrenceId == occurrenceId));
+                    if (component?.Verifications is null)
+                        continue;
+
+                    var occurrence = component.Verifications
+                        .Single(v => v.JobOnVerificationOccurrenceId == occurrenceId);
+                    if (occurrence.Status != "pendente")
+                        return Task.FromResult(0);
+
+                    var updatedVerifications = component.Verifications
+                        .Select(v => v.JobOnVerificationOccurrenceId == occurrenceId
+                            ? v with
+                            {
+                                Status = "confirmada",
+                                CompletedBy = completedBy,
+                                CompletedAtUtc = completedAtUtc,
+                                UpdatedAtUtc = completedAtUtc
+                            }
+                            : v)
+                        .ToList();
+
+                    var updatedComponents = (revision.Components ?? Array.Empty<JobOnComponent>())
+                        .Select(c => c.JobOnComponentId == component.JobOnComponentId
+                            ? c with { Verifications = updatedVerifications }
+                            : c)
+                        .ToList();
+
+                    _revisions[i] = revision with { Components = updatedComponents };
+                    ConfirmMutationCount++;
+                    return Task.FromResult(1);
+                }
+
+                return Task.FromResult(0);
+            }
+
             public Task<Guid?> GetCurrentRevisionIdAsync(Guid jobOnId, CancellationToken cancellationToken = default) =>
                 Task.FromResult<Guid?>(_jobOns.TryGetValue(jobOnId, out var jobOn) ? jobOn.CurrentRevisionId : null);
 
@@ -760,8 +1008,11 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
                 Task.CompletedTask;
 
             public Task InsertAuditEventAsync(
-                Guid jobId, Guid? revisionId, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken cancellationToken = default) =>
-                Task.CompletedTask;
+                Guid jobId, Guid? revisionId, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken cancellationToken = default)
+            {
+                AuditEvents.Add((jobId, revisionId, eventType, beforeSnapshot, afterSnapshot, actorId));
+                return Task.CompletedTask;
+            }
 
             public Task InsertImageMutationAsync(
                 JobOnRevision newRevision, Guid jobOnId, string eventType, string? beforeImageAssetId, string? afterImageAssetId, string actorId, CancellationToken cancellationToken = default) =>

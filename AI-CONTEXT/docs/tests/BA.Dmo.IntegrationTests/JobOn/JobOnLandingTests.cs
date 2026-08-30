@@ -221,6 +221,7 @@ public class JobOnLandingTests : IClassFixture<JobOnLandingTests.LandingFixture>
             public Task InsertRowsAsync(IEnumerable<JobOnComponentRow> rows, CancellationToken cancellationToken = default) => Task.CompletedTask;
             public Task InsertVerificationsAsync(IEnumerable<JobOnVerificationOccurrence> verifications, CancellationToken cancellationToken = default) => Task.CompletedTask;
             public Task UpdateVerificationStatusAsync(Guid occurrenceId, string status, string? completedBy, DateTime? completedAtUtc, CancellationToken cancellationToken = default) => Task.CompletedTask;
+            public Task<int> ConfirmVerificationOccurrenceAsync(Guid occurrenceId, string completedBy, DateTime completedAtUtc, CancellationToken cancellationToken = default) => Task.FromResult(0);
             public Task<Guid?> GetCurrentRevisionIdAsync(Guid jobOnId, CancellationToken cancellationToken = default) => Task.FromResult<Guid?>(null);
             public Task UpdateCurrentRevisionAsync(Guid jobOnId, Guid revisionId, CancellationToken cancellationToken = default) => Task.CompletedTask;
             public Task InsertAuditEventAsync(Guid jobId, Guid? revisionId, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken cancellationToken = default) => Task.CompletedTask;

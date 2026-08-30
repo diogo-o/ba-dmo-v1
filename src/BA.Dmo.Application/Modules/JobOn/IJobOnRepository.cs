@@ -64,6 +64,22 @@ public interface IJobOnRepository
     /// <summary>Update verification status.</summary>
     Task UpdateVerificationStatusAsync(Guid occurrenceId, string status, string? completedBy, DateTime? completedAtUtc, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Confirm a verification occurrence IN PLACE within the current immutable
+    /// revision graph (modules/05 §7): sets <c>status='confirmada'</c>,
+    /// <c>completed_by</c> (resolved server-side from the authenticated session),
+    /// <c>completed_at_utc</c> (generated server-side) and <c>updated_at_utc</c>
+    /// ONLY IF the occurrence is still <c>'pendente'</c> — the optimistic guard
+    /// guarantees that exactly one concurrent confirmation wins; the loser
+    /// observes 0 affected rows and can treat the occurrence as already
+    /// confirmed (idempotent, never silently overwriting the winner). No new
+    /// Job On, revision, Ferramentas or Armazém record is created.
+    /// </summary>
+    /// <returns>Number of affected rows: 1 = this call won the confirmation;
+    /// 0 = the occurrence was already confirmed (no write performed).</returns>
+    Task<int> ConfirmVerificationOccurrenceAsync(
+        Guid occurrenceId, string completedBy, DateTime completedAtUtc, CancellationToken cancellationToken = default);
+
     /// <summary>Get current revision_id for a Job On.</summary>
     Task<Guid?> GetCurrentRevisionIdAsync(Guid jobOnId, CancellationToken cancellationToken = default);
 

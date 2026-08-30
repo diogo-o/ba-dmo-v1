@@ -168,6 +168,30 @@ public sealed class FakeJobOnRepository : IJobOnRepository
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Mirrors the real repository's optimistic guard: the in-place update only
+    /// applies while the occurrence is still 'pendente'; anything else (missing,
+    /// already confirmed by this fake's own state, or another status) affects 0
+    /// rows. The stored occurrence is replaced with its confirmed record so a
+    /// re-read (GetByIdAsync → CurrentRevision) observes the persisted state.
+    /// </summary>
+    public Task<int> ConfirmVerificationOccurrenceAsync(Guid occurrenceId, string completedBy, DateTime completedAtUtc, CancellationToken cancellationToken = default)
+    {
+        var index = Verifications.FindIndex(v => v.JobOnVerificationOccurrenceId == occurrenceId);
+        if (index < 0 || Verifications[index].Status != "pendente")
+            return Task.FromResult(0);
+
+        Verifications[index] = Verifications[index] with
+        {
+            Status = "confirmada",
+            CompletedBy = completedBy,
+            CompletedAtUtc = completedAtUtc,
+            UpdatedAtUtc = completedAtUtc
+        };
+        VerificationUpdates.Add((occurrenceId, "confirmada", completedBy, completedAtUtc));
+        return Task.FromResult(1);
+    }
+
     public Task<Guid?> GetCurrentRevisionIdAsync(Guid jobOnId, CancellationToken cancellationToken = default)
     {
         JobOns.TryGetValue(jobOnId, out var jobOn);

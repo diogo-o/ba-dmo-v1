@@ -59,11 +59,12 @@ public class JobOnServiceTests
     {
         _identity.GrantViewOnly();
 
-        var result = await _service.ConfirmVerificationAsync(Guid.NewGuid());
+        var result = await _service.ConfirmVerificationAsync(Guid.NewGuid(), Guid.NewGuid());
 
         Assert.True(result.IsFailure);
         Assert.Equal(ErrorCategory.Forbidden, result.Error.Category);
         Assert.Empty(_repository.VerificationUpdates);
+        Assert.Empty(_repository.AuditEvents);
     }
 
     // ---- create -----------------------------------------------------------
@@ -611,16 +612,16 @@ public class JobOnServiceTests
     [Fact]
     public async Task ConfirmVerification_WithConfirmarCapability_UpdatesStatus()
     {
-        var occurrenceId = Guid.NewGuid();
+        var (jobOnId, occurrenceId) = await SeedJobOnWithPendingVerificationAsync();
 
-        var result = await _service.ConfirmVerificationAsync(occurrenceId);
+        var result = await _service.ConfirmVerificationAsync(jobOnId, occurrenceId);
 
         Assert.True(result.IsSuccess);
         var update = Assert.Single(_repository.VerificationUpdates);
         Assert.Equal(occurrenceId, update.OccurrenceId);
         Assert.Equal("confirmada", update.Status);
-        Assert.NotNull(update.CompletedBy);
-        Assert.NotNull(update.CompletedAt);
+        Assert.Equal("aaaaaaaa-0000-0000-0000-000000000001", update.CompletedBy);
+        Assert.Equal(new DateTime(2026, 8, 17, 18, 0, 0, DateTimeKind.Utc), update.CompletedAt);
     }
 
     // ---- helpers ----------------------------------------------------------
@@ -662,6 +663,35 @@ public class JobOnServiceTests
         await _service.SaveRevisionAsync(new SaveJobOnRevisionRequest(
             id, "Notas", null, null, new[] { component }));
         return id;
+    }
+
+    /// <summary>Creates a rascunho + a revision with one PENDING verification occurrence.</summary>
+    private async Task<(Guid JobOnId, Guid OccurrenceId)> SeedJobOnWithPendingVerificationAsync()
+    {
+        var jobOnId = await SeedRascunho();
+        var componentId = Guid.NewGuid();
+        var occurrenceId = Guid.NewGuid();
+        var component = new JobOnComponent
+        {
+            JobOnComponentId = componentId,
+            JobOnRevisionId = Guid.NewGuid(),
+            Family = ComponentFamily.MP_CM,
+            ReferenceSnapshot = "CM 5447",
+            LotSnapshot = "Lote 3",
+            Verifications = new[]
+            {
+                new JobOnVerificationOccurrence
+                {
+                    JobOnVerificationOccurrenceId = occurrenceId,
+                    JobOnComponentId = componentId,
+                    RuleTextSnapshot = "Verificar junta da boquilha",
+                    Status = "pendente"
+                }
+            }
+        };
+        await _service.SaveRevisionAsync(new SaveJobOnRevisionRequest(
+            jobOnId, null, null, null, new[] { component }));
+        return (jobOnId, occurrenceId);
     }
 
     private async Task<Guid> SeedClosed()

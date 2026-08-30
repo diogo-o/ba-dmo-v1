@@ -337,6 +337,7 @@ public class HistoriaWebAuthorizationTests :
         public Task InsertRowsAsync(IEnumerable<JobOnComponentRow> rows, CancellationToken ct = default) => Task.CompletedTask;
         public Task InsertVerificationsAsync(IEnumerable<JobOnVerificationOccurrence> verifications, CancellationToken ct = default) => Task.CompletedTask;
         public Task UpdateVerificationStatusAsync(Guid occurrenceId, string status, string? completedBy, DateTime? completedAtUtc, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<int> ConfirmVerificationOccurrenceAsync(Guid occurrenceId, string completedBy, DateTime completedAtUtc, CancellationToken ct = default) => Task.FromResult(0);
         public Task<Guid?> GetCurrentRevisionIdAsync(Guid jobOnId, CancellationToken ct = default) => Task.FromResult<Guid?>(null);
         public Task UpdateCurrentRevisionAsync(Guid jobOnId, Guid revisionId, CancellationToken ct = default) => Task.CompletedTask;
         public Task InsertAuditEventAsync(Guid jobId, Guid? revisionId, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken ct = default) => Task.CompletedTask;

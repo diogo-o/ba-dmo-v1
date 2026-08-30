@@ -533,6 +533,42 @@ WHERE job_on_verification_occurrence_id = @OccurrenceId;";
         }
     }
 
+    /// <summary>
+    /// In-place confirmation of a verification occurrence (modules/05 §7). The
+    /// UPDATE only applies while the row is still <c>'pendente'</c>: exactly one
+    /// concurrent confirmation wins and the loser observes 0 affected rows
+    /// (idempotent — the winner's completed_by/completed_at are never silently
+    /// overwritten). Returns the number of affected rows.
+    /// </summary>
+    public async Task<int> ConfirmVerificationOccurrenceAsync(
+        Guid occurrenceId, string completedBy, DateTime completedAtUtc, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+UPDATE job_on_verification_occurrence
+SET status = 'confirmada',
+    completed_by = @CompletedBy,
+    completed_at_utc = @CompletedAtUtc,
+    updated_at_utc = @UpdatedUtc
+WHERE job_on_verification_occurrence_id = @OccurrenceId
+  AND status = 'pendente';";
+
+        var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
+        try
+        {
+            return await Db.ExecuteAsync(connection, sql, new
+            {
+                OccurrenceId = occurrenceId,
+                CompletedBy = completedBy,
+                CompletedAtUtc = completedAtUtc,
+                UpdatedUtc = DateTime.UtcNow
+            }, cancellationToken: cancellationToken);
+        }
+        finally
+        {
+            await DisposeAsync(connection);
+        }
+    }
+
     public async Task<Guid?> GetCurrentRevisionIdAsync(Guid jobOnId, CancellationToken cancellationToken = default)
     {
         const string sql = @"SELECT current_revision_id FROM job_on WHERE job_on_id = @JobOnId;";

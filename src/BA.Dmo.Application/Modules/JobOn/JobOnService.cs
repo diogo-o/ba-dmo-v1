@@ -597,19 +597,114 @@ public sealed class JobOnService
 
     /// <summary>
     /// Confirm a verification occurrence (modules/05 §7, <c>jobon.confirmar</c>).
-    /// Persists operator/date and <c>completion_source = manual_job_on</c>.
+    /// The occurrence must belong to the CURRENT immutable revision of this Job
+    /// On: stale / wrong-revision / other-Job On occurrences are rejected
+    /// (NotFound) and previous revisions are never modified. An already-confirmed
+    /// occurrence is idempotent — a duplicate request returns success with ZERO
+    /// writes (no re-confirmation, no reset, no duplicated audit fact, no silent
+    /// overwrite of another actor). On success ONLY the intended occurrence is
+    /// updated in place within the current revision graph: status
+    /// <c>confirmada</c>, <c>completed_by</c> resolved server-side from the
+    /// authenticated session (the client never supplies it) and
+    /// <c>completed_at</c> generated server-side, with
+    /// <c>completion_source = manual_job_on</c>. The module audit fact carries
+    /// the JobOnId, the current revision id, the occurrence id, the actor and
+    /// the before/after status.
     /// </summary>
     public async Task<Result<Unit, DomainError>> ConfirmVerificationAsync(
-        Guid occurrenceId, CancellationToken cancellationToken = default)
+        Guid jobOnId, Guid occurrenceId, CancellationToken cancellationToken = default)
     {
         var gate = _gate.Require(JobonModuleCatalog.JobonConfirmarCapabilityId);
         if (gate.IsFailure)
             return Result<Unit, DomainError>.Failure(gate.Error);
 
-        await _repository.UpdateVerificationStatusAsync(
-            occurrenceId, "confirmada", gate.Value.ActorId, _clock.UtcNow.DateTime, cancellationToken);
+        var jobOn = await _repository.GetByIdAsync(jobOnId, cancellationToken);
+        if (jobOn is null)
+            return Result<Unit, DomainError>.Failure(DomainError.NotFound(
+                "JOBON_NOT_FOUND", "Job On não encontrado."));
+
+        var currentRevision = jobOn.CurrentRevision;
+        if (currentRevision is null)
+            return Result<Unit, DomainError>.Failure(DomainError.Validation(
+                "JOBON_NO_REVISION",
+                "O Job On não tem uma revisão atual para confirmar verificações."));
+
+        var occurrence = FindCurrentRevisionOccurrence(currentRevision, occurrenceId);
+        if (occurrence is null)
+            return Result<Unit, DomainError>.Failure(DomainError.NotFound(
+                "JOBON_VERIFICATION_NOT_FOUND",
+                "Ocorrência de verificação não encontrada na revisão atual do Job On."));
+
+        if (occurrence.Status == "confirmada")
+            // Idempotent: already confirmed (a duplicate request or a race loser
+            // that observes the winner's state). Zero writes, zero audit.
+            return Result<Unit, DomainError>.Success(Unit.Value);
+
+        if (occurrence.Status != "pendente")
+            return Result<Unit, DomainError>.Failure(DomainError.DomainConflict(
+                "JOBON_VERIFICATION_NOT_CONFIRMABLE",
+                "Esta verificação não pode ser confirmada no estado atual."));
+
+        // UtcDateTime (Kind=Utc) — the same convention the alter-date flow uses
+        // for persisted/audited timestamps: unambiguous in JSON snapshots and in
+        // the timestamptz column (an Unspecified DateTime would be read as local
+        // time by the provider).
+        var now = _clock.UtcNow.UtcDateTime;
+
+        // In-place optimistic confirmation: the UPDATE only applies while the
+        // occurrence is still 'pendente', so exactly one concurrent call wins.
+        var affected = await _repository.ConfirmVerificationOccurrenceAsync(
+            occurrenceId, gate.Value.ActorId, now, cancellationToken);
+        if (affected == 0)
+            // Lost the race to a concurrent confirmation: the occurrence is now
+            // confirmed by another actor — idempotent success, no write, no audit.
+            return Result<Unit, DomainError>.Success(Unit.Value);
+
+        await _repository.InsertAuditEventAsync(
+            jobOnId,
+            currentRevision.JobOnRevisionId,
+            "jobon.verificacao.confirmar",
+            VerificationAuditSnapshot(occurrenceId, occurrence.Status),
+            VerificationAuditSnapshot(occurrenceId, "confirmada", gate.Value.ActorId, now),
+            gate.Value.ActorId,
+            cancellationToken);
+
         return Result<Unit, DomainError>.Success(Unit.Value);
     }
+
+    /// <summary>
+    /// Locates a verification occurrence within the CURRENT revision's graph
+    /// (per-component occurrences first, then the flattened revision-level
+    /// collection) — occurrences of other revisions or other Job Ons are absent
+    /// and therefore rejected as NotFound.
+    /// </summary>
+    private static JobOnVerificationOccurrence? FindCurrentRevisionOccurrence(
+        JobOnRevision currentRevision, Guid occurrenceId)
+    {
+        var fromComponents = currentRevision.Components?
+            .SelectMany(c => c.Verifications ?? Array.Empty<JobOnVerificationOccurrence>())
+            .FirstOrDefault(v => v.JobOnVerificationOccurrenceId == occurrenceId);
+        if (fromComponents is not null)
+            return fromComponents;
+
+        return (currentRevision.Verifications ?? Array.Empty<JobOnVerificationOccurrence>())
+            .FirstOrDefault(v => v.JobOnVerificationOccurrenceId == occurrenceId);
+    }
+
+    /// <summary>Audit "before" payload of a verification confirmation: the occurrence id and its previous status.</summary>
+    private static string VerificationAuditSnapshot(Guid occurrenceId, string status) =>
+        JsonSerializer.Serialize(new { occurrence_id = occurrenceId, status });
+
+    /// <summary>Audit "after" payload of a verification confirmation: the occurrence id, the new status and the persisted operator/date.</summary>
+    private static string VerificationAuditSnapshot(
+        Guid occurrenceId, string status, string completedBy, DateTime completedAtUtc) =>
+        JsonSerializer.Serialize(new
+        {
+            occurrence_id = occurrenceId,
+            status,
+            completed_by = completedBy,
+            completed_at_utc = completedAtUtc
+        });
 
     /// <summary>
     /// Associates an image with the current Article/Reference. Requires jobon.edit.
