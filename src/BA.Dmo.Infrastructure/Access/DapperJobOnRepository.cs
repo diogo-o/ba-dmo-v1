@@ -723,6 +723,66 @@ VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot::jsonb, @AfterSnapshot:
     }
 
     /// <summary>
+    /// "Alterar data" — atomically changes the planned dates of an EXISTING Job On:
+    /// 1) UPDATEs the <c>job_on</c> header planned dates (the single calendar source),
+    /// 2) INSERTs the NEW immutable revision (same job_on_id, next revision number) with
+    /// its complete child graph, 3) advances <c>job_on.current_revision_id</c> and
+    /// 4) records the audit event — all in ONE transaction. On any failure nothing
+    /// persists: no new revision, no header date change, and current_revision_id stays
+    /// pointing at the previous revision (TD-18). Uses the same DapperUnitOfWork
+    /// strategy as every other Job On atomic write.
+    /// </summary>
+    public async Task AlterDatesAtomicallyAsync(
+        Guid jobOnId,
+        DateTimeOffset? plannedStartAt,
+        DateTimeOffset? plannedEndAt,
+        JobOnRevision newRevision,
+        string eventType,
+        string? beforeSnapshot,
+        string? afterSnapshot,
+        string actorId,
+        CancellationToken cancellationToken = default)
+    {
+        await DapperUnitOfWork.RunAsync<int>(_connectionFactory, async (connection, transaction, ct) =>
+        {
+            // 1. UPDATE header planned dates — must affect exactly 1 row.
+            const string updateHeaderSql = @"
+UPDATE job_on
+SET planned_start_at = @PlannedStartAt,
+    planned_end_at = @PlannedEndAt
+WHERE job_on_id = @JobOnId;";
+
+            var headerRows = await Db.ExecuteAsync(connection, updateHeaderSql, new
+            {
+                JobOnId = jobOnId,
+                PlannedStartAt = (object?)plannedStartAt ?? DBNull.Value,
+                PlannedEndAt = (object?)plannedEndAt ?? DBNull.Value
+            }, transaction, ct);
+
+            if (headerRows != 1)
+                throw new InvalidOperationException(
+                    $"Expected exactly 1 row updated for job_on planned dates, got {headerRows}.");
+
+            // 2. INSERT the new revision + its complete child graph.
+            await InsertRevisionGraphCoreAsync(connection, transaction, newRevision, ct);
+
+            // 3. Advance current_revision_id — must affect exactly 1 row.
+            var updatedRows = await UpdateCurrentRevisionCoreAsync(
+                connection, transaction, jobOnId, newRevision.JobOnRevisionId, ct);
+            if (updatedRows != 1)
+                throw new InvalidOperationException(
+                    $"Expected exactly 1 row updated for job_on.current_revision_id, got {updatedRows}.");
+
+            // 4. INSERT audit event carrying the previous revision/state and the new revision/dates.
+            await InsertAuditEventCoreAsync(
+                connection, transaction, jobOnId, newRevision.JobOnRevisionId,
+                eventType, beforeSnapshot, afterSnapshot, actorId, ct);
+
+            return 0;
+        }, cancellationToken);
+    }
+
+    /// <summary>
     /// Atomically duplicates a Job On: inserts the new <c>job_on</c> header, the copied
     /// revision (revision number 1) with its complete child graph, advances the new
     /// current_revision_id, and records the audit event — all in ONE transaction. On any

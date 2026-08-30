@@ -41,6 +41,9 @@ public sealed class FakeJobOnRepository : IJobOnRepository
     /// <summary>When true, the atomic duplicate throws a raw persistence failure (no-partial-write test).</summary>
     public bool FailDuplicateAtomically { get; set; }
 
+    /// <summary>When true, the atomic alter-date throws a raw persistence failure (no-partial-write test).</summary>
+    public bool FailAlterDatesAtomically { get; set; }
+
     public Task<Guid> CreateAsync(JobOnEntity jobOn, CancellationToken cancellationToken = default)
     {
         if (FailIdentityDuplicate)
@@ -214,6 +217,35 @@ public sealed class FakeJobOnRepository : IJobOnRepository
         // Mirror the real repository (current_revision_id advances atomically).
         if (JobOns.TryGetValue(revision.JobOnId, out var jobOn)) jobOn.SaveRevision(revision);
         AuditEvents.Add((revision.JobOnId, revision.JobOnRevisionId, eventType, null, null, actorId));
+        return Task.CompletedTask;
+    }
+
+    public Task AlterDatesAtomicallyAsync(
+        Guid jobOnId,
+        DateTimeOffset? plannedStartAt,
+        DateTimeOffset? plannedEndAt,
+        JobOnRevision newRevision,
+        string eventType,
+        string? beforeSnapshot,
+        string? afterSnapshot,
+        string actorId,
+        CancellationToken cancellationToken = default)
+    {
+        if (FailAlterDatesAtomically)
+            throw new InvalidOperationException("persistence unavailable");
+
+        // Mirror the real repository: the header planned dates (single calendar
+        // source), the new revision + children, the current-revision link advance
+        // and the audit fact — all-or-nothing.
+        if (JobOns.TryGetValue(jobOnId, out var jobOn))
+        {
+            jobOn.AlterDates(plannedStartAt, plannedEndAt);
+        }
+        Revisions.Add(newRevision);
+        PersistRevisionGraph(newRevision);
+        CurrentRevisionUpdates.Add((jobOnId, newRevision.JobOnRevisionId));
+        if (JobOns.TryGetValue(jobOnId, out var stored)) stored.SaveRevision(newRevision);
+        AuditEvents.Add((jobOnId, newRevision.JobOnRevisionId, eventType, beforeSnapshot, afterSnapshot, actorId));
         return Task.CompletedTask;
     }
 

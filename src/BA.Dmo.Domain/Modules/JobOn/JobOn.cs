@@ -121,6 +121,20 @@ public sealed class JobOn
     }
 
     /// <summary>
+    /// Updates the planned dates on the header (the single calendar source).
+    /// A date change is NEVER persisted as a lone header UPDATE: the service
+    /// orchestrating "Alterar data" must persist it atomically together with a
+    /// NEW immutable revision of the SAME Job On (TD-18). This method only
+    /// updates the in-memory occurrence context so the loaded aggregate and the
+    /// persisted row stay consistent.
+    /// </summary>
+    public void AlterDates(DateTimeOffset? plannedStartAt, DateTimeOffset? plannedEndAt)
+    {
+        PlannedStartAt = plannedStartAt;
+        PlannedEndAt = plannedEndAt;
+    }
+
+    /// <summary>
     /// Duplicate from another Job On instance. The duplicated Job On is a NEW
     /// aggregate: it gets a NEW id — never the source's — and pins the origin
     /// via <c>copied_from_job_on_id</c>. The header carries the NEW production/

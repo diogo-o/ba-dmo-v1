@@ -184,6 +184,68 @@
     });
   }
 
+  // =============================================================
+  // REAL ALTER-DATE FLOW — "Alterar data" (POST /api/jobon/{id}/date).
+  // The dialog collects only the NEW planned dates (and an optional change
+  // reason). The service creates a NEW immutable revision of the SAME Job On
+  // (never a new Job On), preserving the current setup; only the date context
+  // changes. On success the SAME folha reopens via /jobon?id={sameJobOnId}
+  // rendering the new current revision. The button is server-rendered only for
+  // users with jobon.edit and an open Job On; the route policy + service gate
+  // fail closed regardless.
+  // =============================================================
+  const alterDatesButton = $("#alterDatesJobOn");
+  const alterDatesDialog = $("#alterDatesDialog");
+  if (alterDatesButton && alterDatesDialog && typeof alterDatesDialog.showModal === "function") {
+    alterDatesButton.addEventListener("click", () => {
+      const errorEl = $("#alterDatesError");
+      if (errorEl) { errorEl.textContent = ""; errorEl.classList.remove("visible"); }
+      alterDatesDialog.showModal();
+    });
+    $("#alterDatesCancel")?.addEventListener("click", () => alterDatesDialog.close());
+    alterDatesDialog.addEventListener("click", event => { if (event.target === alterDatesDialog) alterDatesDialog.close(); });
+    $("#alterDatesForm")?.addEventListener("submit", async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const errorEl = $("#alterDatesError");
+      const submit = $("#alterDatesSubmit");
+      const showError = message => {
+        if (errorEl) { errorEl.textContent = message; errorEl.classList.add("visible"); }
+      };
+      const jobOnId = $("meta[name='jobon-id']")?.getAttribute("content");
+      if (!jobOnId) { showError("Não foi possível identificar o Job On."); return; }
+      const values = {
+        plannedStartAt: form.elements.plannedStartAt.value || null,
+        plannedEndAt: form.elements.plannedEndAt.value || null,
+        changeReason: form.elements.changeReason.value.trim() || null
+      };
+      submit.disabled = true;
+      try {
+        const response = await fetch(`/api/jobon/${encodeURIComponent(jobOnId)}/date`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(values)
+        });
+        if (response.ok) {
+          // Reopen the SAME Job On folha, now rendering the new current revision.
+          window.location.assign(`/jobon?id=${encodeURIComponent(jobOnId)}`);
+          return;
+        }
+        let message = "Não foi possível alterar a data. Verifique os dados e tente novamente.";
+        try {
+          const body = await response.json();
+          if (body && body.message) message = body.message;
+        } catch { /* keep the default message */ }
+        showError(message);
+      } catch {
+        showError("Não foi possível alterar a data. Verifique a ligação e tente novamente.");
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  }
+
   const setMode = mode => {
     document.body.dataset.mode = mode;
     const label = $("#modeIndicator strong");

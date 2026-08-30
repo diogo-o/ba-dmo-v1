@@ -592,6 +592,9 @@ public class ShellRoutingTests : IClassFixture<ShellRoutingTests.ShellFixture>
             public Task SaveRevisionGraphAsync(JobOnRevision revision, string eventType, string actorId, CancellationToken cancellationToken = default) =>
                 Task.CompletedTask;
 
+            public Task AlterDatesAtomicallyAsync(Guid jobOnId, DateTimeOffset? plannedStartAt, DateTimeOffset? plannedEndAt, JobOnRevision newRevision, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken cancellationToken = default) =>
+                Task.CompletedTask;
+
             public Task<Guid> DuplicateAtomicallyAsync(Domain.Modules.JobOn.JobOn newJobOn, JobOnRevision revision, Guid sourceJobOnId, string actorId, CancellationToken cancellationToken = default) =>
                 Task.FromResult(Guid.NewGuid());
         }

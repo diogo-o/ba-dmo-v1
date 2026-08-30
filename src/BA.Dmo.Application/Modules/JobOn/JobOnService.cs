@@ -33,6 +33,19 @@ public sealed record SaveJobOnRevisionRequest(
     string? ImageAssetId,
     IReadOnlyList<JobOnComponent> Components);
 
+/// <summary>
+/// "Alterar data" — change the planned dates of an EXISTING Job On. The operation
+/// creates a NEW immutable revision of the SAME <c>job_on_id</c> (never a new
+/// Job On), preserving the current setup; only the date context changes. The
+/// change reason is required when the Job On is fechado (same rule as any edit
+/// of a closed revision, modules/05 §4/§5.4).
+/// </summary>
+public sealed record AlterJobOnDatesRequest(
+    Guid JobOnId,
+    DateTimeOffset? PlannedStartAt,
+    DateTimeOffset? PlannedEndAt,
+    string? ChangeReason = null);
+
 /// <summary>Transition the lifecycle state (TD-27).</summary>
 public sealed record TransitionJobOnRequest(
     Guid JobOnId,
@@ -287,6 +300,94 @@ public sealed class JobOnService
         // transaction — a current revision can never become partially persisted.
         await _repository.SaveRevisionGraphAsync(
             revision, "jobon.guardar", gate.Value.ActorId, cancellationToken);
+
+        return Result<Guid, DomainError>.Success(revision.JobOnRevisionId);
+    }
+
+    /// <summary>
+    /// "Alterar data" (modules/05): changes the planned dates of an EXISTING Job On.
+    /// The operation preserves the production identity — the SAME <c>JobOnId</c>,
+    /// production, reference, machine/line and the complete current revision setup
+    /// (sections, drop count, notes, typed values, components, fields, CAL rows and
+    /// verification occurrences) — and creates a NEW immutable revision carrying the
+    /// NEW dates snapshot. The header planned dates (single calendar source) and
+    /// <c>current_revision_id</c> advance atomically with the new revision; previous
+    /// revisions remain unchanged and readable. ALTER DATE IS A WRITE: requires
+    /// <c>jobon.edit</c> through the canonical gate ({jobOn JOB-ON}), route policy and
+    /// gate fail closed for operator/controller with only <c>jobon.view</c>.
+    /// </summary>
+    public async Task<Result<Guid, DomainError>> AlterDatesAsync(
+        AlterJobOnDatesRequest request, CancellationToken cancellationToken = default)
+    {
+        var gate = _gate.Require(JobonModuleCatalog.JobonEditCapabilityId);
+        if (gate.IsFailure)
+            return Result<Guid, DomainError>.Failure(gate.Error);
+
+        if (request.PlannedStartAt is not null
+            && request.PlannedEndAt is not null
+            && request.PlannedStartAt > request.PlannedEndAt)
+            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+                "JOBON_INVALID_DATES",
+                "A data inicial não pode ser posterior à data final."));
+
+        var jobOn = await _repository.GetByIdAsync(request.JobOnId, cancellationToken);
+        if (jobOn is null)
+            return Result<Guid, DomainError>.Failure(DomainError.NotFound(
+                "JOBON_NOT_FOUND", "Job On não encontrado."));
+
+        // Same established rule as any edit of a closed revision: a fechado Job On
+        // requires a change_reason (modules/05 §4/§5.4).
+        if (jobOn.LifecycleState == JobOnLifecycleState.Fechado
+            && string.IsNullOrWhiteSpace(request.ChangeReason))
+            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+                "JOBON_CHANGE_REASON_REQUIRED",
+                "Alterar a data de uma revisão fechada exige um motivo (change_reason)."));
+
+        var currentRevision = jobOn.CurrentRevision;
+        if (currentRevision is null)
+            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+                "JOBON_NO_REVISION",
+                "O Job On não tem uma revisão atual para alterar as datas."));
+
+        // Audit "before": the previous revision/current state of the SAME Job On.
+        var beforeSnapshot = DatesAuditSnapshot(
+            jobOn.CurrentRevisionId, jobOn.PlannedStartAt, jobOn.PlannedEndAt);
+
+        // The new revision starts from the current revision; ONLY the date context
+        // changes. The complete component/field/CAL-row/verification graph is copied
+        // under new ids; verification state is preserved (same production occurrence).
+        var now = _clock.UtcNow.DateTime;
+        var (revision, _) = CopyRevisionForDateChange(
+            jobOn,
+            currentRevision,
+            request.PlannedStartAt,
+            request.PlannedEndAt,
+            request.ChangeReason,
+            gate.Value.ActorId,
+            now);
+
+        // Audit "after": the new revision id + the new dates.
+        var afterSnapshot = DatesAuditSnapshot(
+            revision.JobOnRevisionId, request.PlannedStartAt, request.PlannedEndAt);
+
+        // Mutate the loaded aggregate so the in-memory occurrence context matches the
+        // atomic persistence below (same mutate-then-persist style as TransitionAsync).
+        jobOn.AlterDates(request.PlannedStartAt, request.PlannedEndAt);
+        jobOn.SaveRevision(revision);
+
+        // New revision + children + header dates + current_revision_id advance + audit
+        // commit atomically in ONE transaction — a date change can never leave a partial
+        // revision or an orphaned current link (same strategy as SaveRevisionGraphAsync).
+        await _repository.AlterDatesAtomicallyAsync(
+            jobOn.Id,
+            request.PlannedStartAt,
+            request.PlannedEndAt,
+            revision,
+            "jobon.alterar.data",
+            beforeSnapshot,
+            afterSnapshot,
+            gate.Value.ActorId,
+            cancellationToken);
 
         return Result<Guid, DomainError>.Success(revision.JobOnRevisionId);
     }
@@ -642,6 +743,98 @@ public sealed class JobOnService
 
         return (revision, components);
     }
+
+    /// <summary>
+    /// "Alterar data" — copies the CURRENT revision of the SAME Job On into a NEW
+    /// immutable revision (next revision number, new id, same <c>job_on_id</c>). Only
+    /// the date context changes: the production/machine snapshots re-record the (same)
+    /// header context, the dates snapshot records the NEW planned dates, and every other
+    /// revision-owned value — reference, typed values, sections, drop count, notes and
+    /// the complete component/field/CAL-row graph — is preserved under new ids. Unlike
+    /// duplication (a NEW production occurrence regenerates checks as pendente), the
+    /// verification occurrences are copied WITH their current state: this is the same
+    /// production, only its dates change, so confirmed checks are not silently reset.
+    /// </summary>
+    private static (JobOnRevision Revision, IReadOnlyList<JobOnComponent> Components) CopyRevisionForDateChange(
+        JobOnEntity jobOn,
+        JobOnRevision current,
+        DateTimeOffset? plannedStartAt,
+        DateTimeOffset? plannedEndAt,
+        string? changeReason,
+        string actorId,
+        DateTime now)
+    {
+        var newRevisionId = Guid.NewGuid();
+
+        var components = new List<JobOnComponent>();
+        foreach (var sourceComponent in current.Components ?? Array.Empty<JobOnComponent>())
+        {
+            var componentId = Guid.NewGuid();
+            var fields = (sourceComponent.Fields ?? Array.Empty<JobOnComponentField>())
+                .Select(f => f with { JobOnComponentFieldId = Guid.NewGuid(), JobOnComponentId = componentId })
+                .ToList();
+            var rows = (sourceComponent.Rows ?? Array.Empty<JobOnComponentRow>())
+                .Select(r => r with { JobOnComponentRowId = Guid.NewGuid(), JobOnComponentId = componentId })
+                .ToList();
+            var verifications = (sourceComponent.Verifications ?? Array.Empty<JobOnVerificationOccurrence>())
+                .Select(v => v with
+                {
+                    JobOnVerificationOccurrenceId = Guid.NewGuid(),
+                    JobOnComponentId = componentId
+                })
+                .ToList();
+
+            // Re-pin the copied component to the NEW revision id (never the source's),
+            // so the whole in-memory graph is consistent (R-002: all new child rows
+            // belong to the new revision).
+            components.Add(sourceComponent with
+            {
+                JobOnComponentId = componentId,
+                JobOnRevisionId = newRevisionId,
+                Fields = fields,
+                Rows = rows,
+                Verifications = verifications
+            });
+        }
+
+        var revision = new JobOnRevision
+        {
+            JobOnRevisionId = newRevisionId,
+            JobOnId = jobOn.Id,
+            RevisionNumber = current.RevisionNumber + 1,
+            // Same production occurrence: header context is re-snapshotted (unchanged),
+            // the reference and every revision-owned value are preserved from the
+            // current revision, and ONLY the dates snapshot records the NEW dates.
+            ProductionSnapshot = SnapshotJson.Production(jobOn.ProductionCode),
+            ReferenceSnapshot = current.ReferenceSnapshot,
+            MachineSnapshot = SnapshotJson.Machine(jobOn.MachineCode),
+            DatesSnapshot = SnapshotJson.Dates(plannedStartAt, plannedEndAt),
+            Sections = current.Sections,
+            DropCount = current.DropCount,
+            TypeSnapshot = current.TypeSnapshot,
+            StopSnapshot = current.StopSnapshot,
+            WeightSnapshot = current.WeightSnapshot,
+            ProcessSnapshot = current.ProcessSnapshot,
+            GeneralNotes = current.GeneralNotes,
+            // The legacy revision column stays dormant for historical compatibility.
+            ImageAssetId = null,
+            ChangeReason = changeReason,
+            SavedBy = actorId,
+            SavedAtUtc = now,
+            Components = components
+        };
+
+        return (revision, components);
+    }
+
+    /// <summary>
+    /// Builds the canonical audit payload for a date change
+    /// (<c>{ revision_id, start_at, end_at }</c>): the "before" carries the previous
+    /// revision/current state of the SAME Job On, the "after" the new revision/new dates.
+    /// </summary>
+    private static string DatesAuditSnapshot(
+        Guid? revisionId, DateTimeOffset? startAt, DateTimeOffset? endAt) =>
+        JsonSerializer.Serialize(new { revision_id = revisionId, start_at = startAt, end_at = endAt });
 }
 
 /// <summary>

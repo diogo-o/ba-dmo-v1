@@ -111,6 +111,26 @@ public interface IJobOnRepository
         string actorId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// "Alterar data" — atomically changes the planned dates of an EXISTING Job On in ONE
+    /// database transaction: UPDATEs the <c>job_on</c> header planned dates (the single
+    /// calendar source), INSERTs a NEW immutable revision of the SAME <c>job_on_id</c>
+    /// (next revision number, new dates snapshot, current setup preserved), advances
+    /// <c>job_on.current_revision_id</c>, and records the audit event. On any failure
+    /// nothing persists: no new revision, no header date change, and
+    /// <c>current_revision_id</c> stays pointing at the previous revision (TD-18).
+    /// </summary>
+    Task AlterDatesAtomicallyAsync(
+        Guid jobOnId,
+        DateTimeOffset? plannedStartAt,
+        DateTimeOffset? plannedEndAt,
+        JobOnRevision newRevision,
+        string eventType,
+        string? beforeSnapshot,
+        string? afterSnapshot,
+        string actorId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Get historical productions grouped by reference.</summary>
     Task<IReadOnlyList<HistoricalProductionSummary>> GetHistoricalProductionsAsync(string? referenceFilter, string? machineFilter, DateTime? from, DateTime? to, CancellationToken cancellationToken = default);
 }

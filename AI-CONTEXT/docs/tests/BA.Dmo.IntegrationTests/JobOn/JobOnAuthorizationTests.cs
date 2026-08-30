@@ -287,7 +287,80 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
         Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode); // unknown source: clean 404
     }
 
+    // ---- alter-date flow ("Alterar data", modules/05) -----------------------
+
+    [Fact]
+    public async Task OperatorWithoutEditCapability_CannotAlterJobOnDate()
+    {
+        // Test #2 — an Operator/Controller with only jobon.view fails closed on the
+        // WRITE operation at the route level: POST /api/jobon/{id}/date requires
+        // jobon.edit and is denied with 403 before any code runs. Hiding the button
+        // is never the only guard.
+        _fixture.Repository.User = _fixture.JobOnOperator();
+        var client = await LoginAsync();
+
+        var denied = await client.PostAsJsonAsync(
+            $"/api/jobon/{SomeJobOnId}/date",
+            new { plannedStartAt = "2026-08-25", plannedEndAt = "2026-08-26" });
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResponsibleProfile_AltersDate_OnSameJobOn_AndReopensTheSameFolha()
+    {
+        // Tests #1, #3–#9, #12 — Responsible + jobon.edit alters the planned dates of
+        // an EXISTING Job On: a NEW revision of the SAME job_on_id is created (never a
+        // new Job On), the revision number increments, the previous revision stays
+        // untouched, current_revision_id advances, and the success target reopens the
+        // SAME folha (/jobon?id={sameJobOnId}) rendering the new dates.
+        _fixture.Repository.User = _fixture.JobOnResponsible();
+        var client = await LoginAsync();
+
+        // 1. Create the Job On through the real create flow (revision 1).
+        var created = await client.PostAsJsonAsync("/api/jobon", new
+        {
+            productionCode = "202608",
+            machineCode = "B1",
+            plannedStartAt = "2026-08-17",
+            plannedEndAt = (string?)null,
+            reference = "5447T173"
+        });
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var creation = await created.Content.ReadFromJsonAsync<CreateJobOnResponse>();
+        var jobOnId = creation!.JobOnId;
+
+        var before = await client.GetAsync($"/jobon?id={jobOnId}");
+        Assert.Equal(HttpStatusCode.OK, before.StatusCode);
+        var beforeHtml = await before.Content.ReadAsStringAsync();
+        Assert.Contains("meta name=\"jobon-id\" content=\"" + jobOnId, beforeHtml);
+        Assert.Contains("id=\"jobStartDate\" type=\"date\" value=\"2026-08-17\"", beforeHtml);
+        Assert.Contains("202608", beforeHtml); // production unchanged on the same folha
+
+        // 2. Alter the planned dates on the SAME Job On.
+        var altered = await client.PostAsJsonAsync(
+            $"/api/jobon/{jobOnId}/date",
+            new { plannedStartAt = "2026-08-25", plannedEndAt = "2026-08-26" });
+        Assert.Equal(HttpStatusCode.OK, altered.StatusCode);
+        var payload = await altered.Content.ReadFromJsonAsync<AlterDateResponse>();
+        Assert.NotNull(payload);
+        Assert.Equal(jobOnId, payload!.JobOnId);      // SAME JobOnId — never a new Job On
+        Assert.NotEqual(Guid.Empty, payload.RevisionId); // a NEW revision id
+
+        var after = await client.GetAsync($"/jobon?id={jobOnId}");
+        Assert.Equal(HttpStatusCode.OK, after.StatusCode);
+        var afterHtml = await after.Content.ReadAsStringAsync();
+        // The SAME folha reopens rendering the new dates (new current revision).
+        Assert.Contains("meta name=\"jobon-id\" content=\"" + jobOnId, afterHtml);
+        Assert.Contains("meta name=\"jobon-revision-id\" content=\"" + payload.RevisionId, afterHtml);
+        Assert.Contains("id=\"jobStartDate\" type=\"date\" value=\"2026-08-25\"", afterHtml);
+        Assert.Contains("id=\"jobEndDate\" type=\"date\" value=\"2026-08-26\"", afterHtml);
+        Assert.Contains("202608", afterHtml);   // production unchanged
+        Assert.Contains("5447T173", afterHtml); // reference unchanged
+    }
+
     private sealed record CreateJobOnResponse(Guid JobOnId);
+
+    private sealed record AlterDateResponse(Guid JobOnId, Guid RevisionId);
 
     private sealed record ErrorBody(string Code, string Message);
 
@@ -509,6 +582,29 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
             public Task SaveRevisionGraphAsync(
                 JobOnRevision revision, string eventType, string actorId, CancellationToken cancellationToken = default) =>
                 Task.CompletedTask;
+
+            public Task AlterDatesAtomicallyAsync(
+                Guid jobOnId,
+                DateTimeOffset? plannedStartAt,
+                DateTimeOffset? plannedEndAt,
+                JobOnRevision newRevision,
+                string eventType,
+                string? beforeSnapshot,
+                string? afterSnapshot,
+                string actorId,
+                CancellationToken cancellationToken = default)
+            {
+                // Mirror the real repository: header planned dates (single calendar
+                // source) update + new revision + current-revision advance — readable
+                // through GetByIdAsync so the same folha opens with the new dates.
+                if (_jobOns.TryGetValue(jobOnId, out var stored))
+                {
+                    stored.AlterDates(plannedStartAt, plannedEndAt);
+                    _revisions.Add(newRevision);
+                    stored.SaveRevision(newRevision);
+                }
+                return Task.CompletedTask;
+            }
 
             public Task<Guid> DuplicateAtomicallyAsync(
                 Domain.Modules.JobOn.JobOn newJobOn, JobOnRevision revision, Guid sourceJobOnId, string actorId, CancellationToken cancellationToken = default)

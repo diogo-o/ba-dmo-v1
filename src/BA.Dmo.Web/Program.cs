@@ -329,6 +329,33 @@ app.MapPost("/api/jobon/{jobOnId:guid}/duplicate", async (
     return Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(CapabilityPolicies.JobonEdit);
 
+// "Alterar data" — change the planned dates of an EXISTING Job On (modules/05).
+// ALTER DATE IS A WRITE: the route-level capability policy requires jobon.edit and
+// the service gate re-checks the canonical capability server-side (fail closed), so
+// an Operator/Controller with only jobon.view is denied regardless of UI visibility.
+// The body carries ONLY the new planned dates (and an optional change reason); the
+// service creates a NEW immutable revision of the SAME job_on_id (next revision
+// number, new dates snapshot, current setup preserved), advances the header planned
+// dates (single calendar source) and current_revision_id, and records the audit
+// event — all atomically. On success the client reopens the SAME Folha Job On via
+// /jobon?id={jobOnId} rendering the new current revision.
+app.MapPost("/api/jobon/{jobOnId:guid}/date", async (
+    Guid jobOnId,
+    AlterJobOnDatesRequest request,
+    JobOnService service,
+    CancellationToken cancellationToken) =>
+{
+    var result = await service.AlterDatesAsync(
+        request with { JobOnId = jobOnId }, cancellationToken);
+    if (result.IsSuccess)
+        return Results.Ok(new { jobOnId, revisionId = result.Value });
+    if (result.Error.Category == ErrorCategory.Forbidden)
+        return Results.Forbid();
+    if (result.Error.Category == ErrorCategory.NotFound)
+        return Results.NotFound(new { code = result.Error.Code, message = result.Error.Message });
+    return Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+}).RequireAuthorization(CapabilityPolicies.JobonEdit);
+
 // Job On image API endpoints: attach/replace/remove the master association
 // owned by the current Article/Reference. These actions never create or change
 // a Job On revision. The binary remains in the configured company image
