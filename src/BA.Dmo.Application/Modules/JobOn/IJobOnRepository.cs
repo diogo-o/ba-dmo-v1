@@ -11,6 +11,19 @@ public interface IJobOnRepository
     /// <summary>Create a new Job On (rascunho).</summary>
     Task<Guid> CreateAsync(Domain.Modules.JobOn.JobOn jobOn, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Atomically creates a new Job On (header) WITH its initial immutable
+    /// revision (revision 1), advances <c>job_on.current_revision_id</c> and
+    /// records the <c>jobon.criar</c> audit event — all in ONE database
+    /// transaction. On any failure nothing persists: no header-only or partial
+    /// Job On can remain. Returns the newly created <c>job_on</c> id.
+    /// </summary>
+    Task<Guid> CreateAtomicallyAsync(
+        Domain.Modules.JobOn.JobOn jobOn,
+        JobOnRevision initialRevision,
+        string actorId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Get by primary key.</summary>
     Task<Domain.Modules.JobOn.JobOn?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 

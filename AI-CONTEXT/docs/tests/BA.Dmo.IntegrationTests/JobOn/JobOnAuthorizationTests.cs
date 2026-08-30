@@ -64,6 +64,7 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
         // jobon.edit is NOT derived for the operator/control profile: the
         // privileged folha-edit surface stays hidden server-side.
         Assert.DoesNotContain("Editar folha", html);
+        Assert.DoesNotContain("Criar Job On", html);
     }
 
     [Fact]
@@ -120,7 +121,86 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
         // The Responsible /jobon surface exposes the edit capability.
         var html = await (await client.GetAsync("/jobon")).Content.ReadAsStringAsync();
         Assert.Contains("Editar folha", html);
+        Assert.Contains("Criar Job On", html);
     }
+
+    // ---- create flow (R011) ------------------------------------------------
+
+    [Fact]
+    public async Task OperatorWithoutEditCapability_CannotCreateJobOn()
+    {
+        // Test #2 — a user with only jobon.view fails closed on the WRITE
+        // operation: the route-level jobon.edit policy denies POST /api/jobon
+        // with 403 before any code runs.
+        _fixture.Repository.User = _fixture.JobOnOperator();
+        var client = await LoginAsync();
+
+        var denied = await client.PostAsJsonAsync("/api/jobon", new
+        {
+            productionCode = "202699",
+            machineCode = "B1",
+            plannedStartAt = "2026-08-20",
+            plannedEndAt = (string?)null,
+            reference = "9262T288"
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResponsibleProfile_CreatesJobOn_AndOpensTheCreatedFolha()
+    {
+        // Tests #1, #4, #5 — Responsible + Job On module creates a REAL Job On
+        // (header + initial revision) and the creation target resolves into the
+        // newly created Folha Job On (/jobon?id={jobOnId}).
+        _fixture.Repository.User = _fixture.JobOnResponsible();
+        var client = await LoginAsync();
+
+        var created = await client.PostAsJsonAsync("/api/jobon", new
+        {
+            productionCode = "202620",
+            machineCode = "C1",
+            plannedStartAt = "2026-08-21",
+            plannedEndAt = (string?)null,
+            reference = "5447T173"
+        });
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var payload = await created.Content.ReadFromJsonAsync<CreateJobOnResponse>();
+        Assert.NotNull(payload);
+        Assert.NotEqual(Guid.Empty, payload!.JobOnId);
+
+        // The redirect target opens the created Folha Job On (real projection).
+        var folha = await client.GetAsync($"/jobon?id={payload.JobOnId}");
+        Assert.Equal(HttpStatusCode.OK, folha.StatusCode);
+        var html = await folha.Content.ReadAsStringAsync();
+        Assert.Contains("data-initial-view=\"sheet\"", html); // folha opens, not planning
+        Assert.Contains("meta name=\"jobon-id\" content=\"" + payload.JobOnId, html);
+        Assert.Contains("5447T173", html); // the entered reference renders in the folha
+        Assert.Contains("202620", html);   // the entered production renders in the folha
+    }
+
+    [Fact]
+    public async Task ResponsibleProfile_CreateWithMissingReference_IsRejected()
+    {
+        // Test #3 — required creation data is validated server-side (400).
+        _fixture.Repository.User = _fixture.JobOnResponsible();
+        var client = await LoginAsync();
+
+        var rejected = await client.PostAsJsonAsync("/api/jobon", new
+        {
+            productionCode = "202620",
+            machineCode = "B1",
+            plannedStartAt = "2026-08-21",
+            plannedEndAt = (string?)null,
+            reference = "   "
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        var body = await rejected.Content.ReadFromJsonAsync<ErrorBody>();
+        Assert.Equal("JOBON_INVALID", body?.Code);
+    }
+
+    private sealed record CreateJobOnResponse(Guid JobOnId);
+
+    private sealed record ErrorBody(string Code, string Message);
 
     private async Task<HttpClient> LoginAsync()
     {
@@ -198,7 +278,8 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
             {
                 ReplaceSingleton<ISupabaseAuthAdapter>(services, new FakeAuthAdapter());
                 ReplaceSingleton<IInternalUserRepository>(services, Repository);
-                ReplaceSingleton<IJobOnRepository>(services, new EmptyJobOnRepository());
+                ReplaceSingleton<IJobOnRepository>(services, new MemoryJobOnRepository());
+                ReplaceSingleton<IJobOnUserContextRepository>(services, new FakeJobOnUserContextRepository());
                 services.Configure<Microsoft.AspNetCore.Mvc.RazorPages.RazorPagesOptions>(
                     options => options.Conventions.ConfigureFilter(
                         new IgnoreAntiforgeryTokenAttribute()));
@@ -221,13 +302,66 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
                 Task.FromResult(Result<AuthUser, DomainError>.Success(new AuthUser(AuthUserId, email)));
         }
 
-        private sealed class EmptyJobOnRepository : IJobOnRepository
+        /// <summary>
+        /// In-memory Job On repository (R011 create-flow tests): atomically created
+        /// Job Ons (header + initial revision) become readable through GetByIdAsync,
+        /// so a successful create can open the newly created folha/redirect target.
+        /// All other port members stay inert.
+        /// </summary>
+        private sealed class MemoryJobOnRepository : IJobOnRepository
         {
-            public Task<Guid> CreateAsync(Domain.Modules.JobOn.JobOn jobOn, CancellationToken cancellationToken = default) =>
-                Task.FromResult(Guid.NewGuid());
+            private readonly Dictionary<Guid, Domain.Modules.JobOn.JobOn> _jobOns = new();
+            private readonly List<JobOnRevision> _revisions = [];
 
-            public Task<Domain.Modules.JobOn.JobOn?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
-                Task.FromResult<Domain.Modules.JobOn.JobOn?>(null);
+            public Task<Guid> CreateAsync(Domain.Modules.JobOn.JobOn jobOn, CancellationToken cancellationToken = default)
+            {
+                var id = Guid.NewGuid();
+                SetId(jobOn, id);
+                _jobOns[id] = jobOn;
+                return Task.FromResult(id);
+            }
+
+            public Task<Guid> CreateAtomicallyAsync(
+                Domain.Modules.JobOn.JobOn jobOn,
+                JobOnRevision initialRevision,
+                string actorId,
+                CancellationToken cancellationToken = default)
+            {
+                var id = Guid.NewGuid();
+                SetId(jobOn, id);
+                _jobOns[id] = jobOn;
+                var pinned = initialRevision with { JobOnId = id };
+                _revisions.Add(pinned);
+                _jobOns[id].SaveRevision(pinned);
+                return Task.FromResult(id);
+            }
+
+            public Task<Domain.Modules.JobOn.JobOn?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+            {
+                if (!_jobOns.TryGetValue(id, out var stored))
+                    return Task.FromResult<Domain.Modules.JobOn.JobOn?>(null);
+                var revisions = _revisions
+                    .Where(r => r.JobOnId == id)
+                    .OrderBy(r => r.RevisionNumber)
+                    .ToList();
+                var jobOn = new Domain.Modules.JobOn.JobOn(
+                    stored.ProductionCode,
+                    stored.MachineCode,
+                    stored.PlannedStartAt,
+                    stored.PlannedEndAt,
+                    revisions);
+                SetId(jobOn, id);
+                foreach (var revision in revisions)
+                    jobOn.SaveRevision(revision);
+                return Task.FromResult<Domain.Modules.JobOn.JobOn?>(jobOn);
+            }
+
+            private static void SetId(Domain.Modules.JobOn.JobOn jobOn, Guid id)
+            {
+                typeof(Domain.Modules.JobOn.JobOn)
+                    .GetMethod("SetId", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .Invoke(jobOn, new object[] { id });
+            }
 
             public Task<IReadOnlyList<Domain.Modules.JobOn.JobOn>> GetActiveAsync(
                 string machineCode, DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default) =>
@@ -246,7 +380,8 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
 
             public Task<IReadOnlyList<JobOnRevision>> GetRevisionsAsync(
                 Guid jobOnId, CancellationToken cancellationToken = default) =>
-                Task.FromResult<IReadOnlyList<JobOnRevision>>(Array.Empty<JobOnRevision>());
+                Task.FromResult<IReadOnlyList<JobOnRevision>>(
+                    _revisions.Where(r => r.JobOnId == jobOnId).ToList());
 
             public Task InsertComponentsAsync(
                 IEnumerable<JobOnComponent> components, CancellationToken cancellationToken = default) =>
@@ -269,7 +404,7 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
                 Task.CompletedTask;
 
             public Task<Guid?> GetCurrentRevisionIdAsync(Guid jobOnId, CancellationToken cancellationToken = default) =>
-                Task.FromResult<Guid?>(null);
+                Task.FromResult<Guid?>(_jobOns.TryGetValue(jobOnId, out var jobOn) ? jobOn.CurrentRevisionId : null);
 
             public Task UpdateCurrentRevisionAsync(Guid jobOnId, Guid revisionId, CancellationToken cancellationToken = default) =>
                 Task.CompletedTask;
@@ -294,6 +429,23 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
                 string? referenceFilter, string? machineFilter, DateTime? from, DateTime? to, CancellationToken cancellationToken = default) =>
                 Task.FromResult<IReadOnlyList<HistoricalProductionSummary>>(
                     Array.Empty<HistoricalProductionSummary>());
+        }
+
+        /// <summary>R011 — in-memory per-user current-open Job On context (avoids a live DB).</summary>
+        private sealed class FakeJobOnUserContextRepository : IJobOnUserContextRepository
+        {
+            public Task SetCurrentAsync(
+                string actorId,
+                Guid jobOnId,
+                string productionCode,
+                string reference,
+                string machineCode,
+                CancellationToken cancellationToken = default) =>
+                Task.CompletedTask;
+
+            public Task<JobOnUserCurrent?> GetCurrentAsync(
+                string actorId, CancellationToken cancellationToken = default) =>
+                Task.FromResult<JobOnUserCurrent?>(null);
         }
     }
 

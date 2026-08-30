@@ -44,12 +44,13 @@ public class JobOnServiceTests
     {
         _identity.GrantNone();
 
-        var result = await _service.CreateAsync(new CreateJobOnRequest("202608", "LINHA-1", Start, null));
+        var result = await _service.CreateAsync(new CreateJobOnRequest("202608", "LINHA-1", Start, null, "9262T288"));
 
         Assert.True(result.IsFailure);
         Assert.Equal(ErrorCategory.Forbidden, result.Error.Category);
         Assert.Empty(_repository.JobOns);
         Assert.Empty(_repository.AuditEvents);
+        Assert.Empty(_repository.Revisions);
     }
 
     [Fact]
@@ -69,7 +70,7 @@ public class JobOnServiceTests
     [Fact]
     public async Task Create_WithEditCapability_CreatesRascunho_AndAudits()
     {
-        var result = await _service.CreateAsync(new CreateJobOnRequest("202608", "LINHA-1", Start, null));
+        var result = await _service.CreateAsync(new CreateJobOnRequest("202608", "LINHA-1", Start, null, "9262T288"));
 
         Assert.True(result.IsSuccess);
         var jobOn = Assert.Single(_repository.JobOns.Values);
@@ -85,11 +86,93 @@ public class JobOnServiceTests
     [InlineData("   ", "LINHA-1")]
     public async Task Create_WithMissingProductionOrMachine_IsRejected(string production, string machine)
     {
-        var result = await _service.CreateAsync(new CreateJobOnRequest(production, machine, Start, null));
+        var result = await _service.CreateAsync(new CreateJobOnRequest(production, machine, Start, null, "9262T288"));
 
         Assert.True(result.IsFailure);
         Assert.Equal(ErrorCategory.ValidationError, result.Error.Category);
         Assert.Empty(_repository.JobOns);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public async Task Create_WithMissingReference_IsRejected(string? reference)
+    {
+        var result = await _service.CreateAsync(new CreateJobOnRequest("202608", "LINHA-1", Start, null, reference));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ErrorCategory.ValidationError, result.Error.Category);
+        Assert.Equal("JOBON_INVALID", result.Error.Code);
+        Assert.Empty(_repository.JobOns);
+        Assert.Empty(_repository.Revisions);
+        Assert.Empty(_repository.AuditEvents);
+    }
+
+    /// <summary>
+    /// Test #4 — successful creation persists a REAL Job On + the initial revision:
+    /// the atomic create stores the header AND revision 1 carrying ONLY the
+    /// user-entered context (production/reference/machine/dates), empty sections,
+    /// no invented typed values and no tool associations.
+    /// </summary>
+    [Fact]
+    public async Task Create_PersistsInitialRevision_WithUserContext_AndAudits()
+    {
+        var end = Start.AddHours(8);
+        var result = await _service.CreateAsync(
+            new CreateJobOnRequest("202608", "B1", Start, end, "9262T288"));
+
+        Assert.True(result.IsSuccess);
+        var jobOn = Assert.Single(_repository.JobOns.Values);
+        Assert.Equal(result.Value, jobOn.Id);
+        Assert.Equal(JobOnLifecycleState.Rascunho, jobOn.LifecycleState);
+
+        var revision = Assert.Single(_repository.Revisions);
+        Assert.Equal(1, revision.RevisionNumber);
+        Assert.Equal(jobOn.Id, revision.JobOnId);
+        Assert.Equal(revision.JobOnRevisionId, jobOn.CurrentRevisionId);
+
+        using var prod = JsonDocument.Parse(revision.ProductionSnapshot!);
+        Assert.Equal("202608", prod.RootElement.GetProperty("production_code").GetString());
+        using var reference = JsonDocument.Parse(revision.ReferenceSnapshot!);
+        Assert.Equal("9262T288", reference.RootElement.GetProperty("article_reference").GetString());
+        using var machine = JsonDocument.Parse(revision.MachineSnapshot!);
+        Assert.Equal("B1", machine.RootElement.GetProperty("machine_code").GetString());
+        using var dates = JsonDocument.Parse(revision.DatesSnapshot!);
+        Assert.Equal(Start, dates.RootElement.GetProperty("start_at").GetDateTimeOffset());
+        Assert.Equal(end, dates.RootElement.GetProperty("end_at").GetDateTimeOffset());
+
+        // Sections stay an optional user value (blank on creation, never derived
+        // from machine); typed values and tool associations are absent.
+        Assert.Equal("{}", revision.Sections);
+        Assert.Null(revision.DropCount);
+        Assert.Null(revision.TypeSnapshot);
+        Assert.Null(revision.StopSnapshot);
+        Assert.Null(revision.WeightSnapshot);
+        Assert.Null(revision.ProcessSnapshot);
+        Assert.Empty(revision.Components ?? Array.Empty<JobOnComponent>());
+        Assert.Equal("aaaaaaaa-0000-0000-0000-000000000001", revision.SavedBy);
+
+        var audit = Assert.Single(_repository.AuditEvents, a => a.EventType == "jobon.criar");
+        Assert.Equal(revision.JobOnRevisionId, audit.RevisionId);
+    }
+
+    /// <summary>
+    /// Test #6 — no partial write: when the atomic persistence fails after the
+    /// header would have been inserted, NOTHING remains (no header-only Job On,
+    /// no orphan revision, no audit fact).
+    /// </summary>
+    [Fact]
+    public async Task Create_PersistenceFailure_LeavesNoPartialWrite()
+    {
+        _repository.FailCreateAtomically = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.CreateAsync(new CreateJobOnRequest("202608", "B1", Start, null, "9262T288")));
+
+        Assert.Empty(_repository.JobOns);
+        Assert.Empty(_repository.Revisions);
+        Assert.Empty(_repository.AuditEvents);
     }
 
     // ---- duplication (modules/05 §6.2) -----------------------------------
@@ -112,7 +195,8 @@ public class JobOnServiceTests
         Assert.Equal("202608", _repository.JobOns[sourceId].ProductionCode);
         // New revision copied with regenerated pendente occurrences (never copied checks).
         Assert.Contains(_repository.AuditEvents, a => a.EventType == "jobon.duplicar");
-        Assert.Equal(2, _repository.Revisions.Count);
+        // Creation revision 1 + seeded revision 2 (source) + duplicated revision 1.
+        Assert.Equal(3, _repository.Revisions.Count);
         var newVerifications = _repository.Verifications.Skip(seededVerificationCount).ToList();
         Assert.NotEmpty(newVerifications);
         Assert.All(newVerifications, v => Assert.Equal("pendente", v.Status));
@@ -136,7 +220,7 @@ public class JobOnServiceTests
     {
         _repository.FailIdentityDuplicate = true;
 
-        var result = await _service.CreateAsync(new CreateJobOnRequest("202608", "LINHA-1", Start, null));
+        var result = await _service.CreateAsync(new CreateJobOnRequest("202608", "LINHA-1", Start, null, "9262T288"));
 
         Assert.True(result.IsFailure);
         Assert.Equal(ErrorCategory.DomainConflict, result.Error.Category);
@@ -171,8 +255,9 @@ public class JobOnServiceTests
             jobOnId, "Notas", null, null, Array.Empty<JobOnComponent>()));
 
         Assert.True(result.IsSuccess);
-        var revision = Assert.Single(_repository.Revisions);
-        Assert.Equal(1, revision.RevisionNumber);
+        // Creation persisted revision 1; this save is the NEW revision 2.
+        var revision = _repository.Revisions.Single(r => r.RevisionNumber == 2);
+        Assert.Equal(2, revision.RevisionNumber);
         Assert.Equal("Notas", revision.GeneralNotes);
         Assert.Contains(_repository.CurrentRevisionUpdates, u => u.RevisionId == revision.JobOnRevisionId);
         Assert.Contains(_repository.AuditEvents, a => a.EventType == "jobon.guardar");
@@ -189,7 +274,7 @@ public class JobOnServiceTests
         Assert.True(result.IsFailure);
         Assert.Equal(ErrorCategory.ValidationError, result.Error.Category);
         Assert.Equal("JOBON_CHANGE_REASON_REQUIRED", result.Error.Code);
-        Assert.Empty(_repository.Revisions);
+        Assert.Single(_repository.Revisions); // creation revision only; no new write
     }
 
     [Fact]
@@ -201,7 +286,7 @@ public class JobOnServiceTests
             jobOnId, "Notas", "Correção pós-fecho", null, Array.Empty<JobOnComponent>()));
 
         Assert.True(result.IsSuccess);
-        Assert.Single(_repository.Revisions);
+        Assert.Equal(2, _repository.Revisions.Count); // creation revision 1 + this save
     }
 
     // ---- snapshot completeness (owner D2 contract, TD-18) -----------------
@@ -215,7 +300,8 @@ public class JobOnServiceTests
             jobOnId, "Notas gerais", null, "dir-imagens/artigo", Array.Empty<JobOnComponent>()));
 
         Assert.True(result.IsSuccess);
-        var revision = Assert.Single(_repository.Revisions);
+        // Creation persisted revision 1 (user context); this save is revision 2.
+        var revision = _repository.Revisions.Single(r => r.RevisionNumber == 2);
 
         // production/machine/dates come from the Job On header/context.
         using var prod = JsonDocument.Parse(revision.ProductionSnapshot!);
@@ -228,9 +314,15 @@ public class JobOnServiceTests
         Assert.Equal(Start, dates.RootElement.GetProperty("start_at").GetDateTimeOffset());
         Assert.Equal(JsonValueKind.Null, dates.RootElement.GetProperty("end_at").ValueKind);
 
-        // Reference and typed values are absent on the first save (no prior
-        // revision): preserved as null, never invented.
-        Assert.Null(revision.ReferenceSnapshot);
+        // The user-entered reference is carried from the created initial revision
+        // (never invented by the save; the header UUID is never substituted).
+        Assert.Equal(
+            "{\"article_reference\":\"9262T288\"}",
+            _repository.Revisions.Single(r => r.RevisionNumber == 1).ReferenceSnapshot);
+        using var reference = JsonDocument.Parse(revision.ReferenceSnapshot!);
+        Assert.Equal("9262T288", reference.RootElement.GetProperty("article_reference").GetString());
+
+        // Typed values are absent unless a prior revision carries them.
         Assert.Null(revision.TypeSnapshot);
         Assert.Null(revision.StopSnapshot);
         Assert.Null(revision.WeightSnapshot);
@@ -247,7 +339,7 @@ public class JobOnServiceTests
         {
             JobOnRevisionId = Guid.NewGuid(),
             JobOnId = jobOnId,
-            RevisionNumber = 1,
+            RevisionNumber = 2,
             ProductionSnapshot = "{\"production_code\":\"202608\"}",
             ReferenceSnapshot = "{\"article_reference\":\"9262T288\"}",
             MachineSnapshot = "{\"machine_code\":\"LINHA-1\"}",
@@ -267,7 +359,8 @@ public class JobOnServiceTests
             jobOnId, "Notas gerais", null, null, Array.Empty<JobOnComponent>()));
 
         Assert.True(result.IsSuccess);
-        var revision = _repository.Revisions.Single(r => r.RevisionNumber == 2);
+        // Creation revision 1 + seeded prior (rev 2) → this save is revision 3.
+        var revision = _repository.Revisions.Single(r => r.RevisionNumber == 3);
 
         // Reference and revision-owned typed values carried from the current
         // revision exactly (no re-encoding / no double wrap).
@@ -282,19 +375,19 @@ public class JobOnServiceTests
     }
 
     [Fact]
-    public async Task SaveRevision_DoesNotSubstituteInternalId_AsReadableReference()
+    public async Task SaveRevision_CarriesUserReference_FromCreatedInitialRevision_NotInternalId()
     {
-        // On a first save there is no prior readable reference; even though the
-        // header may only hold an internal article_reference_id (UUID), the
-        // snapshot must NOT use that UUID — it is preserved as null.
+        // The created initial revision carries the USER reference (9262T288), never
+        // the internal header UUID. A save carries that user reference forward.
         var jobOnId = await SeedRascunho();
 
         var result = await _service.SaveRevisionAsync(new SaveJobOnRevisionRequest(
             jobOnId, "Notas", null, null, Array.Empty<JobOnComponent>()));
 
         Assert.True(result.IsSuccess);
-        var revision = Assert.Single(_repository.Revisions);
-        Assert.Null(revision.ReferenceSnapshot);
+        var revision = _repository.Revisions.Single(r => r.RevisionNumber == 2);
+        using var reference = JsonDocument.Parse(revision.ReferenceSnapshot!);
+        Assert.Equal("9262T288", reference.RootElement.GetProperty("article_reference").GetString());
     }
 
     [Fact]
@@ -312,7 +405,7 @@ public class JobOnServiceTests
             jobOnId, "Notas 2", null, null, Array.Empty<JobOnComponent>()));
 
         Assert.True(second.IsSuccess);
-        var rev2 = _repository.Revisions.Single(r => r.RevisionNumber == 2);
+        var rev2 = _repository.Revisions.Single(r => r.RevisionNumber == 3);
         using var prod = JsonDocument.Parse(rev2.ProductionSnapshot!);
         Assert.Equal("202608", prod.RootElement.GetProperty("production_code").GetString());
     }
@@ -432,7 +525,7 @@ public class JobOnServiceTests
 
     private async Task<Guid> SeedRascunho()
     {
-        var result = await _service.CreateAsync(new CreateJobOnRequest("202608", "LINHA-1", Start, null));
+        var result = await _service.CreateAsync(new CreateJobOnRequest("202608", "LINHA-1", Start, null, "9262T288"));
         return result.Value;
     }
 
@@ -486,7 +579,7 @@ public class JobOnServiceTests
         {
             JobOnRevisionId = Guid.NewGuid(),
             JobOnId = id,
-            RevisionNumber = 1,
+            RevisionNumber = 2,
             ReferenceSnapshot = JsonSerializer.Serialize(new { article_reference = reference }),
             SavedBy = "test",
             SavedAtUtc = DateTime.UtcNow
@@ -509,9 +602,10 @@ public class JobOnServiceTests
         Assert.True(result.IsSuccess);
         Assert.Equal("9262T288", result.Value.ReferenceCode);
         Assert.Equal("artigo-9262T288.jpg", result.Value.ImageAssetId);
-        Assert.Single(_repository.Revisions);
-        Assert.Equal(revision.JobOnRevisionId, _repository.Revisions[0].JobOnRevisionId);
-        Assert.Null(_repository.Revisions[0].ImageAssetId);
+        Assert.Equal(2, _repository.Revisions.Count); // creation revision 1 + seeded revision 2
+        Assert.Equal(revision.JobOnRevisionId,
+            _repository.Revisions.Single(r => r.JobOnRevisionId == revision.JobOnRevisionId).JobOnRevisionId);
+        Assert.Null(_repository.Revisions.Single(r => r.JobOnRevisionId == revision.JobOnRevisionId).ImageAssetId);
 
         var stored = Assert.Single(_articleImages.Associations.Values);
         Assert.Equal("9262T288", stored.ReferenceCode);
@@ -534,8 +628,9 @@ public class JobOnServiceTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal("nova.png", _articleImages.Associations["9262T288"].ImageAssetId);
-        Assert.Single(_repository.Revisions);
-        Assert.Equal(revision.JobOnRevisionId, _repository.Revisions[0].JobOnRevisionId);
+        Assert.Equal(2, _repository.Revisions.Count); // image actions never create revisions
+        Assert.Equal(revision.JobOnRevisionId,
+            _repository.Revisions.Single(r => r.JobOnRevisionId == revision.JobOnRevisionId).JobOnRevisionId);
         var audit = Assert.Single(_articleImages.AuditFacts);
         Assert.Equal("original.jpg", audit.Before);
         Assert.Equal("nova.png", audit.After);
@@ -552,8 +647,9 @@ public class JobOnServiceTests
 
         Assert.True(result.IsSuccess);
         Assert.Empty(_articleImages.Associations);
-        Assert.Single(_repository.Revisions);
-        Assert.Equal(revision.JobOnRevisionId, _repository.Revisions[0].JobOnRevisionId);
+        Assert.Equal(2, _repository.Revisions.Count); // image actions never create revisions
+        Assert.Equal(revision.JobOnRevisionId,
+            _repository.Revisions.Single(r => r.JobOnRevisionId == revision.JobOnRevisionId).JobOnRevisionId);
         var audit = Assert.Single(_articleImages.AuditFacts);
         Assert.Equal("artigo.jpg", audit.Before);
         Assert.Null(audit.After);
@@ -618,7 +714,7 @@ public class JobOnServiceTests
         {
             JobOnRevisionId = Guid.NewGuid(),
             JobOnId = sourceId,
-            RevisionNumber = 1,
+            RevisionNumber = 2,
             ImageAssetId = "legacy.jpg",
             ReferenceSnapshot = "9262T288",
             SavedBy = "test",
@@ -638,7 +734,7 @@ public class JobOnServiceTests
         Assert.Equal("9262T288", duplicatedRevision.ReferenceSnapshot);
         Assert.Null(duplicatedRevision.ImageAssetId);
         Assert.Equal("master.jpg", _articleImages.Associations["9262T288"].ImageAssetId);
-        Assert.Equal("legacy.jpg", _repository.Revisions.Single(r => r.JobOnId == sourceId).ImageAssetId);
+        Assert.Equal("legacy.jpg", _repository.Revisions.Last(r => r.JobOnId == sourceId).ImageAssetId);
     }
 
     [Fact]
@@ -810,7 +906,8 @@ public class JobOnServiceTests
             jobOnId, "Notas", null, null, new[] { component }));
 
         Assert.True(result.IsSuccess);
-        var revision = Assert.Single(_repository.Revisions);
+        // Creation persisted revision 1; this save is revision 2.
+        var revision = _repository.Revisions.Single(r => r.RevisionNumber == 2);
         Assert.Contains(_repository.CurrentRevisionUpdates, u => u.RevisionId == revision.JobOnRevisionId);
 
         // The full child graph was persisted for the saved revision.
@@ -835,7 +932,8 @@ public class JobOnServiceTests
             Components: Array.Empty<JobOnComponent>()));
 
         Assert.True(result.IsSuccess);
-        var revision = Assert.Single(_repository.Revisions);
+        // Creation persisted revision 1; this save is revision 2 (legacy image slot stays null).
+        var revision = _repository.Revisions.Single(r => r.RevisionNumber == 2);
         Assert.Null(revision.ImageAssetId);
         Assert.Equal("Notas originais", revision.GeneralNotes);
     }

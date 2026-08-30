@@ -153,6 +153,18 @@
     calendar._year += Math.floor(index / 12);
     calendar._monthIndex = ((index % 12) + 12) % 12;
     render(calendar);
+    // PHASE 4: the displayed month changed client-side (no page reload).
+    // Consumers that drive the calendar markers from server data (Job On
+    // planning) refresh HERE — the event carries the new YYYY-MM. It never
+    // auto-selects a day (GLM-DSN-05) and changes no other calendar state.
+    calendar.dispatchEvent(new CustomEvent("dmo:month-change", {
+      bubbles: true,
+      detail: {
+        year: calendar._year,
+        monthIndex: calendar._monthIndex,
+        month: calendar._year + "-" + pad(calendar._monthIndex + 1)
+      }
+    }));
   }
 
   function clearSelection(calendar) {
@@ -232,6 +244,35 @@
 
     calendar.querySelectorAll("[data-calendar-clear]").forEach(function (button) {
       button.addEventListener("click", function () { clearSelection(calendar); });
+    });
+
+    // PHASE 4 (Job On planning isolation): in-place planning data refresh.
+    // The page updates data-month / data-record-dates / data-record-lines and
+    // dispatches `dmo:calendar-data`; the grid re-reads the attributes and
+    // re-renders WITHOUT any page reload. An optional detail.selectedDate
+    // (YYYY-MM-DD) marks the selected day for the render — it is preserved
+    // only when it belongs to the rendered month (the same rule as month
+    // navigation; the event itself never auto-selects a day).
+    calendar.addEventListener("dmo:calendar-data", function (event) {
+      var monthAttr = calendar.getAttribute("data-month") || "";
+      var parts = monthAttr.split("-");
+      var now = new Date();
+      calendar._year = Number(parts[0]) || now.getFullYear();
+      calendar._monthIndex = parts[1] ? Number(parts[1]) - 1 : now.getMonth();
+      if (calendar._monthIndex < 0 || calendar._monthIndex > 11) {
+        calendar._monthIndex = now.getMonth();
+      }
+      calendar._recordDates = new Set(
+        (calendar.getAttribute("data-record-dates") || "")
+          .split(",")
+          .map(function (value) { return value.trim(); })
+          .filter(Boolean));
+      calendar._recordLines = readRecordLines(calendar);
+      var detail = event.detail;
+      if (detail && typeof detail.selectedDate === "string" && detail.selectedDate) {
+        calendar._selectedDate = detail.selectedDate;
+      }
+      render(calendar);
     });
   });
 })();

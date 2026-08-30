@@ -26,6 +26,7 @@ using BA.Dmo.Infrastructure.Persistence;
 using BA.Dmo.Web.Authorization;
 using BA.Dmo.Web.Cli;
 using BA.Dmo.Web.Identity;
+using BA.Dmo.Web.Pages.JobOn;
 using BA.Dmo.Web.Shell;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
@@ -285,6 +286,25 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapRazorPages();
 
+// Create a new Job On (rascunho). CREATE IS A WRITE: the route-level
+// capability policy requires jobon.edit and the service gate re-checks the
+// canonical capability server-side (fail closed). The service validates the
+// minimum real production context (produção, referência, máquina, datas) and
+// atomically persists the header + the initial revision — on success the
+// client opens the newly created Folha Job On via /jobon?id={jobOnId}.
+app.MapPost("/api/jobon", async (
+    CreateJobOnRequest request,
+    JobOnService service,
+    CancellationToken cancellationToken) =>
+{
+    var result = await service.CreateAsync(request, cancellationToken);
+    if (result.IsSuccess)
+        return Results.Ok(new { jobOnId = result.Value });
+    if (result.Error.Category == ErrorCategory.Forbidden)
+        return Results.Forbid();
+    return Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+}).RequireAuthorization(CapabilityPolicies.JobonEdit);
+
 // Job On image API endpoints: attach/replace/remove the master association
 // owned by the current Article/Reference. These actions never create or change
 // a Job On revision. The binary remains in the configured company image
@@ -362,6 +382,66 @@ app.MapGet("/api/jobon/current", async (
         : (result.Error.Code == "JOBON_CURRENT_NOT_FOUND"
             ? Results.NotFound(new { code = result.Error.Code, message = result.Error.Message })
             : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message }));
+}).RequireAuthorization(CapabilityPolicies.JobonView);
+
+// =============================================================
+// PHASE 4 — Job On planning-only read (JOB ON PLANNING ISOLATION).
+//
+// GET /api/jobon/planning?date=YYYY-MM-DD[&month=YYYY-MM]
+//
+// Returns ONLY the data the Job On planning area needs for the selected
+// date/month: the date display, the calendar month, the calendar marker
+// data (record dates + deterministic line-color markers) and the day list.
+//
+// SAME PLANNING SOURCE + SEMANTICS as the landing page:
+// IJobOnRepository.GetHistoricalProductionsAsync (month read, list filtered
+// to the selected day) projected through JobOnPlanningProjection — the very
+// code the page's OnGetAsync uses (one implementation).
+//
+// ISOLATION CONTRACT (PLANNING ISOLATION RULE): this endpoint is
+// planning-only. It NEVER invokes ICurrentProductionContextLookup, the
+// production rail projection or any current-production/rail reader —
+// planning date state and the Current Production Context remain separate.
+// The client consumes it by updating only the planning DOM (no full page
+// reload, no shell re-creation, no rail re-fetch).
+//
+// date: strict yyyy-MM-dd; missing/invalid falls back to today (page rule).
+// month: optional marker month for calendar navigation (strict yyyy-MM);
+// missing/invalid falls back to the selected date's month. When it differs
+// from the selected date's month the day list is read from the selected
+// date's own month (the selected-date rule is preserved).
+// =============================================================
+app.MapGet("/api/jobon/planning", async (
+    string? date, string? month, IJobOnRepository repository, CancellationToken cancellationToken) =>
+{
+    var selectedDate = JobOnPlanningProjection.ResolveSelectedDate(date);
+    var markerMonthDate = JobOnPlanningProjection.ResolveMarkerMonth(month, selectedDate);
+
+    var (markerFrom, markerTo) = JobOnPlanningProjection.MonthRange(markerMonthDate);
+    var markerSummaries = await repository.GetHistoricalProductionsAsync(
+        referenceFilter: null,
+        machineFilter: null,
+        from: markerFrom,
+        to: markerTo,
+        cancellationToken: cancellationToken);
+
+    // Common path (day selection): marker month == selected date's month —
+    // exactly the landing page's single month read. Calendar navigation to
+    // another month adds one scoped read for the selected date's day list.
+    IReadOnlyList<BA.Dmo.Application.Modules.JobOn.HistoricalProductionSummary> daySummaries = markerSummaries;
+    if (new DateTime(markerMonthDate.Year, markerMonthDate.Month, 1)
+        != new DateTime(selectedDate.Year, selectedDate.Month, 1))
+    {
+        var (dayFrom, dayTo) = JobOnPlanningProjection.MonthRange(selectedDate);
+        daySummaries = await repository.GetHistoricalProductionsAsync(
+            referenceFilter: null,
+            machineFilter: null,
+            from: dayFrom,
+            to: dayTo,
+            cancellationToken: cancellationToken);
+    }
+
+    return Results.Ok(JobOnPlanningProjection.Build(selectedDate, markerMonthDate, markerSummaries, daySummaries));
 }).RequireAuthorization(CapabilityPolicies.JobonView);
 
 // Job On document generation — returns 4-page PDF bytes (Ficha de Artigo x2,

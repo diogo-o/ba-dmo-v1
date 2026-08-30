@@ -502,6 +502,9 @@ public class DesignSystemGuardTests : IClassFixture<DesignSystemGuardTests.Desig
         public Task<Guid> CreateAsync(Domain.Modules.JobOn.JobOn jobOn, CancellationToken cancellationToken = default) =>
             Task.FromResult(Guid.NewGuid());
 
+        public Task<Guid> CreateAtomicallyAsync(Domain.Modules.JobOn.JobOn jobOn, JobOnRevision initialRevision, string actorId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Guid.NewGuid());
+
         public Task<Domain.Modules.JobOn.JobOn?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult<Domain.Modules.JobOn.JobOn?>(null);
 

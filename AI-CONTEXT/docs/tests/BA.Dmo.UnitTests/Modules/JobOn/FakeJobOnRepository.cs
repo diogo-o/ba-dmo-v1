@@ -35,6 +35,9 @@ public sealed class FakeJobOnRepository : IJobOnRepository
     /// <summary>When true, create/duplicate throw JobOnIdentityDuplicateException (audit JA-03 mapping test).</summary>
     public bool FailIdentityDuplicate { get; set; }
 
+    /// <summary>When true, the atomic create throws a raw persistence failure (no-partial-write test).</summary>
+    public bool FailCreateAtomically { get; set; }
+
     public Task<Guid> CreateAsync(JobOnEntity jobOn, CancellationToken cancellationToken = default)
     {
         if (FailIdentityDuplicate)
@@ -44,6 +47,42 @@ public sealed class FakeJobOnRepository : IJobOnRepository
         jobOn.SetId(id);
         JobOns[id] = jobOn;
         return Task.FromResult(id);
+    }
+
+    public Task<Guid> CreateAtomicallyAsync(
+        JobOnEntity jobOn,
+        JobOnRevision initialRevision,
+        string actorId,
+        CancellationToken cancellationToken = default)
+    {
+        if (FailIdentityDuplicate)
+            throw new JobOnIdentityDuplicateException(
+                "Já existe um Job On não cancelado com esta produção e máquina.");
+        if (FailCreateAtomically)
+            throw new InvalidOperationException("persistence unavailable");
+
+        var newId = Guid.NewGuid();
+        jobOn.SetId(newId);
+        JobOns[newId] = jobOn;
+
+        // Mirror the real repository's re-pin rule (R-002): the initial revision
+        // (and its children) belong to the newly created job_on id.
+        var pinnedRevision = initialRevision with
+        {
+            JobOnId = newId,
+            Components = (initialRevision.Components ?? Array.Empty<JobOnComponent>())
+                .Select(c => c with { JobOnRevisionId = initialRevision.JobOnRevisionId })
+                .ToList()
+        };
+        Revisions.Add(pinnedRevision);
+        PersistRevisionGraph(pinnedRevision);
+        // Mirror the real repository: current_revision_id is advanced on the
+        // stored aggregate (the DB UPDATE target of the atomic create).
+        jobOn.SaveRevision(pinnedRevision);
+        CurrentRevisionUpdates.Add((newId, pinnedRevision.JobOnRevisionId));
+        AuditEvents.Add((newId, pinnedRevision.JobOnRevisionId, "jobon.criar", null, null, actorId));
+
+        return Task.FromResult(newId);
     }
 
     public Task<JobOnEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -129,6 +168,13 @@ public sealed class FakeJobOnRepository : IJobOnRepository
     public Task UpdateCurrentRevisionAsync(Guid jobOnId, Guid revisionId, CancellationToken cancellationToken = default)
     {
         CurrentRevisionUpdates.Add((jobOnId, revisionId));
+        // Mirror the real repository (UPDATE job_on SET current_revision_id):
+        // the stored aggregate's current link advances too.
+        if (JobOns.TryGetValue(jobOnId, out var jobOn))
+        {
+            var revision = Revisions.FirstOrDefault(r => r.JobOnRevisionId == revisionId);
+            if (revision is not null) jobOn.SaveRevision(revision);
+        }
         return Task.CompletedTask;
     }
 
@@ -162,6 +208,8 @@ public sealed class FakeJobOnRepository : IJobOnRepository
         Revisions.Add(revision);
         PersistRevisionGraph(revision);
         CurrentRevisionUpdates.Add((revision.JobOnId, revision.JobOnRevisionId));
+        // Mirror the real repository (current_revision_id advances atomically).
+        if (JobOns.TryGetValue(revision.JobOnId, out var jobOn)) jobOn.SaveRevision(revision);
         AuditEvents.Add((revision.JobOnId, revision.JobOnRevisionId, eventType, null, null, actorId));
         return Task.CompletedTask;
     }

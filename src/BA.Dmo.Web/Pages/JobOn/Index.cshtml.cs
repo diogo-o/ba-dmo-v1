@@ -225,104 +225,31 @@ public class IndexModel : PageModel
         }
 
         // Resolve selected date (the date shown/filtered; month drives the calendar).
-        var selectedDate = DateTime.TryParseExact(date, "yyyy-MM-dd", null, DateTimeStyles.None, out var parsed)
-            ? parsed.Date
-            : DateTime.Today;
+        // PHASE 4: the shared JobOnPlanningProjection owns the resolution +
+        // projection semantics (the planning-only endpoint reuses the exact
+        // same code — one implementation, identical behavior).
+        var selectedDate = JobOnPlanningProjection.ResolveSelectedDate(date);
+        var monthStart = JobOnPlanningProjection.MonthRange(selectedDate);
 
         SelectedDateValue = selectedDate.ToString("yyyy-MM-dd");
-        SelectedDateDisplay = $"{selectedDate.Day} de {selectedDate.ToString("MMMM", PtPt).ToLower(PtPt)}";
+        SelectedDateDisplay = JobOnPlanningProjection.FormatDateDisplay(selectedDate);
 
         // R011 — The calendar markers and the list are built from ONE lightweight planning
         // projection (HistoricalProductionSummary: job_on_id, production, reference,
         // machine, planned dates, lifecycle). No full Job On documents are loaded to render
         // the calendar/list (§19). We load the whole displayed month so calendar markers
         // cover it, then filter the list to the selected day (§6/§9).
-        var monthStart = new DateTime(selectedDate.Year, selectedDate.Month, 1);
-        var monthEndExclusive = monthStart.AddMonths(1);
-
         var summaries = await _jobOnRepository.GetHistoricalProductionsAsync(
             referenceFilter: null,
             machineFilter: null,
-            from: monthStart,
-            to: monthEndExclusive,
+            from: monthStart.From,
+            to: monthStart.To,
             cancellationToken: HttpContext.RequestAborted);
 
-        var monthSummaries = summaries.ToList();
-
-        // Stable record dates for the canonical calendar (planned_start_at only) — the
-        // generic .has-record marker remains for any module that still consumes it.
-        RecordDatesCsv = string.Join(",",
-            monthSummaries
-                .Select(s => s.PlannedStartAt?.ToString("yyyy-MM-dd"))
-                .Where(d => d is not null)
-                .OrderBy(d => d)
-                .Distinct());
-
-        // R011 line-color markers: date → distinct line color keys, so multiple
-        // productions/lines on the same day are all represented (never silently hidden).
-        var markers = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        foreach (var s in monthSummaries)
-        {
-            if (s.PlannedStartAt is not { } start)
-                continue;
-            var day = start.ToString("yyyy-MM-dd");
-            var key = JobOnLineColor.GetColorKey(s.MachineCode);
-            if (key is null)
-                continue;
-            if (!markers.TryGetValue(day, out var keys))
-            {
-                keys = new List<string>();
-                markers[day] = keys;
-            }
-            if (!keys.Contains(key))
-                keys.Add(key);
-        }
-
-        var orderedMarkers = markers
-            .OrderBy(kv => kv.Key, StringComparer.Ordinal)
-            .ToDictionary(
-                kv => kv.Key,
-                kv => kv.Value.OrderBy(k => k, StringComparer.Ordinal).ToArray(),
-                StringComparer.Ordinal);
-
-        RecordLinesJson = System.Text.Json.JsonSerializer.Serialize(orderedMarkers);
-
-        // The list shows the productions of the SELECTED day from the same projection (§6/§9).
-        var daySummaries = monthSummaries
-            .Where(s => s.PlannedStartAt?.Date == selectedDate.Date)
-            .ToList();
-
-        PlaneamentoItems = daySummaries
-            .Select(s => new PlaneamentoItem(
-                JobOnId: s.JobOnId,
-                Date: s.PlannedStartAt?.ToString("dd/MM/yyyy") ?? "—",
-                DateIso: s.PlannedStartAt?.ToString("yyyy-MM-dd") ?? "",
-                DayLabel: s.PlannedStartAt?.ToString("dd MMM", PtPt).ToUpper(PtPt) ?? "—",
-                TimeRange: $"{s.PlannedStartAt?.ToString("HH:mm") ?? "—"}–{s.PlannedEndAt?.ToString("HH:mm") ?? "—"}",
-                Reference: s.ReferenceCode ?? "—",
-                Production: s.ProductionCode,
-                Machine: s.MachineCode,
-                RevisionNumber: s.CurrentRevisionNumber,
-                LineColorKey: JobOnLineColor.GetColorKey(s.MachineCode),
-                LifecycleDisplay: s.LifecycleState switch
-                {
-                    JobOnLifecycleState.Rascunho => "Rascunho",
-                    JobOnLifecycleState.Planeado => "Planeado",
-                    JobOnLifecycleState.EmFabrico => "Em fabrico",
-                    JobOnLifecycleState.Fechado => "Fechado",
-                    JobOnLifecycleState.Cancelado => "Cancelado",
-                    _ => "—"
-                },
-                LifecyclePillClass: s.LifecycleState switch
-                {
-                    JobOnLifecycleState.EmFabrico => "approved",
-                    JobOnLifecycleState.Fechado => "approved",
-                    _ => ""
-                },
-                PreparationDisplay: "—",
-                PreparationPillClass: ""
-            ))
-            .ToList();
+        var planning = JobOnPlanningProjection.Build(selectedDate, summaries.ToList());
+        RecordDatesCsv = planning.RecordDatesCsv;
+        RecordLinesJson = System.Text.Json.JsonSerializer.Serialize(planning.RecordLines);
+        PlaneamentoItems = planning.Items;
 
         // R011 — Record the Job On this user explicitly opened when navigated with an id.
         // Preserves exact production identity for later Controlo "Carregar Job On atual".

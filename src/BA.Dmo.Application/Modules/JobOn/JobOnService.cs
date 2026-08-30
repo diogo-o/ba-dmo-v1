@@ -12,7 +12,8 @@ public sealed record CreateJobOnRequest(
     string ProductionCode,
     string MachineCode,
     DateTimeOffset? PlannedStartAt,
-    DateTimeOffset? PlannedEndAt);
+    DateTimeOffset? PlannedEndAt,
+    string? Reference);
 
 /// <summary>Duplicate a Job On from a source (modules/05 §6.2).</summary>
 public sealed record DuplicateJobOnRequest(
@@ -88,7 +89,15 @@ public sealed class JobOnService
         _articleImages = articleImages;
     }
 
-    /// <summary>Create a new Job On in rascunho (modules/05 §6.1).</summary>
+    /// <summary>
+    /// Create a new Job On in rascunho (modules/05 §6.1). Creation requires the
+    /// minimum real production context — produção, referência e máquina — and
+    /// atomically persists the header PLUS the initial immutable revision
+    /// (revision 1) with that context: one transaction, so a Job On can never
+    /// remain half-created. Tool associations are intentionally empty on
+    /// creation (a rascunho may legitimately have none) and sections stay an
+    /// optional user value (blank → "{}", never derived from machine).
+    /// </summary>
     public async Task<Result<Guid, DomainError>> CreateAsync(
         CreateJobOnRequest request, CancellationToken cancellationToken = default)
     {
@@ -96,11 +105,13 @@ public sealed class JobOnService
         if (gate.IsFailure)
             return Result<Guid, DomainError>.Failure(gate.Error);
 
+        var reference = request.Reference?.Trim();
         if (string.IsNullOrWhiteSpace(request.ProductionCode)
-            || string.IsNullOrWhiteSpace(request.MachineCode))
+            || string.IsNullOrWhiteSpace(request.MachineCode)
+            || string.IsNullOrWhiteSpace(reference))
             return Result<Guid, DomainError>.Failure(DomainError.Validation(
                 "JOBON_INVALID",
-                "Produção e Máquina são obrigatórias."));
+                "Produção, Referência e Máquina são obrigatórias."));
 
         var jobOn = new JobOnEntity(
             request.ProductionCode,
@@ -109,10 +120,33 @@ public sealed class JobOnService
             request.PlannedEndAt,
             Array.Empty<JobOnRevision>());
 
+        var now = _clock.UtcNow.DateTime;
+        // Initial immutable revision (TD-18): snapshot values come ONLY from the
+        // user-entered context (production code, reference, machine, planned dates)
+        // — never invented. Typed values (tipo/paragem/peso/processo), gota, notes
+        // and tool components are absent on a fresh Job On.
+        var initialRevision = new JobOnRevision
+        {
+            JobOnRevisionId = Guid.NewGuid(),
+            JobOnId = jobOn.Id,
+            RevisionNumber = 1,
+            ProductionSnapshot = SnapshotJson.Production(jobOn.ProductionCode),
+            ReferenceSnapshot = SnapshotJson.Reference(reference!),
+            MachineSnapshot = SnapshotJson.Machine(jobOn.MachineCode),
+            DatesSnapshot = SnapshotJson.Dates(jobOn.PlannedStartAt, jobOn.PlannedEndAt),
+            Sections = "{}",
+            GeneralNotes = null,
+            ChangeReason = null,
+            SavedBy = gate.Value.ActorId,
+            SavedAtUtc = now,
+            Components = Array.Empty<JobOnComponent>()
+        };
+
         Guid id;
         try
         {
-            id = await _repository.CreateAsync(jobOn, cancellationToken);
+            id = await _repository.CreateAtomicallyAsync(
+                jobOn, initialRevision, gate.Value.ActorId, cancellationToken);
         }
         catch (JobOnIdentityDuplicateException)
         {
@@ -120,8 +154,6 @@ public sealed class JobOnService
                 "JOB_ON_IDENTITY_DUPLICATE",
                 "Já existe um Job On não cancelado com esta produção e máquina."));
         }
-        await _repository.InsertAuditEventAsync(
-            id, null, "jobon.criar", null, null, gate.Value.ActorId, cancellationToken);
         return Result<Guid, DomainError>.Success(id);
     }
 
@@ -598,6 +630,9 @@ internal static class SnapshotJson
 {
     public static string Production(string productionCode) =>
         JsonSerializer.Serialize(new { production_code = productionCode });
+
+    public static string Reference(string referenceCode) =>
+        JsonSerializer.Serialize(new { article_reference = referenceCode });
 
     public static string Machine(string machineCode) =>
         JsonSerializer.Serialize(new { machine_code = machineCode });

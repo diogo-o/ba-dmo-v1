@@ -516,6 +516,8 @@ public class ShellRoutingTests : IClassFixture<ShellRoutingTests.ShellFixture>
         {
             public Task<Guid> CreateAsync(Domain.Modules.JobOn.JobOn jobOn, CancellationToken cancellationToken = default) =>
                 Task.FromResult(Guid.NewGuid());
+            public Task<Guid> CreateAtomicallyAsync(Domain.Modules.JobOn.JobOn jobOn, JobOnRevision initialRevision, string actorId, CancellationToken cancellationToken = default) =>
+                Task.FromResult(Guid.NewGuid());
 
             public Task<Domain.Modules.JobOn.JobOn?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
                 Task.FromResult(id == CrossModuleJobOnId ? BuildCrossModuleJobOn() : null);

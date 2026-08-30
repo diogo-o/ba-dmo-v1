@@ -60,7 +60,7 @@ public class JobOnRevisionImmutabilityIntegrationTests
     {
         // ---- 1. Create Job On + revision A with CM/MF/BQ component snapshots ----
         var createdJobOn = await _jobOnService.CreateAsync(new CreateJobOnRequest(
-            "202601", "B1", Now, Now.AddHours(8)));
+            "202601", "B1", Now, Now.AddHours(8), "5447T173"));
         Assert.True(createdJobOn.IsSuccess);
         var jobOnId = createdJobOn.Value;
 
@@ -161,6 +161,9 @@ public class JobOnRevisionImmutabilityIntegrationTests
         revision = revision with { Components = components };
         await _jobOns.InsertRevisionAsync(revision, default);
         await _jobOns.InsertComponentsAsync(components, default);
+        // Revision A is the current revision the operational services consume
+        // (the repository advances current_revision_id on save).
+        await _jobOns.UpdateCurrentRevisionAsync(jobOnId, revision.JobOnRevisionId, default);
         return revision.JobOnRevisionId;
     }
 }

@@ -207,6 +207,7 @@ public class JobOnLandingTests : IClassFixture<JobOnLandingTests.LandingFixture>
                     LifecycleState: JobOnLifecycleState.Planeado);
 
             public Task<Guid> CreateAsync(JobOn jobOn, CancellationToken cancellationToken = default) => Task.FromResult(Guid.NewGuid());
+            public Task<Guid> CreateAtomicallyAsync(JobOn jobOn, JobOnRevision initialRevision, string actorId, CancellationToken cancellationToken = default) => Task.FromResult(Guid.NewGuid());
             public Task<JobOn?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult<JobOn?>(null);
             public Task<IReadOnlyList<JobOn>> GetActiveAsync(string machineCode, DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default) =>
                 Task.FromResult<IReadOnlyList<JobOn>>(Array.Empty<JobOn>());

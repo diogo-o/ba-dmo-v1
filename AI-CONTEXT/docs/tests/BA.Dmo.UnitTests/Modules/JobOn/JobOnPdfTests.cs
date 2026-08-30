@@ -42,7 +42,7 @@ public class JobOnPdfTests
     {
         // Create Job On
         var createResult = await _jobOnService.CreateAsync(
-            new CreateJobOnRequest(production, machine, Start, End));
+            new CreateJobOnRequest(production, machine, Start, End, "9262T288"));
         Assert.True(createResult.IsSuccess);
         var jobOnId = createResult.Value;
 
@@ -383,7 +383,7 @@ public class JobOnPdfTests
     public void BuildFileName_ProducesCorrectFormat()
     {
         var result = _jobOnService.CreateAsync(
-            new CreateJobOnRequest("202608", "B1", Start, End)).Result;
+            new CreateJobOnRequest("202608", "B1", Start, End, "9262T288")).Result;
         var jobOnId = result.Value;
 
         // Save a revision so filename can extract reference

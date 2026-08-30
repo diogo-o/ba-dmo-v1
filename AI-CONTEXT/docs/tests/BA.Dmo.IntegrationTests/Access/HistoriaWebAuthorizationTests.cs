@@ -325,6 +325,7 @@ public class HistoriaWebAuthorizationTests :
     private sealed class FakeJobOnRepo : IJobOnRepository
     {
         public Task<Guid> CreateAsync(JobOn jobOn, CancellationToken ct = default) => Task.FromResult(Guid.NewGuid());
+        public Task<Guid> CreateAtomicallyAsync(JobOn jobOn, JobOnRevision initialRevision, string actorId, CancellationToken ct = default) => Task.FromResult(Guid.NewGuid());
         public Task<JobOn?> GetByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult<JobOn?>(null);
         public Task<IReadOnlyList<JobOn>> GetActiveAsync(string machineCode, DateTime? from = null, DateTime? to = null, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<JobOn>>(Array.Empty<JobOn>());
         public Task<JobOn?> GetByProductionCodeAsync(string productionCode, CancellationToken ct = default) => Task.FromResult<JobOn?>(null);

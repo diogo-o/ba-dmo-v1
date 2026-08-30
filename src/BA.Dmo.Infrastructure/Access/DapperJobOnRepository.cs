@@ -70,6 +70,63 @@ RETURNING job_on_id;";
         }
     }
 
+    /// <summary>
+    /// Atomically creates a NEW Job On: inserts the <c>job_on</c> header, the initial
+    /// revision (revision number 1 — the user-entered production/reference/machine/
+    /// dates context snapshot) with its (empty) component graph, advances
+    /// <c>current_revision_id</c>, and records the <c>jobon.criar</c> audit event — all
+    /// in ONE transaction (U-13 / TD-18, same pattern as DuplicateAtomicallyAsync). On
+    /// any failure nothing is persisted, so no header-only or partially-created Job On
+    /// can remain. Returns the newly created <c>job_on</c> id.
+    /// </summary>
+    public async Task<Guid> CreateAtomicallyAsync(
+        JobOn jobOn,
+        JobOnRevision initialRevision,
+        string actorId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await DapperUnitOfWork.RunAsync<Guid>(_connectionFactory, async (connection, transaction, ct) =>
+            {
+                var newJobOnId = await InsertJobOnCoreAsync(connection, transaction, jobOn, ct);
+
+                // Re-pin the initial revision (and its children) to the new job_on id
+                // — same R-002 rule the duplicate path applies.
+                var pinnedRevision = initialRevision with { JobOnId = newJobOnId };
+                if (initialRevision.Components is not null)
+                {
+                    pinnedRevision = pinnedRevision with
+                    {
+                        Components = MapComponentsToRevision(
+                            pinnedRevision.JobOnRevisionId, initialRevision.Components)
+                    };
+                }
+
+                await InsertRevisionGraphCoreAsync(connection, transaction, pinnedRevision, ct);
+
+                var updatedRows = await UpdateCurrentRevisionCoreAsync(
+                    connection, transaction, newJobOnId, pinnedRevision.JobOnRevisionId, ct);
+                if (updatedRows != 1)
+                    throw new InvalidOperationException(
+                        $"Expected exactly 1 row updated for job_on.current_revision_id, got {updatedRows}.");
+
+                await InsertAuditEventCoreAsync(
+                    connection, transaction, newJobOnId, pinnedRevision.JobOnRevisionId,
+                    "jobon.criar", null, null, actorId, ct);
+
+                return newJobOnId;
+            }, cancellationToken);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            // uq_job_on_identity — a NON-canceled job with the same identity
+            // already exists (audit JA-03/ON-02). The UoW already rolled back.
+            throw new JobOnIdentityDuplicateException(
+                "Já existe um Job On não cancelado com esta produção e máquina.");
+        }
+    }
+
     public async Task<JobOn?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         const string sql = @"
@@ -946,6 +1003,7 @@ SELECT
     jo.planned_start_at,
     jo.planned_end_at,
     jc.reference_snapshot as reference_code,
+    jr.reference_snapshot as revision_reference_code,
     jr.revision_number as current_revision_number,
     COUNT(jr2.job_on_revision_id) as total_revision_count,
     jo.status
@@ -971,7 +1029,8 @@ GROUP BY
     jo.planned_end_at,
     jo.status,
     jc.reference_snapshot,
-    jr.revision_number";
+    jr.revision_number,
+    jr.reference_snapshot";
 
         var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
         try
@@ -988,7 +1047,10 @@ GROUP BY
                 .Select(r => new HistoricalProductionSummary(
                     JobOnId: r.job_on_id,
                     ProductionCode: (string)r.production_code,
-                    ReferenceCode: (string?)(r.reference_code),
+                    // The latest revision's reference snapshot is the reference owned by
+                    // the Job On itself (set at creation). The component snapshot remains
+                    // the fallback for Job Ons created before the initial-revision flow.
+                    ReferenceCode: (string?)(r.revision_reference_code) ?? (string?)(r.reference_code),
                     MachineCode: (string)r.machine_code,
                     PlannedStartAt: r.planned_start_at?.ToDateTimeOffset() ?? null,
                     PlannedEndAt: r.planned_end_at?.ToDateTimeOffset() ?? null,

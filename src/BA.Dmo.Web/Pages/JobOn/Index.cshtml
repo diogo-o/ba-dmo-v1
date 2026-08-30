@@ -54,7 +54,7 @@
         </aside>
 
         <main class="workspace">
-            <section class="view planning-view @(initialView == "planning" ? "active" : "")" id="planningView">
+            <section class="view planning-view @(initialView == "planning" ? "active" : "")" id="planningView" data-selected-date="@Model.SelectedDateValue">
                 <div class="page-heading"><div><span class="eyebrow">Planeamento</span><h1>Produções planeadas</h1><p>Selecione um dia para consultar ou preparar os Job Ons.</p></div>@if (Model.CanEdit){<button class="button primary" id="newJob" type="button">Criar Job On</button>}</div>
                 <div class="planning-grid">
                     <section class="surface calendar-card">
@@ -135,6 +135,32 @@
     </div>
 
     <dialog class="image-dialog" id="imageDialog"><button class="dialog-close" type="button" aria-label="Fechar">×</button><img id="image-dialog-preview" alt="Imagem ampliada do artigo"><strong>@Model.ReferenceDisplay</strong><span>Produção @Model.ProductionDisplay · Linha @Model.MachineDisplay</span></dialog>
+
+    @* Real creation flow: the planning "Criar Job On" button opens this dialog and
+       submits the minimum real production context server-side (POST /api/jobon).
+       The machine list is the canonical production lines source (never derived
+       from components). *@
+    @if (Model.CanEdit)
+    {
+        <dialog class="document-dialog job-create-dialog" id="newJobDialog" aria-labelledby="newJobTitle">
+            <h2 id="newJobTitle">Criar Job On</h2>
+            <p>Registo de uma produção real: referência, linha e datas planeadas. A folha abre no fim da criação.</p>
+            <form id="newJobForm" novalidate>
+                <div class="create-fields">
+                    <label class="full"><span>Produção</span><input name="productionCode" type="text" required placeholder="Ex.: 202608"></label>
+                    <label class="full"><span>Referência</span><input name="reference" type="text" required placeholder="Ex.: 5447T173"></label>
+                    <label><span>Máquina / Linha</span><select name="machineCode" required>@foreach (var line in BA.Dmo.Domain.Modules.JobOn.ProductionLines.Canonical){<option value="@line">@line</option>}</select></label>
+                    <label><span>Data inicial</span><input name="plannedStartAt" type="date"></label>
+                    <label class="full"><span>Data final (opcional)</span><input name="plannedEndAt" type="date"></label>
+                </div>
+                <p class="create-error" id="newJobError" role="alert"></p>
+                <div class="dialog-actions">
+                    <button class="button ghost" type="button" id="newJobCancel">Cancelar</button>
+                    <button class="button primary" type="submit" id="newJobSubmit">Criar Job On</button>
+                </div>
+            </form>
+        </dialog>
+    }
 </div>
 
 <script src="~/scripts/jobon-canonical-interactions.js" defer></script>
