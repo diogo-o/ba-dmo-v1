@@ -116,6 +116,74 @@
     });
   }
 
+  // =============================================================
+  // REAL DUPLICATE FLOW — "Duplicar" (POST /api/jobon/{id}/duplicate).
+  // The dialog collects only the NEW production/date context; the reference
+  // and tool setup are reused from the source revision. The service validates
+  // and atomically persists the new header + the copied initial revision +
+  // the audit event, then the client opens the newly created folha. The source
+  // Job On is never modified. The button is server-rendered only for users with
+  // jobon.edit and an open Job On; the route policy + service gate fail closed
+  // regardless.
+  // =============================================================
+  const duplicateJobButton = $("#duplicateJobOn");
+  const duplicateJobDialog = $("#duplicateJobDialog");
+  if (duplicateJobButton && duplicateJobDialog && typeof duplicateJobDialog.showModal === "function") {
+    duplicateJobButton.addEventListener("click", () => {
+      const errorEl = $("#duplicateJobError");
+      if (errorEl) { errorEl.textContent = ""; errorEl.classList.remove("visible"); }
+      duplicateJobDialog.showModal();
+    });
+    $("#duplicateJobCancel")?.addEventListener("click", () => duplicateJobDialog.close());
+    duplicateJobDialog.addEventListener("click", event => { if (event.target === duplicateJobDialog) duplicateJobDialog.close(); });
+    $("#duplicateJobForm")?.addEventListener("submit", async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const errorEl = $("#duplicateJobError");
+      const submit = $("#duplicateJobSubmit");
+      const showError = message => {
+        if (errorEl) { errorEl.textContent = message; errorEl.classList.add("visible"); }
+      };
+      const jobOnId = $("meta[name='jobon-id']")?.getAttribute("content");
+      if (!jobOnId) { showError("Não foi possível identificar o Job On de origem."); return; }
+      const values = {
+        productionCode: form.elements.productionCode.value.trim(),
+        machineCode: form.elements.machineCode.value,
+        plannedStartAt: form.elements.plannedStartAt.value || null,
+        plannedEndAt: form.elements.plannedEndAt.value || null
+      };
+      if (!values.productionCode || !values.machineCode) {
+        showError("Produção e Máquina são obrigatórias.");
+        return;
+      }
+      submit.disabled = true;
+      try {
+        const response = await fetch(`/api/jobon/${encodeURIComponent(jobOnId)}/duplicate`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(values)
+        });
+        if (response.ok) {
+          const payload = await response.json();
+          // Open the newly created Folha Job On (the redirect/landing target).
+          window.location.assign(`/jobon?id=${encodeURIComponent(payload.jobOnId)}`);
+          return;
+        }
+        let message = "Não foi possível duplicar o Job On. Verifique os dados e tente novamente.";
+        try {
+          const body = await response.json();
+          if (body && body.message) message = body.message;
+        } catch { /* keep the default message */ }
+        showError(message);
+      } catch {
+        showError("Não foi possível duplicar o Job On. Verifique a ligação e tente novamente.");
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  }
+
   const setMode = mode => {
     document.body.dataset.mode = mode;
     const label = $("#modeIndicator strong");

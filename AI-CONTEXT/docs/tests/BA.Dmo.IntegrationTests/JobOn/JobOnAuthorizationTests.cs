@@ -198,6 +198,95 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
         Assert.Equal("JOBON_INVALID", body?.Code);
     }
 
+    // ---- duplicate flow (modules/05 §6.2) ----------------------------------
+
+    [Fact]
+    public async Task OperatorWithoutEditCapability_CannotDuplicateJobOn()
+    {
+        // A user with only jobon.view fails closed on the WRITE operation at the
+        // route level: POST /api/jobon/{id}/duplicate requires jobon.edit and is
+        // denied with 403 before any code runs.
+        _fixture.Repository.User = _fixture.JobOnOperator();
+        var client = await LoginAsync();
+
+        var denied = await client.PostAsJsonAsync(
+            $"/api/jobon/{SomeJobOnId}/duplicate",
+            new { productionCode = "202699", machineCode = "B1" });
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResponsibleProfile_DuplicatesJobOn_AndOpensTheDuplicatedFolha()
+    {
+        // Tests #1, #3, #4, #6, #10 — Responsible + jobon.edit duplicates a REAL
+        // Job On: the new production/date context is applied (new header + copied
+        // initial revision), a NEW JobOnId is returned, the source Job On remains
+        // untouched, and the success target opens the duplicated Folha Job On
+        // (/jobon?id={newJobOnId}).
+        _fixture.Repository.User = _fixture.JobOnResponsible();
+        var client = await LoginAsync();
+
+        // 1. Create the source Job On through the real create flow.
+        var created = await client.PostAsJsonAsync("/api/jobon", new
+        {
+            productionCode = "202608",
+            machineCode = "B1",
+            plannedStartAt = "2026-08-17",
+            plannedEndAt = (string?)null,
+            reference = "5447T173"
+        });
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var creation = await created.Content.ReadFromJsonAsync<CreateJobOnResponse>();
+        var sourceId = creation!.JobOnId;
+
+        // 2. Duplicate it with the NEW production/date context.
+        var duplicated = await client.PostAsJsonAsync(
+            $"/api/jobon/{sourceId}/duplicate",
+            new
+            {
+                productionCode = "202699",
+                machineCode = "C1",
+                plannedStartAt = "2026-08-24",
+                plannedEndAt = "2026-08-25"
+            });
+        Assert.Equal(HttpStatusCode.OK, duplicated.StatusCode);
+        var payload = await duplicated.Content.ReadFromJsonAsync<CreateJobOnResponse>();
+        Assert.NotNull(payload);
+        Assert.NotEqual(Guid.Empty, payload!.JobOnId);
+        Assert.NotEqual(sourceId, payload.JobOnId); // a NEW JobOnId, never the source's
+
+        // 3. The success target opens the newly created Folha Job On.
+        var newFolha = await client.GetAsync($"/jobon?id={payload.JobOnId}");
+        Assert.Equal(HttpStatusCode.OK, newFolha.StatusCode);
+        var newHtml = await newFolha.Content.ReadAsStringAsync();
+        Assert.Contains("data-initial-view=\"sheet\"", newHtml);
+        Assert.Contains("meta name=\"jobon-id\" content=\"" + payload.JobOnId, newHtml);
+        Assert.Contains("202699", newHtml); // the new production renders in the folha
+        Assert.Contains("5447T173", newHtml); // the source reference is reused
+
+        // 4. The source Folha Job On remains untouched.
+        var sourceFolha = await client.GetAsync($"/jobon?id={sourceId}");
+        Assert.Equal(HttpStatusCode.OK, sourceFolha.StatusCode);
+        var sourceHtml = await sourceFolha.Content.ReadAsStringAsync();
+        Assert.Contains("meta name=\"jobon-id\" content=\"" + sourceId, sourceHtml);
+        Assert.Contains("202608", sourceHtml);
+    }
+
+    [Fact]
+    public async Task ResponsibleProfile_DuplicateUnknownSource_ReturnsCleanNotFound()
+    {
+        // An unknown source maps to the existing clean NotFound behavior, never
+        // a raw 500 (the identity-conflict mapping itself is unit-proven:
+        // Duplicate_IdentityDuplicate_Raw23505_MapsToCleanDomainConflict).
+        _fixture.Repository.User = _fixture.JobOnResponsible();
+        var client = await LoginAsync();
+
+        var denied = await client.PostAsJsonAsync(
+            $"/api/jobon/{SomeJobOnId}/duplicate",
+            new { productionCode = "202699", machineCode = "B1" });
+        Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode); // unknown source: clean 404
+    }
+
     private sealed record CreateJobOnResponse(Guid JobOnId);
 
     private sealed record ErrorBody(string Code, string Message);
@@ -422,8 +511,27 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
                 Task.CompletedTask;
 
             public Task<Guid> DuplicateAtomicallyAsync(
-                Domain.Modules.JobOn.JobOn newJobOn, JobOnRevision revision, Guid sourceJobOnId, string actorId, CancellationToken cancellationToken = default) =>
-                Task.FromResult(Guid.NewGuid());
+                Domain.Modules.JobOn.JobOn newJobOn, JobOnRevision revision, Guid sourceJobOnId, string actorId, CancellationToken cancellationToken = default)
+            {
+                // Mirror the real repository: a NEW job_on row (fresh DB id) with the
+                // copied revision pinned to it and the current-revision link advanced —
+                // readable through GetByIdAsync so the duplicated folha opens after a
+                // successful duplicate. The header context comes from the service-built
+                // duplicate (constructor-visible: production/machine/dates).
+                var newId = Guid.NewGuid();
+                var header = new Domain.Modules.JobOn.JobOn(
+                    newJobOn.ProductionCode,
+                    newJobOn.MachineCode,
+                    newJobOn.PlannedStartAt,
+                    newJobOn.PlannedEndAt,
+                    Array.Empty<JobOnRevision>());
+                SetId(header, newId);
+                var pinned = revision with { JobOnId = newId };
+                _revisions.Add(pinned);
+                header.SaveRevision(pinned);
+                _jobOns[newId] = header;
+                return Task.FromResult(newId);
+            }
 
             public Task<IReadOnlyList<HistoricalProductionSummary>> GetHistoricalProductionsAsync(
                 string? referenceFilter, string? machineFilter, DateTime? from, DateTime? to, CancellationToken cancellationToken = default) =>

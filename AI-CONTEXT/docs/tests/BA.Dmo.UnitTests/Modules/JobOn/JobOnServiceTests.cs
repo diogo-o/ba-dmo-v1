@@ -213,6 +213,107 @@ public class JobOnServiceTests
         Assert.Empty(_repository.JobOns);
     }
 
+    [Fact]
+    public async Task Duplicate_WithoutEditCapability_IsDenied_AndWritesNothing()
+    {
+        // An operator with only jobon.view must be denied the duplicate (a WRITE).
+        var sourceId = await SeedPlaneadoWithRevision();
+        _identity.GrantViewOnly();
+
+        var result = await _service.DuplicateAsync(new DuplicateJobOnRequest(
+            sourceId, "202620", "LINHA-1", Start, null));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ErrorCategory.Forbidden, result.Error.Category);
+        Assert.Single(_repository.JobOns); // source only — no duplicate written
+        Assert.DoesNotContain(_repository.AuditEvents, a => a.EventType == "jobon.duplicar");
+        Assert.Equal(2, _repository.Revisions.Count(r => r.JobOnId == sourceId));
+    }
+
+    [Fact]
+    public async Task Duplicate_PersistenceFailure_LeavesNoPartialDuplicate()
+    {
+        // The atomic duplicate fails AFTER the header would have been inserted:
+        // NOTHING may remain — no header-only duplicate, no orphan revision,
+        // no audit fact (mirror of the atomic create contract).
+        var sourceId = await SeedPlaneadoWithRevision();
+        _repository.FailDuplicateAtomically = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.DuplicateAsync(new DuplicateJobOnRequest(
+                sourceId, "202620", "LINHA-1", Start, null)));
+
+        Assert.Single(_repository.JobOns);            // source only
+        Assert.Equal(sourceId, _repository.JobOns.Keys.Single());
+        Assert.Equal(2, _repository.Revisions.Count); // source's creation + seeded revisions only
+        Assert.DoesNotContain(_repository.AuditEvents, a => a.EventType == "jobon.duplicar");
+    }
+
+    [Fact]
+    public async Task Duplicate_GetsNewJobOnId_AndAppliesNewProductionContext_OnCopiedRevision()
+    {
+        // SeedPlaneadoWithRevision: rascunho (202608/LINHA-1/9262T288) + revision 2 with
+        // a CM component carrying a "confirmada" verification and GeneralNotes "Notas".
+        var sourceId = await SeedPlaneadoWithRevision();
+        var newStart = Start.AddDays(3);
+        var newEnd = newStart.AddHours(8);
+
+        var result = await _service.DuplicateAsync(new DuplicateJobOnRequest(
+            sourceId, "202699", "B2", newStart, newEnd));
+
+        Assert.True(result.IsSuccess);
+        var duplicatedId = result.Value;
+
+        // A NEW JobOnId — never the source's.
+        Assert.NotEqual(sourceId, duplicatedId);
+
+        // Header: new production/date context; origin pinned; source untouched.
+        var duplicated = _repository.JobOns[duplicatedId];
+        Assert.Equal("202699", duplicated.ProductionCode);
+        Assert.Equal("B2", duplicated.MachineCode);
+        Assert.Equal(newStart, duplicated.PlannedStartAt);
+        Assert.Equal(newEnd, duplicated.PlannedEndAt);
+        Assert.Equal(sourceId, duplicated.CopiedFromJobOnId);
+        Assert.Equal("202608", _repository.JobOns[sourceId].ProductionCode);
+        Assert.Equal(Start, _repository.JobOns[sourceId].PlannedStartAt);
+
+        // The copied initial revision records the NEW production/date context,
+        // reuses the source reference + notes, and regenerates checks as pendente.
+        var revision = Assert.Single(_repository.Revisions, r => r.JobOnId == duplicatedId);
+        Assert.Equal(1, revision.RevisionNumber);
+        Assert.Equal(duplicatedId, revision.JobOnId);
+        using var prod = JsonDocument.Parse(revision.ProductionSnapshot!);
+        Assert.Equal("202699", prod.RootElement.GetProperty("production_code").GetString());
+        using var machine = JsonDocument.Parse(revision.MachineSnapshot!);
+        Assert.Equal("B2", machine.RootElement.GetProperty("machine_code").GetString());
+        using var dates = JsonDocument.Parse(revision.DatesSnapshot!);
+        Assert.Equal(newStart, dates.RootElement.GetProperty("start_at").GetDateTimeOffset());
+        Assert.Equal(newEnd, dates.RootElement.GetProperty("end_at").GetDateTimeOffset());
+        using var reference = JsonDocument.Parse(revision.ReferenceSnapshot!);
+        Assert.Equal("9262T288", reference.RootElement.GetProperty("article_reference").GetString());
+        Assert.Equal("Notas", revision.GeneralNotes);
+
+        var component = Assert.Single(revision.Components ?? Array.Empty<JobOnComponent>());
+        Assert.Equal(ComponentFamily.MP_CM, component.Family);
+        Assert.Equal("CM 5447", component.ReferenceSnapshot);
+        var verification = Assert.Single(component.Verifications ?? Array.Empty<JobOnVerificationOccurrence>());
+        Assert.Equal("pendente", verification.Status); // checks are never copied
+        Assert.Null(verification.CompletedBy);
+        Assert.Null(verification.CompletedAtUtc);
+
+        // Source verification completion preserved on the source only.
+        var reloadedSource = await _repository.GetByIdAsync(sourceId);
+        var srcComponents = reloadedSource!.CurrentRevision!.Components ?? Array.Empty<JobOnComponent>();
+        var srcVerification = Assert.Single(srcComponents.First().Verifications ?? Array.Empty<JobOnVerificationOccurrence>());
+        Assert.Equal("confirmada", srcVerification.Status);
+        Assert.Equal("actor-1", srcVerification.CompletedBy);
+
+        // Own audit fact on the NEW id; the source revision count is unchanged.
+        Assert.Contains(_repository.AuditEvents, a =>
+            a.EventType == "jobon.duplicar" && a.JobId == duplicatedId && a.After == sourceId.ToString());
+        Assert.Equal(2, _repository.Revisions.Count(r => r.JobOnId == sourceId));
+    }
+
     // ---- unique-violation mapping (audit JA-03/ON-02) ---------------------
 
     [Fact]

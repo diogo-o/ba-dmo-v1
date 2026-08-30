@@ -305,6 +305,30 @@ app.MapPost("/api/jobon", async (
     return Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(CapabilityPolicies.JobonEdit);
 
+// Duplicate a Job On (modules/05 §6.2). DUPLICATE IS A WRITE: the route-level
+// capability policy requires jobon.edit and the service gate re-checks the
+// canonical capability server-side (fail closed). The body carries ONLY the NEW
+// production/date context; the reference and tool setup come from the source
+// revision. The service atomically persists the new header + the copied initial
+// revision + the audit event; the source Job On is never modified. On success
+// the client opens the newly created Folha Job On via /jobon?id={jobOnId}.
+app.MapPost("/api/jobon/{jobOnId:guid}/duplicate", async (
+    Guid jobOnId,
+    DuplicateJobOnRequest request,
+    JobOnService service,
+    CancellationToken cancellationToken) =>
+{
+    var result = await service.DuplicateAsync(
+        request with { SourceJobOnId = jobOnId }, cancellationToken);
+    if (result.IsSuccess)
+        return Results.Ok(new { jobOnId = result.Value });
+    if (result.Error.Category == ErrorCategory.Forbidden)
+        return Results.Forbid();
+    if (result.Error.Category == ErrorCategory.NotFound)
+        return Results.NotFound(new { code = result.Error.Code, message = result.Error.Message });
+    return Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+}).RequireAuthorization(CapabilityPolicies.JobonEdit);
+
 // Job On image API endpoints: attach/replace/remove the master association
 // owned by the current Article/Reference. These actions never create or change
 // a Job On revision. The binary remains in the configured company image

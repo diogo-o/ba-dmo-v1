@@ -120,7 +120,13 @@ public sealed class JobOn
         CurrentRevisionId = revision.JobOnRevisionId;
     }
 
-    /// <summary>Duplicate from another Job On instance.</summary>
+    /// <summary>
+    /// Duplicate from another Job On instance. The duplicated Job On is a NEW
+    /// aggregate: it gets a NEW id — never the source's — and pins the origin
+    /// via <c>copied_from_job_on_id</c>. The header carries the NEW production/
+    /// machine/dates context supplied by the user; the source instance is never
+    /// mutated. Revision content is rebuilt by the service, not here.
+    /// </summary>
     public static JobOn DuplicateFrom(
         JobOn source,
         string productionCode,
@@ -136,7 +142,7 @@ public sealed class JobOn
             plannedEndAt,
             newRevisions.ToList())
         {
-            Id = source.Id, // Same aggregate root but different instance
+            Id = Guid.NewGuid(),
             CreatedAtUtc = DateTime.UtcNow,
             CopiedFromJobOnId = source.Id
         };

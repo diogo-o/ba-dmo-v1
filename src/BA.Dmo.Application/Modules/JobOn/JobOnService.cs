@@ -158,10 +158,12 @@ public sealed class JobOnService
     }
 
     /// <summary>
-    /// Duplicate a Job On (modules/05 §6.2): copies the full snapshot
-    /// (components, fields, CAL rows, applicable occurrences), assigns a new
-    /// id, new production/dates and <c>copied_from_job_on_id</c>. The source
-    /// is immutable; occurrences are regenerated (never copied checks).
+    /// Duplicate a Job On (modules/05 §6.2): the source revision's setup — reference,
+    /// typed values, sections, notes and the full component graph (components, fields,
+    /// CAL rows) — is copied into a NEW Job On with a new id, the user-supplied
+    /// production/date context and <c>copied_from_job_on_id</c>. The source is
+    /// immutable; verification occurrences are regenerated pendente (never copied
+    /// with checks), and audit history is never copied.
     /// </summary>
     public async Task<Result<Guid, DomainError>> DuplicateAsync(
         DuplicateJobOnRequest request, CancellationToken cancellationToken = default)
@@ -199,7 +201,14 @@ public sealed class JobOnService
                 "O Job On de origem não tem uma revisão atual para duplicar."));
 
         var (revision, _) = CopyRevisionForDuplication(
-            duplicated.Id, sourceRevision, _clock.UtcNow.DateTime, gate.Value.ActorId);
+            duplicated.Id,
+            sourceRevision,
+            request.ProductionCode,
+            request.MachineCode,
+            request.PlannedStartAt,
+            request.PlannedEndAt,
+            _clock.UtcNow.DateTime,
+            gate.Value.ActorId);
 
         // The whole new Job On + revision + children + current link + audit commit as ONE
         // logical transaction: no partially duplicated Job On can remain on failure.
@@ -547,8 +556,22 @@ public sealed class JobOnService
         return Result<JobOnUserCurrent, DomainError>.Success(current);
     }
 
+    /// <summary>
+    /// Copies the source revision's setup into a NEW immutable revision (revision 1)
+    /// for the duplicate. The production/machine/dates snapshots record the NEW user-
+    /// supplied occurrence context (never the source's), while the reference, typed
+    /// values, sections, drop count, notes and the complete component graph are copied
+    /// from the source revision (references/tool setup are reused, checks are not).
+    /// </summary>
     private static (JobOnRevision Revision, IReadOnlyList<JobOnComponent> Components) CopyRevisionForDuplication(
-        Guid newJobOnId, JobOnRevision source, DateTime now, string actorId)
+        Guid newJobOnId,
+        JobOnRevision source,
+        string productionCode,
+        string machineCode,
+        DateTimeOffset? plannedStartAt,
+        DateTimeOffset? plannedEndAt,
+        DateTime now,
+        string actorId)
     {
         // The duplicated revision is a NEW immutable snapshot (revision 1) with a new id.
         var newRevisionId = Guid.NewGuid();
@@ -595,10 +618,13 @@ public sealed class JobOnService
             JobOnRevisionId = newRevisionId,
             JobOnId = newJobOnId,
             RevisionNumber = 1,
-            ProductionSnapshot = source.ProductionSnapshot,
+            // The duplicated Job On is a NEW production occurrence: the revision
+            // snapshot records the NEW user-entered production/machine/dates. The
+            // reference and tool setup are reused from the source revision.
+            ProductionSnapshot = SnapshotJson.Production(productionCode),
             ReferenceSnapshot = source.ReferenceSnapshot,
-            MachineSnapshot = source.MachineSnapshot,
-            DatesSnapshot = source.DatesSnapshot,
+            MachineSnapshot = SnapshotJson.Machine(machineCode),
+            DatesSnapshot = SnapshotJson.Dates(plannedStartAt, plannedEndAt),
             Sections = source.Sections,
             DropCount = source.DropCount,
             TypeSnapshot = source.TypeSnapshot,

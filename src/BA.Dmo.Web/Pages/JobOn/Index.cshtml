@@ -96,7 +96,7 @@
                     <div class="summary-grid">
                         <label class="summary-cell key"><span>Data inicial</span><input id="jobStartDate" type="date" value="@Model.StartDateDisplay"></label><label class="summary-cell key"><span>Data final</span><input id="jobEndDate" type="date" value="@Model.EndDateDisplay"></label><label class="summary-cell key short"><span>Máquina</span><select id="sheetMachine"><option>@Model.MachineDisplay</option></select></label><label class="summary-cell identity"><span>Referência</span><input value="@Model.ReferenceDisplay"></label><label class="summary-cell identity"><span>Produção</span><input id="sheetProduction" value="@Model.ProductionDisplay"></label><label class="summary-cell tiny"><span>Secções</span><input value="@Model.SectionsDisplay"></label><label class="summary-cell tiny"><span>Gota</span><input value="@Model.DropCountDisplay"></label><label class="summary-cell tiny"><span>Tipo</span><input value="@Model.TypeDisplay"></label><label class="summary-cell short"><span>Paragem</span><input value="@Model.StopDisplay"></label><label class="summary-cell short"><span>Peso</span><input value="@Model.WeightDisplay"></label><label class="summary-cell short"><span>Processo</span><select><option>@Model.ProcessDisplay</option></select></label>
                     </div>
-                    <div class="action-bar"><div class="primary-actions">@if(Model.CanEdit){<button class="button primary" id="editSheet" type="button">Editar folha</button><button class="button primary edit-only" id="saveSheet" type="button">Guardar nova revisão</button><button class="button ghost edit-only" id="cancelEdit" type="button">Cancelar edição</button>}</div><div class="secondary-actions">@if (Model.JobOnId.HasValue && Model.CanViewControlo){<a class="button ghost" id="viewSheetControl" asp-page="/Controlo/Index" asp-route-jobOn="@Model.JobOnId" asp-route-revision="@Model.CurrentRevisionId">Ver Controlo</a>}@if (Model.JobOnId.HasValue && Model.CanViewRepairs){<a class="button ghost" id="viewSheetRepairs" asp-page="/ReparacaoInterna/Index" asp-route-view="historico" asp-route-jobOnId="@Model.JobOnId" asp-route-revision="@Model.CurrentRevisionId" asp-route-production="@Model.ProductionDisplay" asp-route-line="@Model.MachineDisplay">Ver reparações</a>}@if(Model.CanEdit){<button class="button ghost edit-only" type="button">Alterar data</button>}<button class="button ghost" type="button">Duplicar</button><button class="button ghost" type="button">Comparar</button><button class="button ghost" id="printJobOn" type="button">Imprimir 4 folhas</button><div class="more-actions-menu"><button class="button more" type="button" data-more-actions aria-label="Mais ações" aria-expanded="false">•••</button><div class="tool-menu">@if(Model.JobOnId.HasValue && Model.CanViewControlo){<a asp-page="/Controlo/Index" asp-route-jobOn="@Model.JobOnId" asp-route-revision="@Model.CurrentRevisionId" asp-route-section="peso">Ver Peso</a><a asp-page="/Controlo/Index" asp-route-jobOn="@Model.JobOnId" asp-route-revision="@Model.CurrentRevisionId" asp-route-section="pegamentos">Ver Pegamentos</a><a asp-page="/Controlo/Index" asp-route-jobOn="@Model.JobOnId" asp-route-revision="@Model.CurrentRevisionId" asp-route-section="resumo">Ver Resumo</a>}</div></div></div></div>
+                    <div class="action-bar"><div class="primary-actions">@if(Model.CanEdit){<button class="button primary" id="editSheet" type="button">Editar folha</button><button class="button primary edit-only" id="saveSheet" type="button">Guardar nova revisão</button><button class="button ghost edit-only" id="cancelEdit" type="button">Cancelar edição</button>}</div><div class="secondary-actions">@if (Model.JobOnId.HasValue && Model.CanViewControlo){<a class="button ghost" id="viewSheetControl" asp-page="/Controlo/Index" asp-route-jobOn="@Model.JobOnId" asp-route-revision="@Model.CurrentRevisionId">Ver Controlo</a>}@if (Model.JobOnId.HasValue && Model.CanViewRepairs){<a class="button ghost" id="viewSheetRepairs" asp-page="/ReparacaoInterna/Index" asp-route-view="historico" asp-route-jobOnId="@Model.JobOnId" asp-route-revision="@Model.CurrentRevisionId" asp-route-production="@Model.ProductionDisplay" asp-route-line="@Model.MachineDisplay">Ver reparações</a>}@if(Model.CanEdit){<button class="button ghost edit-only" type="button">Alterar data</button>}@if(Model.JobOnId.HasValue && Model.CanEdit){<button class="button ghost" id="duplicateJobOn" type="button">Duplicar</button>}<button class="button ghost" type="button">Comparar</button><button class="button ghost" id="printJobOn" type="button">Imprimir 4 folhas</button><div class="more-actions-menu"><button class="button more" type="button" data-more-actions aria-label="Mais ações" aria-expanded="false">•••</button><div class="tool-menu">@if(Model.JobOnId.HasValue && Model.CanViewControlo){<a asp-page="/Controlo/Index" asp-route-jobOn="@Model.JobOnId" asp-route-revision="@Model.CurrentRevisionId" asp-route-section="peso">Ver Peso</a><a asp-page="/Controlo/Index" asp-route-jobOn="@Model.JobOnId" asp-route-revision="@Model.CurrentRevisionId" asp-route-section="pegamentos">Ver Pegamentos</a><a asp-page="/Controlo/Index" asp-route-jobOn="@Model.JobOnId" asp-route-revision="@Model.CurrentRevisionId" asp-route-section="resumo">Ver Resumo</a>}</div></div></div></div>
                 </section>
 
                 @if (Model.HasPendingVerifications) { <div class="preparation-alert"><div class="alert-icon">!</div><div><strong>Preparação pendente</strong><span>@string.Join(" · ", Model.VerificationItems.Where(item => item.IsPending).Take(3).Select(item => item.RuleText))</span></div><button class="text-action" id="goChecks" type="button">Ver verificações</button></div> }
@@ -157,6 +157,31 @@
                 <div class="dialog-actions">
                     <button class="button ghost" type="button" id="newJobCancel">Cancelar</button>
                     <button class="button primary" type="submit" id="newJobSubmit">Criar Job On</button>
+                </div>
+            </form>
+        </dialog>
+    }
+
+    @* Real duplicate flow: the sheet "Duplicar" button opens this dialog and
+       submits only the NEW production/date context (POST /api/jobon/{id}/duplicate).
+       The reference and tool setup are reused from the source revision; the source
+       Job On is never modified. The new folha opens after a successful duplicate. *@
+    @if (Model.CanEdit && Model.JobOnId.HasValue)
+    {
+        <dialog class="document-dialog job-create-dialog" id="duplicateJobDialog" aria-labelledby="duplicateJobTitle">
+            <h2 id="duplicateJobTitle">Duplicar Job On</h2>
+            <p>Nova produção a partir de @Model.ProductionDisplay · @Model.ReferenceDisplay. A preparação é copiada e o Job On original não é alterado.</p>
+            <form id="duplicateJobForm" novalidate>
+                <div class="create-fields">
+                    <label class="full"><span>Produção</span><input name="productionCode" type="text" required placeholder="Ex.: 202609"></label>
+                    <label><span>Máquina / Linha</span><select name="machineCode" required>@foreach (var line in BA.Dmo.Domain.Modules.JobOn.ProductionLines.Canonical){<option value="@line" selected="@(line == Model.MachineDisplay ? "selected" : null)">@line</option>}</select></label>
+                    <label><span>Data inicial</span><input name="plannedStartAt" type="date"></label>
+                    <label class="full"><span>Data final (opcional)</span><input name="plannedEndAt" type="date"></label>
+                </div>
+                <p class="create-error" id="duplicateJobError" role="alert"></p>
+                <div class="dialog-actions">
+                    <button class="button ghost" type="button" id="duplicateJobCancel">Cancelar</button>
+                    <button class="button primary" type="submit" id="duplicateJobSubmit">Duplicar Job On</button>
                 </div>
             </form>
         </dialog>

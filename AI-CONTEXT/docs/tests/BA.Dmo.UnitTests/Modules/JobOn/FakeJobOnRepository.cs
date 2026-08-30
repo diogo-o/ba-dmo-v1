@@ -38,6 +38,9 @@ public sealed class FakeJobOnRepository : IJobOnRepository
     /// <summary>When true, the atomic create throws a raw persistence failure (no-partial-write test).</summary>
     public bool FailCreateAtomically { get; set; }
 
+    /// <summary>When true, the atomic duplicate throws a raw persistence failure (no-partial-write test).</summary>
+    public bool FailDuplicateAtomically { get; set; }
+
     public Task<Guid> CreateAsync(JobOnEntity jobOn, CancellationToken cancellationToken = default)
     {
         if (FailIdentityDuplicate)
@@ -224,6 +227,8 @@ public sealed class FakeJobOnRepository : IJobOnRepository
         if (FailIdentityDuplicate)
             throw new JobOnIdentityDuplicateException(
                 "Já existe um Job On não cancelado com esta produção e máquina.");
+        if (FailDuplicateAtomically)
+            throw new InvalidOperationException("persistence unavailable");
         var newId = Guid.NewGuid();
 
         // Construct the duplicated header via its public constructor, then hydrate the

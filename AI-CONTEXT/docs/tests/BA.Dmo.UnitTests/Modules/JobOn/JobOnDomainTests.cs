@@ -154,6 +154,8 @@ public class JobOnDomainTests
         Assert.Equal("202620", duplicated.ProductionCode);
         Assert.Equal(newStart, duplicated.PlannedStartAt);
         Assert.Equal(source.Id, duplicated.CopiedFromJobOnId);
+        // A duplicated Job On is a NEW aggregate with a NEW id — never the source's.
+        Assert.NotEqual(source.Id, duplicated.Id);
         // Origin is immutable: source keeps its own production/dates.
         Assert.Equal("202608", source.ProductionCode);
         Assert.Equal(Start, source.PlannedStartAt);
