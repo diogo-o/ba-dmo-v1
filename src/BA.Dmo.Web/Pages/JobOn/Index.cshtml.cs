@@ -18,6 +18,17 @@ public class IndexModel : PageModel
 {
     private static readonly CultureInfo PtPt = new("pt-PT");
 
+    /// <summary>
+    /// Client-side revision-round-trip options: the SAME shape the save endpoint
+    /// binds (camelCase + enum strings), so the embedded current-revision graph can
+    /// be edited by the client and POSTed back verbatim.
+    /// </summary>
+    private static readonly JsonSerializerOptions RevisionGraphJsonOptions =
+        new(JsonSerializerDefaults.Web)
+        {
+            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+        };
+
     private readonly ICurrentUserAccessor _currentUserAccessor;
     private readonly IJobOnRepository _jobOnRepository;
     private readonly JobOnService? _jobOnService;
@@ -48,6 +59,18 @@ public class IndexModel : PageModel
     public Domain.Modules.JobOn.JobOn? JobOn { get; private set; }
     public Guid? JobOnId => JobOn?.Id;
     public Guid? CurrentRevisionId => JobOn?.CurrentRevision?.JobOnRevisionId;
+
+    /// <summary>
+    /// The CURRENT revision's complete component graph (components + fields + CAL
+    /// rows + verifications) serialized for the edit flow: the client overlays the
+    /// edited DOM values, assigns fresh ids and submits the whole graph back to
+    /// <c>POST /api/jobon/{id}/revision</c>. Only ACTUAL stored components are
+    /// submitted — absent tools stay absent (no invented associations).
+    /// </summary>
+    public string CurrentRevisionGraphJson { get; private set; } = "[]";
+
+    /// <summary>Editing a fechado (closed) revision requires a change reason (modules/05 §4/§5.4).</summary>
+    public bool ChangeReasonRequired => JobOn?.LifecycleState == JobOnLifecycleState.Fechado;
 
     // ---- Planeamento ----
     public IReadOnlyList<PlaneamentoItem> PlaneamentoItems { get; private set; } = Array.Empty<PlaneamentoItem>();
@@ -194,6 +217,13 @@ public class IndexModel : PageModel
         if (id.HasValue)
         {
             JobOn = await _jobOnRepository.GetByIdAsync(id.Value);
+
+            // The complete CURRENT revision graph is embedded for the edit flow (see
+            // CurrentRevisionGraphJson). Serialization escapes HTML-sensitive chars, so
+            // the payload is safe inside the <script type="application/json"> block.
+            CurrentRevisionGraphJson = JobOn?.CurrentRevision?.Components is { Count: > 0 } components
+                ? JsonSerializer.Serialize(components, RevisionGraphJsonOptions)
+                : "[]";
 
             // Build verification items from CurrentRevision.Verifications
             var verifications = JobOn?.CurrentRevision?.Verifications ?? Array.Empty<JobOnVerificationOccurrence>();

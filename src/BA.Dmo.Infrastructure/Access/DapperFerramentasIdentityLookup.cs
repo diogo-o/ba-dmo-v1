@@ -77,6 +77,73 @@ WHERE l.tool_lote_id = @ToolLoteId;";
         }
     }
 
+    public async Task<IReadOnlyList<FerramentasToolLoteOption>> SearchToolLoteOptionsAsync(
+        FerramentasToolType type,
+        string? reference,
+        string? lot,
+        string? line,
+        CancellationToken ct = default)
+    {
+        const string sql = @"
+SELECT r.tool_reference_id, r.tool_type, r.ref_code, r.technical_name,
+       l.tool_lote_id, l.lote, l.allowed_lines
+FROM tool_references r
+JOIN tool_lotes l ON l.tool_reference_id = r.tool_reference_id
+WHERE r.tool_type = @Type
+  AND (@Reference IS NULL OR r.ref_code ILIKE '%'||@Reference||'%')
+  AND (@Lot IS NULL OR l.lote ILIKE '%'||@Lot||'%')
+  AND (@Line IS NULL OR @Line = ANY(l.allowed_lines))
+ORDER BY r.ref_code, l.lote;";
+
+        var conn = await _connectionFactory.OpenConnectionAsync(ct);
+        try
+        {
+            var rows = await Db.QueryAsync<dynamic>(conn, sql, new
+            {
+                Type = FerramentasToolTypeCodec.ToStorage(type),
+                Reference = reference,
+                Lot = lot,
+                Line = line
+            }, cancellationToken: ct);
+            return rows.Select<dynamic, FerramentasToolLoteOption>(r => MapOption(r)).ToList().AsReadOnly();
+        }
+        finally
+        {
+            await DisposeAsync(conn);
+        }
+    }
+
+    public async Task<FerramentasToolLoteOption?> ResolveToolLoteOptionAsync(Guid toolLoteId, CancellationToken ct = default)
+    {
+        const string sql = @"
+SELECT r.tool_reference_id, r.tool_type, r.ref_code, r.technical_name,
+       l.tool_lote_id, l.lote, l.allowed_lines
+FROM tool_lotes l
+JOIN tool_references r ON r.tool_reference_id = l.tool_reference_id
+WHERE l.tool_lote_id = @ToolLoteId;";
+
+        var conn = await _connectionFactory.OpenConnectionAsync(ct);
+        try
+        {
+            dynamic? row = await Db.QuerySingleOrDefaultAsync<dynamic>(conn, sql, new { ToolLoteId = toolLoteId }, cancellationToken: ct);
+            return row is null ? null : MapOption(row);
+        }
+        finally
+        {
+            await DisposeAsync(conn);
+        }
+    }
+
+    private static FerramentasToolLoteOption MapOption(dynamic row) =>
+        new(
+            row.tool_reference_id,
+            row.tool_lote_id,
+            FerramentasToolTypeCodec.FromStorage(row.tool_type),
+            (string)row.ref_code,
+            (string)row.lote,
+            row.technical_name as string,
+            ((row.allowed_lines as string[]) ?? Array.Empty<string>()).ToList().AsReadOnly());
+
     private static FerramentasIdentityHit Map(dynamic row) =>
         new(
             row.tool_reference_id,

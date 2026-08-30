@@ -33,6 +33,7 @@ public class JobOnAlterDateTests
         _service = new JobOnService(
             gate, _repository, _userContext, new AlterDateTestClock(
                 new DateTimeOffset(2026, 8, 18, 9, 0, 0, TimeSpan.Zero)),
+            new FakeFerramentasToolLookup(),
             articleImages: null);
         _identity.GrantResponsible();
     }

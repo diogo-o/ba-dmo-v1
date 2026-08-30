@@ -23,6 +23,24 @@ public interface IFerramentasIdentityLookup
 
     /// <summary>Resolves the canonical identity of a single tool lot.</summary>
     Task<FerramentasIdentityHit?> ResolveAsync(Guid toolLoteId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Searches registered tool LOTS of one type by optional reference/lot
+    /// fragments and optional allowed line, returning each lot's registered
+    /// <c>allowed_lines</c> (the machine/line dimension of the tool identity
+    /// tuple). Read-only: returns ONLY existing registered records — consumer
+    /// selection surfaces (Job On "Alterar CM/MF/BQ associado") must never
+    /// present or persist combinations that are not registered here.
+    /// </summary>
+    Task<IReadOnlyList<FerramentasToolLoteOption>> SearchToolLoteOptionsAsync(
+        FerramentasToolType type,
+        string? reference,
+        string? lot,
+        string? line,
+        CancellationToken ct = default);
+
+    /// <summary>Resolves the canonical identity + registered lines of a single tool lot.</summary>
+    Task<FerramentasToolLoteOption?> ResolveToolLoteOptionAsync(Guid toolLoteId, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -36,3 +54,20 @@ public sealed record FerramentasIdentityHit(
     string Reference,
     string Lot,
     string? TechnicalName);
+
+/// <summary>
+/// Canonical read-only projection of a Ferramentas tool LOT used by consumer
+/// selection surfaces: the stable reference/lot ids, the (type, reference, lot)
+/// master identity, the technical name and the registered allowed lines.
+/// CM/MF/BQ are distinct <see cref="FerramentasToolType"/> values — the same
+/// reference code registered under a different type is a DIFFERENT tool and
+/// never merges with the other.
+/// </summary>
+public sealed record FerramentasToolLoteOption(
+    Guid ToolReferenceId,
+    Guid ToolLoteId,
+    FerramentasToolType Type,
+    string Reference,
+    string Lot,
+    string? TechnicalName,
+    IReadOnlyList<string> AllowedLines);

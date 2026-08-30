@@ -342,7 +342,7 @@ public class HistoriaWebAuthorizationTests :
         public Task InsertAuditEventAsync(Guid jobId, Guid? revisionId, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken ct = default) => Task.CompletedTask;
         public Task InsertImageMutationAsync(JobOnRevision newRevision, Guid jobOnId, string eventType, string? beforeImageAssetId, string? afterImageAssetId, string actorId, CancellationToken ct = default) => Task.CompletedTask;
         public Task<IReadOnlyList<HistoricalProductionSummary>> GetHistoricalProductionsAsync(string? referenceFilter, string? machineFilter, DateTime? from, DateTime? to, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<HistoricalProductionSummary>>(Array.Empty<HistoricalProductionSummary>());
-        public Task SaveRevisionGraphAsync(JobOnRevision revision, string eventType, string actorId, CancellationToken ct = default) => Task.CompletedTask;
+        public Task SaveRevisionGraphAsync(JobOnRevision revision, string eventType, string actorId, string? beforeSnapshot = null, string? afterSnapshot = null, CancellationToken ct = default) => Task.CompletedTask;
         public Task AlterDatesAtomicallyAsync(Guid jobOnId, DateTimeOffset? plannedStartAt, DateTimeOffset? plannedEndAt, JobOnRevision newRevision, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken ct = default) => Task.CompletedTask;
         public Task<Guid> DuplicateAtomicallyAsync(JobOn newJobOn, JobOnRevision revision, Guid sourceJobOnId, string actorId, CancellationToken ct = default) => Task.FromResult(Guid.NewGuid());
     }

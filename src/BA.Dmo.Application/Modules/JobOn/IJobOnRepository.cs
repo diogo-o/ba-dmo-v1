@@ -92,11 +92,17 @@ public interface IJobOnRepository
     /// (components + fields + CAL rows + verification occurrences), advances
     /// <c>job_on.current_revision_id</c>, and records the audit event — all in ONE
     /// database transaction. A current revision can never become partially persisted.
+    /// The <paramref name="beforeSnapshot"/>/<paramref name="afterSnapshot"/> follow
+    /// the same audit contract as every revision-creation event: the "before"
+    /// identifies the previous revision of the SAME Job On and the "after" the new
+    /// revision (TD-18).
     /// </summary>
     Task SaveRevisionGraphAsync(
         JobOnRevision revision,
         string eventType,
         string actorId,
+        string? beforeSnapshot = null,
+        string? afterSnapshot = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

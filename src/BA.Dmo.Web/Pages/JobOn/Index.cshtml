@@ -28,12 +28,17 @@
 {
     <meta name="jobon-id" content="@Model.JobOnId">
     <meta name="jobon-revision-id" content="@Model.CurrentRevisionId">
+    @* The complete CURRENT revision graph — the edit/save round-trip source. The
+       client overlays edited tool/field values, assigns FRESH ids and submits the
+       whole graph to POST /api/jobon/{id}/revision; only real stored components
+       are submitted (absent tools stay absent — no invented associations). *@
+    <script type="application/json" id="jobon-revision-graph">@Html.Raw(Model.CurrentRevisionGraphJson)</script>
 }
 
 <link rel="stylesheet" href="~/styles/modules/jobon-canonical-design-system.css" asp-append-version="true" />
 <link rel="stylesheet" href="~/styles/modules/jobon-layout.css" asp-append-version="true" />
 
-<div class="jobon-canonical-root" data-initial-view="@initialView">
+<div class="jobon-canonical-root" data-initial-view="@initialView" data-change-reason-required="@Model.ChangeReasonRequired.ToString().ToLowerInvariant()">
     <nav class="module-tabs dmo-secondary-nav" aria-label="Navegação Job On">
         <button class="@(initialView == "planning" ? "active" : "")" data-tab="planning" data-view="planeamento" type="button">Planeamento</button>
         <button class="@(initialView == "sheet" ? "active" : "")" data-tab="sheet" data-view="folha" type="button">Job On</button>
@@ -109,7 +114,7 @@
                     <article class="article-card priority-image"><header><div><strong>Imagem do artigo</strong><span>@Model.ReferenceDisplay · Produção @Model.ProductionDisplay</span></div><span class="status info">Referência</span></header><button class="article-image" id="articleImage" type="button" aria-label="Ampliar imagem do artigo">@if(Model.JobOnId.HasValue){<img id="article-reference-image" src="/api/jobon/@Model.JobOnId.Value/image" alt="Imagem completa do artigo @Model.ReferenceDisplay" hidden>}<span id="article-image-empty">Sem imagem associada</span></button><footer><span>A imagem é apresentada integralmente, sem corte.</span>@if(Model.CanEdit){<label class="button compact edit-only" for="job-image-input">Carregar imagem</label><input id="job-image-input" type="file" accept="image/*" hidden><button class="button compact edit-only" id="remove-image-btn" type="button">Remover</button>}</footer></article>
                 </section>
 
-                <section class="inventory-picker surface edit-only" id="inventoryPicker"><div class="section-heading"><div><h2 id="pickerTitle">Alterar CM associado</h2><p>Escolha outra ferramenta compatível. A associação só muda quando guardar a nova revisão.</p></div></div><div class="picker-filters"><label><span>Referência ou nome técnico</span><input value="@Model.ReferenceDisplay" placeholder="Pesquisar"></label><label><span>Máquina</span><select><option>@Model.MachineDisplay</option></select></label><label><span>Localização</span><select><option>Todas</option></select></label><label><span>Estado</span><select><option>Todos</option></select></label><button class="button ghost" type="button">Limpar</button></div><div class="table-scroll"><table><thead><tr><th>Referência</th><th>Lote</th><th>Nome técnico</th><th>Localização</th><th>Estado</th><th>Utilização</th></tr></thead><tbody><tr><td colspan="6">Catálogo de ferramentas ainda não ligado nesta superfície.</td></tr></tbody></table></div></section>
+                <section class="inventory-picker surface edit-only" id="inventoryPicker"><div class="section-heading"><div><h2 id="pickerTitle">Alterar CM associado</h2><p>Escolha outra ferramenta compatível. A associação só muda quando guardar a nova revisão.</p></div></div><div class="picker-filters"><label><span>Referência ou nome técnico</span><input id="pickerReferenceFilter" value="@Model.ReferenceDisplay" placeholder="Pesquisar"></label><label><span>Máquina</span><select id="pickerMachine"><option>@Model.MachineDisplay</option></select></label><label><span>Localização</span><select><option>Todas</option></select></label><label><span>Estado</span><select><option>Todos</option></select></label><button class="button ghost" id="pickerClear" type="button">Limpar</button></div><div class="table-scroll"><table><thead><tr><th>Referência</th><th>Lote</th><th>Nome técnico</th><th>Localização</th><th>Estado</th><th>Utilização</th></tr></thead><tbody id="pickerOptionsBody"><tr><td colspan="6">Carregue em “Alterar CM/MF/BQ associado” para listar as opções registadas.</td></tr></tbody></table></div><div class="picker-footer"><span id="pickerSelectionCount">Sem opção selecionada.</span><button class="button primary edit-only" id="applyToolSelection" type="button" disabled>Associar selecionado</button></div></section>
 
                 <section class="secondary-grid">
                     <article class="tool-card cal-card"><header><span class="tool-code">CAL</span><span class="status @(cal is null ? "neutral" : "info")">@(cal is null ? "Por preencher" : "Registado")</span></header><div class="table-scroll"><table class="cal-table"><thead><tr><th>Elemento</th><th>Valor</th><th>Qtd.</th></tr></thead><tbody>@if(cal?.Rows is { Count: > 0 }){@foreach(var row in cal.Rows.OrderBy(row => row.DisplayOrder)){<tr><td>@row.ElementLabel</td><td>@(row.ValueText ?? row.ValueDecimal?.ToString("0.##") ?? "") @row.Unit</td><td>@(row.MachineQuantity?.ToString("0.##") ?? "")</td></tr>}}else{<tr><td colspan="3">Sem calibres registados.</td></tr>}</tbody></table></div></article>
@@ -182,6 +187,32 @@
                 <div class="dialog-actions">
                     <button class="button ghost" type="button" id="alterDatesCancel">Cancelar</button>
                     <button class="button primary" type="submit" id="alterDatesSubmit">Guardar nova data</button>
+                </div>
+            </form>
+        </dialog>
+    }
+
+    @* Real edit-save flow: the sheet "Guardar nova revisão" button opens this
+       dialog and submits ONLY revision-owned values (general notes from the sheet
+       + the complete edited component graph). The service creates a NEW immutable
+       revision of the SAME Job On — never a new Job On — preserving the header
+       context and every unchanged value; the previous revision is never modified.
+       The same folha reopens via /jobon?id={sameJobOnId} with the new revision.
+       The change reason is REQUIRED server-side when the production is fechado
+       (modules/05 §4/§5.4) — the field is never the only guard. *@
+    @if (Model.CanEdit && Model.JobOnId.HasValue)
+    {
+        <dialog class="document-dialog job-create-dialog" id="saveRevisionDialog" aria-labelledby="saveRevisionTitle">
+            <h2 id="saveRevisionTitle">Guardar nova revisão</h2>
+            <p>Nova revisão de @Model.ProductionDisplay · @Model.ReferenceDisplay com os valores editados. As revisões anteriores nunca são alteradas.</p>
+            <form id="saveRevisionForm" novalidate>
+                <div class="create-fields">
+                    <label class="full"><span>Motivo da revisão (obrigatório se a produção está fechada)</span><input name="changeReason" type="text"></label>
+                </div>
+                <p class="create-error" id="saveRevisionError" role="alert"></p>
+                <div class="dialog-actions">
+                    <button class="button ghost" type="button" id="saveRevisionCancel">Cancelar</button>
+                    <button class="button primary" type="submit" id="saveRevisionSubmit">Guardar nova revisão</button>
                 </div>
             </form>
         </dialog>

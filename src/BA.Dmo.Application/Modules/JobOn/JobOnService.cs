@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BA.Dmo.Application.Modules.Ferramentas;
 using BA.Dmo.Domain.Modules.JobOn;
 using BA.Dmo.Domain.Shared.Access;
 using BA.Dmo.Domain.Shared.Kernel;
@@ -85,6 +86,7 @@ public sealed class JobOnService
     private readonly IJobOnRepository _repository;
     private readonly IJobOnUserContextRepository _userContextRepository;
     private readonly IClock _clock;
+    private readonly IFerramentasIdentityLookup _toolLookup;
     private readonly IArticleReferenceImageRepository? _articleImages;
 
     public JobOnService(
@@ -92,6 +94,7 @@ public sealed class JobOnService
         IJobOnRepository repository,
         IJobOnUserContextRepository userContextRepository,
         IClock clock,
+        IFerramentasIdentityLookup toolLookup,
         IArticleReferenceImageRepository? articleImages = null)
     {
         _gate = gate ?? throw new ArgumentNullException(nameof(gate));
@@ -99,6 +102,7 @@ public sealed class JobOnService
         _userContextRepository = userContextRepository
             ?? throw new ArgumentNullException(nameof(userContextRepository));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _toolLookup = toolLookup ?? throw new ArgumentNullException(nameof(toolLookup));
         _articleImages = articleImages;
     }
 
@@ -263,12 +267,27 @@ public sealed class JobOnService
                 "JOBON_CHANGE_REASON_REQUIRED",
                 "Alterar uma revisão fechada exige um motivo (change_reason)."));
 
+        // Identity-tuple enforcement (TD-18 + Manual 10 §4): a CM/MF/BQ
+        // association must point at a REAL registered tool lot (N04) of the
+        // matching type, registered for this Job On's machine/line, with
+        // snapshots that agree with the register. Invalid/nonexistent
+        // combinations are rejected BEFORE any write — a revision can never
+        // persist an invented tool. Read-only: nothing is created in
+        // Ferramentas or Armazém.
+        var toolError = await ValidateToolAssociationsAsync(jobOn, request.Components, cancellationToken);
+        if (toolError is not null)
+            return Result<Guid, DomainError>.Failure(toolError);
+
         // Complete immutable snapshot (JOB_ON_DATA_MODEL §1/§2, TD-18). The
         // production/machine/dates/reference come from the already-loaded Job On
         // header/context; revision-owned typed values (type/stop/weight/process)
         // come from the already-loaded current revision only — never invented, and
         // preserved as null when genuinely absent (owner D2 decision).
         var currentRevision = jobOn.CurrentRevision;
+
+        // Audit "before": the previous revision of the SAME Job On (the state the
+        // edit started from). Writes never touch that revision.
+        var beforeSnapshot = SaveAuditSnapshot(jobOn.CurrentRevisionId);
 
         var revision = new JobOnRevision
         {
@@ -295,13 +314,141 @@ public sealed class JobOnService
             Components = request.Components
         };
 
+        // Audit "after": the new revision id.
+        var afterSnapshot = SaveAuditSnapshot(revision.JobOnRevisionId);
+
         // The complete graph (revision + components + fields + CAL rows + verifications) +
         // the current_revision_id advance + the audit event commit atomically in ONE
         // transaction — a current revision can never become partially persisted.
         await _repository.SaveRevisionGraphAsync(
-            revision, "jobon.guardar", gate.Value.ActorId, cancellationToken);
+            revision,
+            "jobon.guardar",
+            gate.Value.ActorId,
+            beforeSnapshot: beforeSnapshot,
+            afterSnapshot: afterSnapshot,
+            cancellationToken: cancellationToken);
 
         return Result<Guid, DomainError>.Success(revision.JobOnRevisionId);
+    }
+
+    /// <summary>
+    /// "Alterar CM/MF/BQ associado" — read-only tool selection options (Manual 10
+    /// §4/§8). Lists ONLY real registered tool lots (N04 <c>tool_references</c> /
+    /// <c>tool_lotes</c>) of the requested type whose registered
+    /// <c>allowed_lines</c> include this Job On's machine/line — the identity
+    /// tuple (tipo, referência, lote, máquina/linha) is enforced at the source:
+    /// combinations that do not exist in the register are never presented. CM,
+    /// MF and BQ are distinct types and are never merged. Job On does not own
+    /// these tools: this use case reads the Ferramentas register and writes
+    /// nothing (no Ferramentas/Armazém record is created).
+    /// </summary>
+    public async Task<Result<JobOnToolSelection, DomainError>> GetToolSelectionOptionsAsync(
+        Guid jobOnId,
+        string family,
+        string? reference,
+        string? lot,
+        CancellationToken cancellationToken = default)
+    {
+        var gate = _gate.Require(JobonModuleCatalog.JobonEditCapabilityId);
+        if (gate.IsFailure)
+            return Result<JobOnToolSelection, DomainError>.Failure(gate.Error);
+
+        if (!JobOnToolSelectionFamilies.TryParse(family, out var componentFamily, out var toolType))
+            return Result<JobOnToolSelection, DomainError>.Failure(DomainError.Validation(
+                "JOBON_TOOL_FAMILY_INVALID",
+                "Família inválida para seleção de ferramenta (use CM, MF ou BQ)."));
+
+        var jobOn = await _repository.GetByIdAsync(jobOnId, cancellationToken);
+        if (jobOn is null)
+            return Result<JobOnToolSelection, DomainError>.Failure(DomainError.NotFound(
+                "JOBON_NOT_FOUND", "Job On não encontrado."));
+
+        // The machine/line dimension of the identity tuple is the Job On's own
+        // line: only lots registered for this line are valid combinations here.
+        var options = await _toolLookup.SearchToolLoteOptionsAsync(
+            toolType, reference, lot, jobOn.MachineCode, cancellationToken);
+
+        var items = options
+            .Where(o => o.AllowedLines.Contains(jobOn.MachineCode, StringComparer.Ordinal))
+            .Select(o => new JobOnToolSelectionOption(
+                o.ToolReferenceId,
+                o.ToolLoteId,
+                o.Type.ToString(),
+                o.Reference,
+                o.Lot,
+                o.TechnicalName,
+                o.AllowedLines))
+            .ToList()
+            .AsReadOnly();
+
+        return Result<JobOnToolSelection, DomainError>.Success(new JobOnToolSelection(
+            jobOn.Id,
+            jobOn.MachineCode,
+            JobOnToolSelectionFamilies.CardCode(componentFamily) ?? family.Trim().ToUpperInvariant(),
+            items));
+    }
+
+    /// <summary>
+    /// Save-time validation of CM/MF/BQ tool associations (identity tuple):
+    /// a component with a physical link (source tool/lot ids) must resolve to a
+    /// REAL registered lot of the matching type, registered for the Job On's
+    /// machine/line, with reference/lot snapshots that agree with the register.
+    /// Components without a link (snapshot-only, e.g. legacy manual values or
+    /// PU/CS production configuration) are not register-backed and pass through.
+    /// </summary>
+    private async Task<DomainError?> ValidateToolAssociationsAsync(
+        JobOnEntity jobOn,
+        IReadOnlyList<JobOnComponent> components,
+        CancellationToken cancellationToken)
+    {
+        foreach (var component in components)
+        {
+            if (!JobOnToolSelectionFamilies.TryGetToolType(component.Family, out var expectedType))
+                continue;
+
+            if (component.SourceToolId is null && component.SourceLotId is null)
+                continue; // no physical link — snapshot-only component
+
+            if (component.SourceToolId is null || component.SourceLotId is null)
+                return DomainError.Validation(
+                    "JOBON_TOOL_LINK_INCOMPLETE",
+                    "A associação de ferramenta exige a referência e o lote registados.");
+
+            var option = await _toolLookup.ResolveToolLoteOptionAsync(
+                component.SourceLotId.Value, cancellationToken);
+            if (option is null)
+                return DomainError.Validation(
+                    "JOBON_TOOL_NOT_FOUND",
+                    "O lote de ferramenta selecionado não existe no registo de Ferramentas.");
+
+            if (option.ToolReferenceId != component.SourceToolId.Value)
+                return DomainError.Validation(
+                    "JOBON_TOOL_LINK_MISMATCH",
+                    "A referência e o lote selecionados não formam uma combinação registada.");
+
+            if (option.Type != expectedType)
+                return DomainError.Validation(
+                    "JOBON_TOOL_TYPE_MISMATCH",
+                    "O tipo da ferramenta não corresponde à família selecionada (CM, MF e BQ são ferramentas distintas).");
+
+            if (!option.AllowedLines.Contains(jobOn.MachineCode, StringComparer.Ordinal))
+                return DomainError.Validation(
+                    "JOBON_TOOL_LINE_NOT_ALLOWED",
+                    "O lote selecionado não está registado para a máquina/linha deste Job On.");
+
+            if (!string.IsNullOrWhiteSpace(component.ReferenceSnapshot)
+                && !string.Equals(component.ReferenceSnapshot, option.Reference, StringComparison.Ordinal))
+                return DomainError.Validation(
+                    "JOBON_TOOL_SNAPSHOT_MISMATCH",
+                    "A referência selecionada não corresponde ao registo real da ferramenta.");
+
+            if (!string.IsNullOrWhiteSpace(component.LotSnapshot)
+                && !string.Equals(component.LotSnapshot, option.Lot, StringComparison.Ordinal))
+                return DomainError.Validation(
+                    "JOBON_TOOL_SNAPSHOT_MISMATCH",
+                    "O lote selecionado não corresponde ao registo real da ferramenta.");
+        }
+        return null;
     }
 
     /// <summary>
@@ -826,6 +973,15 @@ public sealed class JobOnService
 
         return (revision, components);
     }
+
+    /// <summary>
+    /// Builds the canonical audit payload for a revision save
+    /// (<c>{ revision_id }</c>): the "before" identifies the previous revision of
+    /// the SAME Job On, the "after" the new revision (same shape the date-change
+    /// flow uses; the header dates are unchanged by an edit-save).
+    /// </summary>
+    private static string SaveAuditSnapshot(Guid? revisionId) =>
+        JsonSerializer.Serialize(new { revision_id = revisionId });
 
     /// <summary>
     /// Builds the canonical audit payload for a date change

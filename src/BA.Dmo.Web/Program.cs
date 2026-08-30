@@ -356,6 +356,71 @@ app.MapPost("/api/jobon/{jobOnId:guid}/date", async (
     return Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(CapabilityPolicies.JobonEdit);
 
+// "Guardar nova revisão" — save an EDITED revision of an EXISTING Job On (TD-18).
+// SAVE IS A WRITE: the route-level capability policy requires jobon.edit and the
+// service gate re-checks the canonical capability server-side (fail closed), so an
+// Operator/Controller with only jobon.view is denied regardless of UI visibility.
+// The body carries ONLY revision-owned values (general notes + the complete edited
+// component graph: components, fields, CAL rows, verifications); header-owned data
+// (dates, production identity, machine/line) is neither accepted nor rewritten —
+// dates keep their dedicated "Alterar data" flow. The service creates a NEW
+// immutable revision of the SAME job_on_id (next revision number, header context
+// and unchanged revision values preserved), advances current_revision_id, and
+// records the audit event — all atomically; the previous revision is never
+// modified. On success the client reopens the SAME Folha Job On via
+// /jobon?id={jobOnId} rendering the new current revision.
+app.MapPost("/api/jobon/{jobOnId:guid}/revision", async (
+    Guid jobOnId,
+    SaveJobOnRevisionRequest request,
+    JobOnService service,
+    CancellationToken cancellationToken) =>
+{
+    var result = await service.SaveRevisionAsync(
+        request with { JobOnId = jobOnId }, cancellationToken);
+    if (result.IsSuccess)
+        return Results.Ok(new { jobOnId, revisionId = result.Value });
+    if (result.Error.Category == ErrorCategory.Forbidden)
+        return Results.Forbid();
+    if (result.Error.Category == ErrorCategory.NotFound)
+        return Results.NotFound(new { code = result.Error.Code, message = result.Error.Message });
+    return Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+}).RequireAuthorization(CapabilityPolicies.JobonEdit);
+
+// "Alterar CM/MF/BQ associado" — tool selection options (Manual 10 §4/§8).
+// READ-ONLY over the Ferramentas register: lists ONLY real registered tool
+// lots (N04) of the requested type (CM/MF/BQ are distinct, never merged)
+// whose registered allowed_lines include this Job On's machine/line — the
+// identity tuple (tipo, referência, lote, máquina/linha) is enforced at the
+// source, so the picker can never present or persist an invented combination.
+// No Ferramentas/Armazém record is read or written except the register read.
+// The picker is an edit surface: the route policy requires jobon.edit and the
+// service gate re-checks it server-side (fail closed), so an operator with
+// only jobon.view is denied regardless of UI visibility.
+app.MapGet("/api/jobon/{jobOnId:guid}/tool-options", async (
+    Guid jobOnId,
+    string family,
+    string? reference,
+    string? lot,
+    JobOnService service,
+    CancellationToken cancellationToken) =>
+{
+    var result = await service.GetToolSelectionOptionsAsync(
+        jobOnId, family, reference, lot, cancellationToken);
+    if (result.IsSuccess)
+        return Results.Ok(new
+        {
+            jobOnId,
+            machine = result.Value.Machine,
+            family = result.Value.Family,
+            items = result.Value.Items
+        });
+    if (result.Error.Category == ErrorCategory.Forbidden)
+        return Results.Forbid();
+    if (result.Error.Category == ErrorCategory.NotFound)
+        return Results.NotFound(new { code = result.Error.Code, message = result.Error.Message });
+    return Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+}).RequireAuthorization(CapabilityPolicies.JobonEdit);
+
 // Job On image API endpoints: attach/replace/remove the master association
 // owned by the current Article/Reference. These actions never create or change
 // a Job On revision. The binary remains in the configured company image

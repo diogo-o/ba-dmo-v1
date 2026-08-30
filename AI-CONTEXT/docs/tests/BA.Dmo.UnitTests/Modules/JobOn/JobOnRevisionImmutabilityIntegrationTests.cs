@@ -43,7 +43,7 @@ public class JobOnRevisionImmutabilityIntegrationTests
     public JobOnRevisionImmutabilityIntegrationTests()
     {
         var jobOnGate = new JobOnAuthorizationGate(new JobOnActor());
-        _jobOnService = new JobOnService(jobOnGate, _jobOns, new FakeJobOnUserContextRepository(), new TestClock(Now));
+        _jobOnService = new JobOnService(jobOnGate, _jobOns, new FakeJobOnUserContextRepository(), new TestClock(Now), new FakeFerramentasToolLookup());
 
         var pesoGate = new PesoAuthorizationGate(new PesoOperador());
         _pesoService = new PesoService(pesoGate, _peso, _jobOns, new TestClock(Now));

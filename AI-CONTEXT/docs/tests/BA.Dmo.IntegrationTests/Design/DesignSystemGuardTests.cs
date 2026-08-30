@@ -550,7 +550,7 @@ public class DesignSystemGuardTests : IClassFixture<DesignSystemGuardTests.Desig
         public Task InsertImageMutationAsync(JobOnRevision newRevision, Guid jobOnId, string eventType, string? beforeImageAssetId, string? afterImageAssetId, string actorId, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
 
-        public Task SaveRevisionGraphAsync(JobOnRevision revision, string eventType, string actorId, CancellationToken cancellationToken = default) =>
+        public Task SaveRevisionGraphAsync(JobOnRevision revision, string eventType, string actorId, string? beforeSnapshot = null, string? afterSnapshot = null, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
 
         public Task AlterDatesAtomicallyAsync(Guid jobOnId, DateTimeOffset? plannedStartAt, DateTimeOffset? plannedEndAt, JobOnRevision newRevision, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken cancellationToken = default) =>

@@ -589,7 +589,7 @@ public class ShellRoutingTests : IClassFixture<ShellRoutingTests.ShellFixture>
             public Task<IReadOnlyList<HistoricalProductionSummary>> GetHistoricalProductionsAsync(string? referenceFilter, string? machineFilter, DateTime? from, DateTime? to, CancellationToken cancellationToken = default) =>
                 Task.FromResult<IReadOnlyList<HistoricalProductionSummary>>(Array.Empty<HistoricalProductionSummary>());
 
-            public Task SaveRevisionGraphAsync(JobOnRevision revision, string eventType, string actorId, CancellationToken cancellationToken = default) =>
+            public Task SaveRevisionGraphAsync(JobOnRevision revision, string eventType, string actorId, string? beforeSnapshot = null, string? afterSnapshot = null, CancellationToken cancellationToken = default) =>
                 Task.CompletedTask;
 
             public Task AlterDatesAtomicallyAsync(Guid jobOnId, DateTimeOffset? plannedStartAt, DateTimeOffset? plannedEndAt, JobOnRevision newRevision, string eventType, string? beforeSnapshot, string? afterSnapshot, string actorId, CancellationToken cancellationToken = default) =>

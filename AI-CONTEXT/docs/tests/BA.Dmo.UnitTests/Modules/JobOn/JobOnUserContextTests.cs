@@ -29,7 +29,8 @@ public class JobOnUserContextTests
         var gate = new JobOnAuthorizationGate(_identity);
         _service = new JobOnService(
             gate, _repository, _userContext, new LocalFixedClock(
-                new DateTimeOffset(2026, 8, 17, 18, 0, 0, TimeSpan.Zero)));
+                new DateTimeOffset(2026, 8, 17, 18, 0, 0, TimeSpan.Zero)),
+            new FakeFerramentasToolLookup());
     }
 
     private JobOnEntity CreateJobOn(string production = "202601", string machine = "B1")

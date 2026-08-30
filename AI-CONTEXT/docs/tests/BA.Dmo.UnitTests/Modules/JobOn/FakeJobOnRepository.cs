@@ -44,6 +44,9 @@ public sealed class FakeJobOnRepository : IJobOnRepository
     /// <summary>When true, the atomic alter-date throws a raw persistence failure (no-partial-write test).</summary>
     public bool FailAlterDatesAtomically { get; set; }
 
+    /// <summary>When true, the atomic save-revision throws a raw persistence failure (no-partial-write test).</summary>
+    public bool FailSaveRevisionGraph { get; set; }
+
     public Task<Guid> CreateAsync(JobOnEntity jobOn, CancellationToken cancellationToken = default)
     {
         if (FailIdentityDuplicate)
@@ -209,14 +212,19 @@ public sealed class FakeJobOnRepository : IJobOnRepository
         JobOnRevision revision,
         string eventType,
         string actorId,
+        string? beforeSnapshot = null,
+        string? afterSnapshot = null,
         CancellationToken cancellationToken = default)
     {
+        if (FailSaveRevisionGraph)
+            throw new InvalidOperationException("persistence unavailable");
+
         Revisions.Add(revision);
         PersistRevisionGraph(revision);
         CurrentRevisionUpdates.Add((revision.JobOnId, revision.JobOnRevisionId));
         // Mirror the real repository (current_revision_id advances atomically).
         if (JobOns.TryGetValue(revision.JobOnId, out var jobOn)) jobOn.SaveRevision(revision);
-        AuditEvents.Add((revision.JobOnId, revision.JobOnRevisionId, eventType, null, null, actorId));
+        AuditEvents.Add((revision.JobOnId, revision.JobOnRevisionId, eventType, beforeSnapshot, afterSnapshot, actorId));
         return Task.CompletedTask;
     }
 

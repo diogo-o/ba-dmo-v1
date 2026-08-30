@@ -251,13 +251,513 @@
     const label = $("#modeIndicator strong");
     if (label) label.textContent = mode === "edit" ? "Modo edição" : "Modo consulta";
   };
-  $("#editSheet")?.addEventListener("click", () => setMode("edit"));
-  $("#saveSheet")?.addEventListener("click", () => setMode("view"));
-  $("#cancelEdit")?.addEventListener("click", () => setMode("view"));
-  $$(".tool-change").forEach(button => button.addEventListener("click", () => {
+
+  // =============================================================
+  // REAL EDIT / SAVE-NEW-REVISION / CANCEL FLOW.
+  //
+  // "Editar folha" enters edit mode (the existing design enables the editable
+  // controls). "Guardar nova revisão" submits ONLY revision-owned values — the
+  // general notes from the sheet and the complete edited component graph — to
+  // POST /api/jobon/{id}/revision. Header-owned data (dates, production
+  // identity, machine/line) is NEVER part of this payload: dates keep the
+  // dedicated "Alterar data" flow and production/machine are not rewritten.
+  //
+  // The component graph starts from the CURRENT revision (embedded in
+  // #jobon-revision-graph): every component, field, CAL row and verification is
+  // copied under FRESH ids (R-002 — the repository re-pins children to the new
+  // revision id), so the previous revision can never collide or be mutated.
+  // Verification occurrences are copied WITH their current state — the same
+  // production-occurrence rule the date-change flow documents (confirmed checks
+  // are never silently reset; old-revision rows are never touched).
+  //
+  // "Cancelar edição" is a pure client-side reset: it discards the unsaved DOM
+  // edits and performs ZERO writes (no fetch, no endpoint).
+  // =============================================================
+  const revisionGraphScript = $("#jobon-revision-graph");
+  let revisionGraph = [];
+  if (revisionGraphScript && revisionGraphScript.textContent) {
+    try { revisionGraph = JSON.parse(revisionGraphScript.textContent); } catch { revisionGraph = []; }
+  }
+  const saveRevisionDialog = $("#saveRevisionDialog");
+  const saveRevisionForm = $("#saveRevisionForm");
+  const saveRevisionCancel = $("#saveRevisionCancel");
+  const jobOnIdForSave = $("meta[name='jobon-id']")?.getAttribute("content");
+  const changeReasonRequired = root?.dataset.changeReasonRequired === "true";
+  const initialGeneralNotes = $(".general-notes textarea")?.value ?? null;
+
+  // uuid v4 fallback for browsers without crypto.randomUUID.
+  function uuid() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, character => {
+      const random = Math.floor(Math.random() * 16);
+      const value = character === "x" ? random : (random & 0x3) | 0x8;
+      return value.toString(16);
+    });
+  }
+
+  // Family enum value (MP_CM) → tool-card data-family code (CM). CAL has no
+  // editable tool card in the sheet (rows are read-only), so it is excluded.
+  const familyToCardCode = {
+    MP_CM: "CM", MF: "MF", BQ: "BQ", PU: "PU", AN: "AN", ARR: "ARR",
+    PI: "PI", CS: "CS", TP: "TP", FO: "FO"
+  };
+
+  function parsePtDate(value) {
+    const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(value || "").trim());
+    if (!match) return null;
+    return `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}T00:00:00`;
+  }
+
+  function formatDateInput(iso) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+    if (!match) return "";
+    return `${match[3]}/${match[2]}/${match[1]}`;
+  }
+
+  // Applies a DOM input value onto a typed field record (the only revision-owned
+  // value the tool cards edit). Empty input → null (never an invented value).
+  function applyFieldValue(field, raw) {
+    const value = String(raw ?? "").trim();
+    const cleared = {
+      valueText: null, valueInteger: null, valueDecimal: null,
+      valueBoolean: null, valueDate: null
+    };
+    switch (field.valueType) {
+      case "integer":
+        return { ...field, ...cleared, valueInteger: value === "" ? null : parseInt(value, 10) };
+      case "decimal":
+        return { ...field, ...cleared, valueDecimal: value === "" ? null : parseFloat(value.replace(",", ".")) };
+      case "boolean":
+        return { ...field, ...cleared, valueBoolean: value === "" ? null : value === "Sim" };
+      case "date":
+        return { ...field, ...cleared, valueDate: value === "" ? null : parsePtDate(value) };
+      default:
+        return { ...field, ...cleared, valueText: value };
+    }
+  }
+
+  // Reads the edited DOM value of a tool card (by family) and overlays it onto
+  // the component loaded from the current revision graph. Absent cards or
+  // missing inputs carry the stored values forward unchanged.
+  function overlayEditedComponent(component) {
+    const cardCode = familyToCardCode[component.family];
+    const card = cardCode ? document.querySelector(`.tool-card[data-family="${cardCode}"]`) : null;
+    if (!card) return component;
+
+    const refInput = card.querySelector('input[aria-label^="Referência"]');
+    const lotInput = card.querySelector('input[aria-label^="Lote"]');
+    const notes = card.querySelector("textarea");
+
+    const fields = (component.fields || []).map(field => ({ ...field }));
+    if (fields.length > 0) {
+      const fieldInputs = [...(card.querySelectorAll(".tool-fields input") || [])]
+        .filter(input => input !== refInput && input !== lotInput);
+      fields.forEach((field, index) => {
+        const input = fieldInputs[index];
+        if (input) Object.assign(field, applyFieldValue(field, input.value));
+      });
+    }
+
+    return {
+      ...component,
+      referenceSnapshot: refInput ? refInput.value : component.referenceSnapshot,
+      lotSnapshot: lotInput ? lotInput.value : component.lotSnapshot,
+      notes: notes ? notes.value : component.notes,
+      fields
+    };
+  }
+
+  // Builds the new-revision graph: the current revision's components with the
+  // edited values, every row regenerated under FRESH ids (R-002). Verification
+  // occurrences are copied WITH their current state — same production; the
+  // previous revision's rows are never touched.
+  //
+  // Staged picker selections ("Alterar CM/MF/BQ associado") are merged LAST:
+  // the physical source links (sourceToolId/sourceLotId) + the reference/lot
+  // snapshots come from the SELECTED REGISTERED tool lot, so the saved
+  // association is always a real existing (tipo, referência, lote,
+  // máquina/linha) combination — the server re-validates it. A family with no
+  // stored component gains its association only through an explicit selection
+  // (absent tools stay absent — no invented associations).
+  function buildEditedComponentsGraph() {
+    const source = Array.isArray(revisionGraph) ? revisionGraph : [];
+    const graph = source.map(component => {
+      const edited = overlayEditedComponent(component);
+      const componentId = uuid();
+      return {
+        ...edited,
+        jobOnComponentId: componentId,
+        fields: (edited.fields || []).map(field => ({
+          ...field,
+          jobOnComponentFieldId: uuid(),
+          jobOnComponentId: componentId
+        })),
+        rows: (edited.rows || []).map(row => ({
+          ...row,
+          jobOnComponentRowId: uuid(),
+          jobOnComponentId: componentId
+        })),
+        verifications: (edited.verifications || []).map(verification => ({
+          ...verification,
+          jobOnVerificationOccurrenceId: uuid(),
+          jobOnComponentId: componentId,
+          completionSource: verification.completionSource || "manual_job_on"
+        }))
+      };
+    });
+
+    Object.entries(toolSelections).forEach(([cardCode, selection]) => {
+      const family = cardCodeToFamily[cardCode];
+      if (!family) return;
+      const staged = {
+        sourceToolId: selection.referenceId,
+        sourceLotId: selection.loteId,
+        referenceSnapshot: selection.reference,
+        lotSnapshot: selection.lot,
+        technicalNameSnapshot: selection.technicalName ?? null
+      };
+      const index = graph.findIndex(component => component.family === family);
+      if (index >= 0) {
+        graph[index] = { ...graph[index], ...staged };
+      } else {
+        graph.push({
+          jobOnComponentId: uuid(),
+          jobOnRevisionId: null,
+          family,
+          ...staged,
+          plannedQuantity: null,
+          stockSnapshot: null,
+          usageSnapshot: null,
+          notes: null,
+          displayOrder: 0,
+          fields: [],
+          rows: [],
+          verifications: []
+        });
+      }
+    });
+
+    return graph;
+  }
+
+  // Restores the ORIGINAL values (from the embedded graph) into the tool cards
+  // and the notes textarea — the cancel-edit reset. Pure DOM, zero writes.
+  function restoreOriginalValues() {
+    resetPickerState(); // discards any staged (unsaved) tool selection
+    const notes = $(".general-notes textarea");
+    if (notes && initialGeneralNotes !== null) notes.value = initialGeneralNotes;
+    (Array.isArray(revisionGraph) ? revisionGraph : []).forEach(component => {
+      const cardCode = familyToCardCode[component.family];
+      const card = cardCode ? document.querySelector(`.tool-card[data-family="${cardCode}"]`) : null;
+      if (!card) return;
+      const refInput = card.querySelector('input[aria-label^="Referência"]');
+      const lotInput = card.querySelector('input[aria-label^="Lote"]');
+      const notesInput = card.querySelector("textarea");
+      if (refInput) refInput.value = component.referenceSnapshot ?? "";
+      if (lotInput) lotInput.value = component.lotSnapshot ?? "";
+      if (notesInput) notesInput.value = component.notes ?? "";
+      const fieldInputs = [...(card.querySelectorAll(".tool-fields input") || [])]
+        .filter(input => input !== refInput && input !== lotInput);
+      (component.fields || []).forEach((field, index) => {
+        const input = fieldInputs[index];
+        if (!input) return;
+        switch (field.valueType) {
+          case "integer": input.value = field.valueInteger == null ? "" : String(field.valueInteger); break;
+          case "decimal": input.value = field.valueDecimal == null ? "" : String(field.valueDecimal); break;
+          case "boolean": input.value = field.valueBoolean == null ? "" : (field.valueBoolean ? "Sim" : "Não"); break;
+          case "date": input.value = field.valueDate ? formatDateInput(field.valueDate) : ""; break;
+          default: input.value = field.valueText ?? "";
+        }
+      });
+    });
+  }
+
+  // =============================================================
+  // REAL TOOL-SELECTION PICKER — "Alterar CM/MF/BQ associado" (Manual 10 §4/§8).
+  //
+  // A tool selection is identified by the tuple (tipo, referência, lote,
+  // máquina/linha). CM, MF and BQ are DISTINCT tools: the same reference code
+  // registered under another type — or for another machine/line — is a
+  // different tool and never merges. The option list comes ONLY from the
+  // Ferramentas register (GET /api/jobon/{id}/tool-options): real existing
+  // (referência, lote) combinations registered for THIS Job On's machine/line.
+  // The server rejects any persisted combination that does not exist in the
+  // register — no invented tools; no Ferramentas/Armazém record is created.
+  //
+  // Flow: "Alterar X" loads the options for X → the Responsável filters by
+  // reference and selects one row → "Associar selecionado" applies it to the
+  // editable revision (tool card values + physical source links) → the
+  // association only becomes real when "Guardar nova revisão" saves the NEW
+  // immutable revision (the previous revision is never touched). PU is Job On
+  // production-specific manual configuration (Manual 10 §6.1) and has no
+  // register-backed selection.
+  // =============================================================
+  const toolSelections = {}; // card code (CM/MF/BQ) → staged selected option
+  let pickerFamily = null;   // card code currently loaded in the picker
+  let selectedOption = null; // the row selected in the current picker list
+
+  const cardCodeToFamily = { CM: "MP_CM", MF: "MF", BQ: "BQ" };
+  const pickerBody = $("#pickerOptionsBody");
+  const pickerSelectionCount = $("#pickerSelectionCount");
+  const applyToolSelectionButton = $("#applyToolSelection");
+  const pickerReferenceFilter = $("#pickerReferenceFilter");
+  const initialPickerReference = pickerReferenceFilter?.value ?? "";
+  const PICKER_EMPTY_MESSAGE =
+    "Carregue em “Alterar CM/MF/BQ associado” para listar as opções registadas.";
+
+  function pickerMessage(text) {
+    if (!pickerBody) return;
+    pickerBody.textContent = "";
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 6;
+    cell.textContent = text;
+    row.appendChild(cell);
+    pickerBody.appendChild(row);
+  }
+
+  function clearPickerSelection() {
+    $$(".picker-row", pickerBody).forEach(row => {
+      row.classList.remove("selected");
+      row.setAttribute("aria-selected", "false");
+    });
+    selectedOption = null;
+    if (applyToolSelectionButton) applyToolSelectionButton.disabled = true;
+    if (pickerSelectionCount) pickerSelectionCount.textContent = "Sem opção selecionada.";
+  }
+
+  async function loadPickerOptions() {
+    if (!pickerFamily || !jobOnIdForSave) {
+      pickerMessage(PICKER_EMPTY_MESSAGE);
+      return;
+    }
+    clearPickerSelection();
+    if (!cardCodeToFamily[pickerFamily]) {
+      // PU/CS & co. are manual production configuration — no tool register.
+      pickerMessage(`${pickerFamily} é configuração manual de produção — sem registo de ferramentas neste catálogo.`);
+      return;
+    }
+    pickerMessage("A carregar opções registadas…");
+    const reference = (pickerReferenceFilter?.value || "").trim();
+    const query = new URLSearchParams({ family: pickerFamily });
+    if (reference) query.set("reference", reference);
+    try {
+      const response = await fetch(
+        `/api/jobon/${encodeURIComponent(jobOnIdForSave)}/tool-options?${query.toString()}`,
+        { credentials: "same-origin" });
+      // An edit-capability denial surfaces as a redirect to /access-denied
+      // (GET semantics) — treat it as a denial, never as data.
+      if (response.redirected) throw new Error("Sem permissão para selecionar ferramentas.");
+      let body = null;
+      try { body = await response.json(); } catch { /* non-JSON body */ }
+      if (!response.ok) throw new Error(body?.message || "Não foi possível carregar as opções de ferramenta.");
+      renderPickerOptions(body);
+    } catch (error) {
+      pickerMessage(error?.message || "Não foi possível carregar as opções de ferramenta.");
+    }
+  }
+
+  function renderPickerOptions(data) {
+    clearPickerSelection();
+    const items = Array.isArray(data?.items) ? data.items : [];
+    if (items.length === 0) {
+      pickerMessage("Sem lotes registados para esta família, referência e máquina/linha.");
+      return;
+    }
+    pickerBody.textContent = "";
+    items.forEach(option => {
+      const row = document.createElement("tr");
+      row.className = "picker-row";
+      row.dataset.referenceId = option.referenceId;
+      row.dataset.loteId = option.loteId;
+      row.dataset.reference = option.reference;
+      row.dataset.lot = option.lot;
+      row.dataset.technicalName = option.technicalName || "";
+      row.setAttribute("aria-selected", "false");
+
+      const refCell = document.createElement("td");
+      const strong = document.createElement("strong");
+      strong.textContent = option.reference;
+      refCell.appendChild(strong);
+      const lotCell = document.createElement("td");
+      lotCell.textContent = option.lot;
+      if (Array.isArray(option.allowedLines) && option.allowedLines.length > 0) {
+        const lines = document.createElement("small");
+        lines.textContent = option.allowedLines.join(" · ");
+        lotCell.appendChild(document.createElement("br"));
+        lotCell.appendChild(lines);
+      }
+      const techCell = document.createElement("td");
+      techCell.textContent = option.technicalName || "";
+
+      row.append(refCell, lotCell, techCell);
+      // Localização/Estado/Utilização stay blank: the picker lists registered
+      // tool-lot identity only (no Armazém/estado real data is presented).
+      row.append(document.createElement("td"), document.createElement("td"), document.createElement("td"));
+
+      row.addEventListener("click", () => selectPickerOption(row));
+      pickerBody.appendChild(row);
+    });
+  }
+
+  function selectPickerOption(row) {
+    $$(".picker-row", pickerBody).forEach(r => {
+      r.classList.remove("selected");
+      r.setAttribute("aria-selected", "false");
+    });
+    row.classList.add("selected");
+    row.setAttribute("aria-selected", "true");
+    selectedOption = {
+      family: pickerFamily,
+      referenceId: row.dataset.referenceId,
+      loteId: row.dataset.loteId,
+      reference: row.dataset.reference,
+      lot: row.dataset.lot,
+      technicalName: row.dataset.technicalName || null
+    };
+    if (applyToolSelectionButton) applyToolSelectionButton.disabled = false;
+    if (pickerSelectionCount) {
+      pickerSelectionCount.textContent =
+        `Selecionado: ${pickerFamily} ${selectedOption.reference} · Lote ${selectedOption.lot}`;
+    }
+  }
+
+  function applySelectedTool() {
+    if (!selectedOption) return;
+    const family = selectedOption.family;
+    toolSelections[family] = selectedOption;
+    const card = document.querySelector(`.tool-card[data-family="${family}"]`);
+    if (card) {
+      const refInput = card.querySelector('input[aria-label^="Referência"]');
+      const lotInput = card.querySelector('input[aria-label^="Lote"]');
+      if (refInput) refInput.value = selectedOption.reference;
+      if (lotInput) lotInput.value = selectedOption.lot;
+    }
+    if (pickerSelectionCount) {
+      pickerSelectionCount.textContent =
+        `Aplicado: ${family} ${selectedOption.reference} · Lote ${selectedOption.lot}. Use “Guardar nova revisão” para persistir a associação.`;
+    }
+    if (applyToolSelectionButton) applyToolSelectionButton.disabled = true;
+  }
+
+  // Manual edits of the reference/lot of a CM/MF/BQ card replace the staged
+  // picker selection: the register-backed association is dropped (snapshot-only
+  // values stay editable); a linked component must always match the register.
+  Object.keys(cardCodeToFamily).forEach(family => {
+    const card = document.querySelector(`.tool-card[data-family="${family}"]`);
+    if (!card) return;
+    [card.querySelector('input[aria-label^="Referência"]'), card.querySelector('input[aria-label^="Lote"]')]
+      .filter(Boolean)
+      .forEach(input => input.addEventListener("input", () => {
+        if (toolSelections[family]) {
+          delete toolSelections[family];
+          if (pickerFamily === family && pickerSelectionCount) {
+            pickerSelectionCount.textContent =
+              "Seleção registada substituída por edição manual — a associação física foi removida.";
+          }
+        }
+      }));
+  });
+
+  function resetPickerState() {
+    Object.keys(toolSelections).forEach(key => delete toolSelections[key]);
+    selectedOption = null;
+    if (pickerReferenceFilter && initialPickerReference !== undefined) {
+      pickerReferenceFilter.value = initialPickerReference;
+    }
+    pickerMessage(PICKER_EMPTY_MESSAGE);
+    if (pickerSelectionCount) pickerSelectionCount.textContent = "Sem opção selecionada.";
+    if (applyToolSelectionButton) applyToolSelectionButton.disabled = true;
+  }
+
+  // Reference filter (fragment) — server-side real-data filtering.
+  let pickerFilterTimer = null;
+  pickerReferenceFilter?.addEventListener("input", () => {
+    clearTimeout(pickerFilterTimer);
+    pickerFilterTimer = setTimeout(loadPickerOptions, 250);
+  });
+  $("#pickerClear")?.addEventListener("click", () => {
+    if (pickerReferenceFilter) pickerReferenceFilter.value = "";
+    loadPickerOptions();
+  });
+  applyToolSelectionButton?.addEventListener("click", applySelectedTool);
+
+  function triggerPickerChange(familyCode) {
+    pickerFamily = familyCode;
     const title = $("#pickerTitle");
-    if (title) title.textContent = `Alterar ${button.dataset.family} associado`;
+    if (title) title.textContent = `Alterar ${familyCode} associado`;
     $("#inventoryPicker")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    loadPickerOptions();
+  }
+
+  $("#editSheet")?.addEventListener("click", () => setMode("edit"));
+  $("#saveSheet")?.addEventListener("click", () => {
+    const errorEl = $("#saveRevisionError");
+    if (errorEl) { errorEl.textContent = ""; errorEl.classList.remove("visible"); }
+    if (saveRevisionForm) saveRevisionForm.reset();
+    if (saveRevisionDialog && typeof saveRevisionDialog.showModal === "function") {
+      saveRevisionDialog.showModal();
+    }
+  });
+  saveRevisionCancel?.addEventListener("click", () => saveRevisionDialog?.close());
+  saveRevisionDialog?.addEventListener("click", event => { if (event.target === saveRevisionDialog) saveRevisionDialog.close(); });
+  saveRevisionForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const errorEl = $("#saveRevisionError");
+    const submit = $("#saveRevisionSubmit");
+    const showError = message => {
+      if (errorEl) { errorEl.textContent = message; errorEl.classList.add("visible"); }
+    };
+    if (!jobOnIdForSave) { showError("Não foi possível identificar o Job On."); return; }
+    // Server-side authority: the change reason stays optional here, but the service
+    // rejects a save of a fechado revision without it (JOBON_CHANGE_REASON_REQUIRED).
+    const changeReason = saveRevisionForm?.elements.changeReason?.value.trim() || null;
+    if (changeReasonRequired && !changeReason) {
+      showError("Alterar uma produção fechada exige um motivo.");
+      return;
+    }
+    const payload = {
+      jobOnId: jobOnIdForSave,
+      generalNotes: $(".general-notes textarea")?.value ?? null,
+      changeReason,
+      imageAssetId: null,
+      components: buildEditedComponentsGraph()
+    };
+    submit.disabled = true;
+    try {
+      const response = await fetch(`/api/jobon/${encodeURIComponent(jobOnIdForSave)}/revision`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (response.ok) {
+        // Reopen the SAME Job On folha, now rendering the new current revision.
+        window.location.assign(`/jobon?id=${encodeURIComponent(jobOnIdForSave)}`);
+        return;
+      }
+      let message = "Não foi possível guardar a nova revisão. Verifique os dados e tente novamente.";
+      try {
+        const body = await response.json();
+        if (body && body.message) message = body.message;
+      } catch { /* keep the default message */ }
+      showError(message);
+    } catch {
+      showError("Não foi possível guardar a nova revisão. Verifique a ligação e tente novamente.");
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  $("#cancelEdit")?.addEventListener("click", () => {
+    // CANCEL EDIT — discards client-side edits and exits edit mode. This is a
+    // pure client-side reset: it performs ZERO writes (never calls the backend).
+    setMode("view");
+    restoreOriginalValues();
+  });
+  $$(".tool-change").forEach(button => button.addEventListener("click", () => {
+    triggerPickerChange(button.dataset.family);
   }));
 
   let loadedRow = null;
@@ -552,6 +1052,12 @@
   });
 
   $("#printJobOn")?.addEventListener("click", async () => {
+    // Documented hand-off rule: never print from unsaved DOM values — the sheet
+    // must be saved as a new revision (or the edit cancelled) before printing.
+    if (document.body.dataset.mode === "edit") {
+      alert("Guarde a nova revisão antes de imprimir.");
+      return;
+    }
     if (!jobOnId) return;
     const button = $("#printJobOn");
     button.disabled = true;

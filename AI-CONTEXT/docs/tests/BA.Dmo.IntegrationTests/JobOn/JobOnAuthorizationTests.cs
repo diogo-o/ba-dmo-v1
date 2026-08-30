@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
+using BA.Dmo.Application.Modules.Ferramentas;
 using BA.Dmo.Application.Modules.JobOn;
 using BA.Dmo.Application.Shared.Identity;
+using BA.Dmo.Domain.Modules.Ferramentas;
 using BA.Dmo.Domain.Modules.JobOn;
 using BA.Dmo.Domain.Shared.Access;
 using BA.Dmo.Domain.Shared.Kernel;
@@ -358,11 +360,196 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
         Assert.Contains("5447T173", afterHtml); // reference unchanged
     }
 
+    // ---- edit / save-new-revision flow ("Guardar nova revisão", TD-18) ------
+
+    [Fact]
+    public async Task OperatorWithoutEditCapability_CannotSaveRevision()
+    {
+        // Test #2 — a user with only jobon.view fails closed on the WRITE operation
+        // at the route level: POST /api/jobon/{id}/revision requires jobon.edit and
+        // is denied with 403 before any code runs. Hiding the button is never the
+        // only guard.
+        _fixture.Repository.User = _fixture.JobOnOperator();
+        var client = await LoginAsync();
+
+        var denied = await client.PostAsJsonAsync(
+            $"/api/jobon/{SomeJobOnId}/revision",
+            new { generalNotes = "edit", changeReason = (string?)null, components = Array.Empty<object>() });
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResponsibleProfile_SavesNewRevision_SameJobOn_AndReopensTheSameFolha()
+    {
+        // Tests #1, #3–#9, #12, #17 — Responsible + jobon.edit saves an EDITED
+        // revision of an EXISTING Job On: a NEW revision of the SAME job_on_id is
+        // created (never a new Job On), the revision number increments, the previous
+        // revision stays untouched, current_revision_id advances, and the success
+        // target reopens the SAME folha (/jobon?id={sameJobOnId}) rendering the new
+        // current revision with the edited values.
+        _fixture.Repository.User = _fixture.JobOnResponsible();
+        var client = await LoginAsync();
+
+        // 1. Create the Job On through the real create flow (revision 1).
+        var created = await client.PostAsJsonAsync("/api/jobon", new
+        {
+            productionCode = "202608",
+            machineCode = "B1",
+            plannedStartAt = "2026-08-17",
+            plannedEndAt = (string?)null,
+            reference = "5447T173"
+        });
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var creation = await created.Content.ReadFromJsonAsync<CreateJobOnResponse>();
+        var jobOnId = creation!.JobOnId;
+
+        var before = await client.GetAsync($"/jobon?id={jobOnId}");
+        Assert.Equal(HttpStatusCode.OK, before.StatusCode);
+        var beforeHtml = await before.Content.ReadAsStringAsync();
+        Assert.Contains("meta name=\"jobon-id\" content=\"" + jobOnId, beforeHtml);
+        Assert.Contains("meta name=\"jobon-revision-id\"", beforeHtml);
+        Assert.DoesNotContain("Notas editadas na revisao 2", beforeHtml);
+
+        // 2. Save an edited revision of the SAME Job On.
+        var saved = await client.PostAsJsonAsync(
+            $"/api/jobon/{jobOnId}/revision",
+            new
+            {
+                jobOnId,
+                generalNotes = "Notas editadas na revisao 2",
+                changeReason = (string?)null,
+                imageAssetId = (string?)null,
+                components = Array.Empty<object>()
+            });
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        var payload = await saved.Content.ReadFromJsonAsync<SaveRevisionResponse>();
+        Assert.NotNull(payload);
+        Assert.Equal(jobOnId, payload!.JobOnId);            // SAME JobOnId — never a new Job On
+        Assert.NotEqual(Guid.Empty, payload.RevisionId);    // a NEW revision id
+
+        // 3. The SAME folha reopens rendering the new current revision.
+        var after = await client.GetAsync($"/jobon?id={jobOnId}");
+        Assert.Equal(HttpStatusCode.OK, after.StatusCode);
+        var afterHtml = await after.Content.ReadAsStringAsync();
+        Assert.Contains("meta name=\"jobon-id\" content=\"" + jobOnId, afterHtml);
+        Assert.Contains("meta name=\"jobon-revision-id\" content=\"" + payload.RevisionId, afterHtml);
+        Assert.Contains("Notas editadas na revisao 2", afterHtml); // edited value renders
+        Assert.Contains("202608", afterHtml);   // production unchanged
+        Assert.Contains("5447T173", afterHtml); // reference unchanged
+    }
+
+    // ---- "Alterar CM/MF/BQ associado" — tool-selection options (TD-18) ------
+
+    [Fact]
+    public async Task ToolOptions_WithoutEditCapability_DeniedWithSafeAccessDeniedState()
+    {
+        // GET /api/jobon/{id}/tool-options is an edit surface: the route policy
+        // requires jobon.edit, so an operator with only jobon.view is denied
+        // before any register read (hiding the button is never the only guard).
+        // App GET denial contract: an authenticated denied user gets the safe
+        // /access-denied deep-link state (redirect) — never data, never a loop.
+        _fixture.Repository.User = _fixture.JobOnOperator();
+        var client = await LoginAsync();
+
+        var denied = await client.GetAsync(
+            $"/api/jobon/{SomeJobOnId}/tool-options?family=CM");
+
+        Assert.Equal(HttpStatusCode.Redirect, denied.StatusCode);
+        Assert.StartsWith("/access-denied", denied.Headers.Location!.PathAndQuery);
+    }
+
+    [Fact]
+    public async Task ToolOptions_Responsible_ReturnsOnlyRegisteredLotsForTheJobOnMachine()
+    {
+        // The options come ONLY from the real (fake) N04 register, filtered by
+        // the Job On's machine: a CM lote registered for B2 is offered on a B2
+        // Job On and never on a C3 one; CM and MF sharing reference "5447" are
+        // DISTINCT tools (distinct reference/lot ids, never merged).
+        _fixture.Repository.User = _fixture.JobOnResponsible();
+        var client = await LoginAsync();
+
+        var b2 = await CreateJobOnAsync(client, "202631", "B2", "5447T173");
+        var c3 = await CreateJobOnAsync(client, "202632", "C3", "5447T173");
+
+        var cmB2 = await client.GetAsync($"/api/jobon/{b2}/tool-options?family=CM");
+        Assert.Equal(HttpStatusCode.OK, cmB2.StatusCode);
+        var cmB2Payload = await cmB2.Content.ReadFromJsonAsync<ToolOptionsResponse>();
+        Assert.NotNull(cmB2Payload);
+        Assert.Equal("B2", cmB2Payload!.Machine);
+        Assert.Equal("CM", cmB2Payload.Family);
+        // The CM 5447 lote registered for B2 is offered...
+        Assert.Contains(cmB2Payload.Items, i => i.Lot == "1" && i.Reference == "5447");
+        // ...and the C3-only CM lote is NOT offered on B2.
+        Assert.DoesNotContain(cmB2Payload.Items, i => i.Lot == "3");
+
+        var cmC3 = await client.GetAsync($"/api/jobon/{c3}/tool-options?family=CM");
+        Assert.Equal(HttpStatusCode.OK, cmC3.StatusCode);
+        var cmC3Payload = await cmC3.Content.ReadFromJsonAsync<ToolOptionsResponse>();
+        Assert.NotNull(cmC3Payload);
+        Assert.Contains(cmC3Payload!.Items, i => i.Lot == "3" && i.Reference == "5447");
+        Assert.DoesNotContain(cmC3Payload.Items, i => i.Lot == "1");
+
+        // Same reference code "5447" as MF — a DIFFERENT tool with its own ids.
+        var mfB2 = await client.GetAsync($"/api/jobon/{b2}/tool-options?family=MF");
+        Assert.Equal(HttpStatusCode.OK, mfB2.StatusCode);
+        var mfB2Payload = await mfB2.Content.ReadFromJsonAsync<ToolOptionsResponse>();
+        Assert.NotNull(mfB2Payload);
+        var mfItem = Assert.Single(mfB2Payload!.Items, i => i.Reference == "5447");
+        Assert.Equal("2", mfItem.Lot);
+        var cmItem = Assert.Single(cmB2Payload.Items, i => i.Lot == "1");
+        Assert.NotEqual(cmItem.LoteId, mfItem.LoteId);
+        Assert.NotEqual(cmItem.ReferenceId, mfItem.ReferenceId);
+    }
+
+    [Fact]
+    public async Task ToolOptions_InvalidFamilyOrUnknownJobOn_RejectedServerSide()
+    {
+        _fixture.Repository.User = _fixture.JobOnResponsible();
+        var client = await LoginAsync();
+
+        // Unknown Job On → NotFound (no data leak).
+        var missing = await client.GetAsync(
+            $"/api/jobon/{Guid.NewGuid()}/tool-options?family=CM");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+
+        // Known Job On, invalid family (only CM/MF/BQ are tool families) → BadRequest.
+        var jobOnId = await CreateJobOnAsync(client, "202608", "B2", "5447T173");
+        var invalid = await client.GetAsync($"/api/jobon/{jobOnId}/tool-options?family=PU");
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        var body = await invalid.Content.ReadFromJsonAsync<ErrorBody>();
+        Assert.Equal("JOBON_TOOL_FAMILY_INVALID", body!.Code);
+    }
+
+    private async Task<Guid> CreateJobOnAsync(
+        HttpClient client, string production, string machine, string reference)
+    {
+        var created = await client.PostAsJsonAsync("/api/jobon", new
+        {
+            productionCode = production,
+            machineCode = machine,
+            plannedStartAt = "2026-08-17",
+            plannedEndAt = (string?)null,
+            reference
+        });
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var response = await created.Content.ReadFromJsonAsync<CreateJobOnResponse>();
+        return response!.JobOnId;
+    }
+
     private sealed record CreateJobOnResponse(Guid JobOnId);
 
     private sealed record AlterDateResponse(Guid JobOnId, Guid RevisionId);
 
+    private sealed record SaveRevisionResponse(Guid JobOnId, Guid RevisionId);
+
     private sealed record ErrorBody(string Code, string Message);
+
+    private sealed record ToolOptionsResponse(
+        Guid JobOnId, string Machine, string Family, IReadOnlyList<ToolOption> Items);
+
+    private sealed record ToolOption(
+        Guid ReferenceId, Guid LoteId, string Type, string Reference, string Lot,
+        IReadOnlyList<string> AllowedLines);
 
     private async Task<HttpClient> LoginAsync()
     {
@@ -442,6 +629,7 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
                 ReplaceSingleton<IInternalUserRepository>(services, Repository);
                 ReplaceSingleton<IJobOnRepository>(services, new MemoryJobOnRepository());
                 ReplaceSingleton<IJobOnUserContextRepository>(services, new FakeJobOnUserContextRepository());
+                ReplaceSingleton<IFerramentasIdentityLookup>(services, new FakeToolRegister());
                 services.Configure<Microsoft.AspNetCore.Mvc.RazorPages.RazorPagesOptions>(
                     options => options.Conventions.ConfigureFilter(
                         new IgnoreAntiforgeryTokenAttribute()));
@@ -580,8 +768,20 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
                 Task.CompletedTask;
 
             public Task SaveRevisionGraphAsync(
-                JobOnRevision revision, string eventType, string actorId, CancellationToken cancellationToken = default) =>
-                Task.CompletedTask;
+                JobOnRevision revision, string eventType, string actorId,
+                string? beforeSnapshot = null, string? afterSnapshot = null,
+                CancellationToken cancellationToken = default)
+            {
+                // Mirror the real repository: the new revision + the current-revision
+                // link advance — readable through GetByIdAsync so the SAME folha reopens
+                // rendering the new current revision after a successful save.
+                if (_jobOns.TryGetValue(revision.JobOnId, out var stored))
+                {
+                    _revisions.Add(revision);
+                    stored.SaveRevision(revision);
+                }
+                return Task.CompletedTask;
+            }
 
             public Task AlterDatesAtomicallyAsync(
                 Guid jobOnId,
@@ -633,6 +833,65 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
                 string? referenceFilter, string? machineFilter, DateTime? from, DateTime? to, CancellationToken cancellationToken = default) =>
                 Task.FromResult<IReadOnlyList<HistoricalProductionSummary>>(
                     Array.Empty<HistoricalProductionSummary>());
+        }
+
+        /// <summary>
+        /// In-memory N04 tool register for the tool-options endpoint proof
+        /// (avoids a live DB): CM 5447 Lote 1 (B2) + Lote 3 (C3), MF 5447
+        /// Lote 2 (B2) and BQ 5447 Lote 9 (C3) — the same reference code
+        /// registered as three DISTINCT tools (different reference/lot ids).
+        /// Read-only: the flow can never create Ferramentas records.
+        /// </summary>
+        private sealed class FakeToolRegister : IFerramentasIdentityLookup
+        {
+            public static readonly Guid CmRef = Guid.Parse("60000000-0000-4000-8000-000000000001");
+            public static readonly Guid CmLote1 = Guid.Parse("60000000-0000-4000-8000-000000000011");
+            public static readonly Guid CmLote3 = Guid.Parse("60000000-0000-4000-8000-000000000013");
+            public static readonly Guid MfRef = Guid.Parse("60000000-0000-4000-8000-000000000002");
+            public static readonly Guid MfLote2 = Guid.Parse("60000000-0000-4000-8000-000000000012");
+            public static readonly Guid BqRef = Guid.Parse("60000000-0000-4000-8000-000000000003");
+            public static readonly Guid BqLote9 = Guid.Parse("60000000-0000-4000-8000-000000000019");
+
+            private static readonly FerramentasToolLoteOption[] Lots =
+            {
+                new(CmRef, CmLote1, FerramentasToolType.CM, "5447", "1", "Contra molde 5447", new[] { "B2" }),
+                new(CmRef, CmLote3, FerramentasToolType.CM, "5447", "3", "Contra molde 5447", new[] { "C3" }),
+                new(MfRef, MfLote2, FerramentasToolType.MF, "5447", "2", "Molde final 5447", new[] { "B2" }),
+                new(BqRef, BqLote9, FerramentasToolType.BQ, "5447", "9", "Boquilha 5447", new[] { "C3" })
+            };
+
+            public Task<IReadOnlyList<FerramentasIdentityHit>> SearchAsync(
+                FerramentasToolType type, string? reference, string? lot, CancellationToken ct = default) =>
+                Task.FromResult<IReadOnlyList<FerramentasIdentityHit>>(
+                    Lots.Where(l => l.Type == type)
+                        .Select(l => new FerramentasIdentityHit(
+                            l.ToolReferenceId, l.ToolLoteId, l.Type, l.Reference, l.Lot, l.TechnicalName))
+                        .ToList());
+
+            public Task<FerramentasIdentityHit?> ResolveAsync(Guid toolLoteId, CancellationToken ct = default)
+            {
+                var lot = Lots.FirstOrDefault(l => l.ToolLoteId == toolLoteId);
+                return Task.FromResult(lot is null
+                    ? null
+                    : new FerramentasIdentityHit(
+                        lot.ToolReferenceId, lot.ToolLoteId, lot.Type, lot.Reference, lot.Lot, lot.TechnicalName));
+            }
+
+            public Task<IReadOnlyList<FerramentasToolLoteOption>> SearchToolLoteOptionsAsync(
+                FerramentasToolType type, string? reference, string? lot, string? line,
+                CancellationToken ct = default)
+            {
+                var result = Lots
+                    .Where(l => l.Type == type
+                        && (string.IsNullOrWhiteSpace(reference) || l.Reference.Contains(reference))
+                        && (string.IsNullOrWhiteSpace(lot) || l.Lot.Contains(lot))
+                        && (line is null || l.AllowedLines.Contains(line)))
+                    .ToList();
+                return Task.FromResult<IReadOnlyList<FerramentasToolLoteOption>>(result);
+            }
+
+            public Task<FerramentasToolLoteOption?> ResolveToolLoteOptionAsync(Guid toolLoteId, CancellationToken ct = default) =>
+                Task.FromResult(Lots.FirstOrDefault(l => l.ToolLoteId == toolLoteId));
         }
 
         /// <summary>R011 — in-memory per-user current-open Job On context (avoids a live DB).</summary>

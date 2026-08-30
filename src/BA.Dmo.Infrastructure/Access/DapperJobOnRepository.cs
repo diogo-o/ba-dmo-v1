@@ -702,11 +702,27 @@ VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot::jsonb, @AfterSnapshot:
         JobOnRevision revision,
         string eventType,
         string actorId,
+        string? beforeSnapshot = null,
+        string? afterSnapshot = null,
         CancellationToken cancellationToken = default)
     {
         await DapperUnitOfWork.RunAsync<int>(_connectionFactory, async (connection, transaction, ct) =>
         {
-            await InsertRevisionGraphCoreAsync(connection, transaction, revision, ct);
+            // R-002: every child row of the NEW revision belongs to the NEW revision id.
+            // The service builds the revision with a fresh id while the request components
+            // arrive pinned to the previous revision, so the graph is re-pinned here before
+            // insert (same rule the create/duplicate paths apply).
+            var pinnedRevision = revision;
+            if (revision.Components is not null)
+            {
+                pinnedRevision = pinnedRevision with
+                {
+                    Components = MapComponentsToRevision(
+                        revision.JobOnRevisionId, revision.Components)
+                };
+            }
+
+            await InsertRevisionGraphCoreAsync(connection, transaction, pinnedRevision, ct);
 
             var updatedRows = await UpdateCurrentRevisionCoreAsync(
                 connection, transaction, revision.JobOnId, revision.JobOnRevisionId, ct);
@@ -716,7 +732,7 @@ VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot::jsonb, @AfterSnapshot:
 
             await InsertAuditEventCoreAsync(
                 connection, transaction, revision.JobOnId, revision.JobOnRevisionId,
-                eventType, null, null, actorId, ct);
+                eventType, beforeSnapshot, afterSnapshot, actorId, ct);
 
             return 0;
         }, cancellationToken);

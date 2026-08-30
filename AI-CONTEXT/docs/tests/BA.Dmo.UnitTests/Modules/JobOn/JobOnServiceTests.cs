@@ -33,6 +33,7 @@ public class JobOnServiceTests
         _service = new JobOnService(
             gate, _repository, _userContext, new FixedClock(
                 new DateTimeOffset(2026, 8, 17, 18, 0, 0, TimeSpan.Zero)),
+            new FakeFerramentasToolLookup(),
             _articleImages);
         _identity.GrantJobOn();
     }

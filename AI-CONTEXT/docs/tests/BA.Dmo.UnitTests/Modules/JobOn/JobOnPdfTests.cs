@@ -31,7 +31,8 @@ public class JobOnPdfTests
             gate,
             _repository,
             new FakeJobOnUserContextRepository(),
-            new PdfTestClock());
+            new PdfTestClock(),
+            new FakeFerramentasToolLookup());
         _pdfService = new JobOnPdfService(_repository, gate);
         _identity.GrantCapabilities(new[] { "jobon.view", "jobon.edit" });
     }
