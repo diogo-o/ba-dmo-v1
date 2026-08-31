@@ -93,6 +93,23 @@ public class JobOnScriptSafetyGuardTests
         Assert.Contains("q.set('jobOnId', f.jobOnId)", script, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void SaveRevision_BrandNewToolComponent_IsPinnedToCurrentRevisionId_NeverNull()
+    {
+        // A brand-new CM/MF/BQ component created client-side in edit mode must
+        // carry a VALID transport value: the CURRENT revision id (the same pin
+        // the embedded graph's components hold). `jobOnRevisionId: null` fails
+        // JSON model binding on the non-nullable Guid before the service runs —
+        // the server/repository remain authoritative: the repository re-pins
+        // the whole graph (including the new component) to the NEW revision id
+        // at persistence (R-002).
+        var script = File.ReadAllText(JobOnScript);
+
+        Assert.DoesNotContain("jobOnRevisionId: null", script, StringComparison.Ordinal);
+        Assert.Contains("jobOnRevisionId: currentRevisionIdForSave", script, StringComparison.Ordinal);
+        Assert.Contains("meta[name='jobon-revision-id']", script, StringComparison.Ordinal);
+    }
+
     private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

@@ -282,6 +282,14 @@
   const saveRevisionForm = $("#saveRevisionForm");
   const saveRevisionCancel = $("#saveRevisionCancel");
   const jobOnIdForSave = $("meta[name='jobon-id']")?.getAttribute("content");
+  // The CURRENT revision id of this folha (embedded by the page): the pin every
+  // component in the submitted graph carries — including a brand-new component
+  // created client-side in edit mode (the non-nullable transport contract never
+  // receives null; the repository stays authoritative and re-pins the graph to
+  // the newly created revision id at persistence, R-002).
+  const currentRevisionIdForSave =
+    $("meta[name='jobon-revision-id']")?.getAttribute("content")
+    || (revisionGraph[0] ? revisionGraph[0].jobOnRevisionId : null);
   const changeReasonRequired = root?.dataset.changeReasonRequired === "true";
   const initialGeneralNotes = $(".general-notes textarea")?.value ?? null;
 
@@ -424,7 +432,12 @@
       } else {
         graph.push({
           jobOnComponentId: uuid(),
-          jobOnRevisionId: null,
+          // Brand-new (not-yet-persisted) component: carries the CURRENT revision
+          // id — the same pin as every stored component in this graph (the
+          // established save-flow convention). Never null: the request DTO binds
+          // a non-nullable Guid. The server creates the NEW revision id and the
+          // repository re-pins this component to it at persistence (R-002).
+          jobOnRevisionId: currentRevisionIdForSave,
           family,
           ...staged,
           plannedQuantity: null,
