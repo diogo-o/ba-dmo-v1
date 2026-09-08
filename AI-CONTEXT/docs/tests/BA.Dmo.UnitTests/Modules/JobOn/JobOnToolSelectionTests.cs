@@ -276,9 +276,10 @@ public class JobOnToolSelectionTests
     }
 
     [Fact]
-    public async Task SaveRevision_LineNotAllowed_Rejected()
+    public async Task SaveRevision_RegisteredLotOutsideCurrentLine_StillPersists()
     {
-        // CM 5447 Lote 3 is registered for C3 only — a B2 Job On cannot use it.
+        // allowed_lines filters lookup options only. An explicitly selected,
+        // real registered lot remains saveable even when this Job On is on B2.
         var b2 = await CreateJobOnAsync(machine: "B2", production: "202609");
         var revisionCountBefore = _repository.Revisions.Count;
 
@@ -286,9 +287,14 @@ public class JobOnToolSelectionTests
         var result = await _service.SaveRevisionAsync(new SaveJobOnRevisionRequest(
             b2, null, null, null, new[] { component }));
 
-        Assert.True(result.IsFailure);
-        Assert.Equal("JOBON_TOOL_LINE_NOT_ALLOWED", result.Error.Code);
-        Assert.Equal(revisionCountBefore, _repository.Revisions.Count); // nothing persisted
+        Assert.True(result.IsSuccess, result.IsFailure ? result.Error.Code : null);
+        Assert.Equal(revisionCountBefore + 1, _repository.Revisions.Count);
+        var saved = Assert.Single(_repository.Components
+            .Where(c => c.JobOnRevisionId == result.Value));
+        Assert.Equal(Cm5447Ref, saved.SourceToolId);
+        Assert.Equal(Cm5447Lote3, saved.SourceLotId);
+        Assert.Equal("5447", saved.ReferenceSnapshot);
+        Assert.Equal("3", saved.LotSnapshot);
     }
 
     [Fact]

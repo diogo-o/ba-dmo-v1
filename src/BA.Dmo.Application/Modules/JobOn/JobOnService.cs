@@ -289,12 +289,13 @@ public sealed class JobOnService
 
         // Identity-tuple enforcement (TD-18 + Manual 10 §4): a CM/MF/BQ
         // association must point at a REAL registered tool lot (N04) of the
-        // matching type, registered for this Job On's machine/line, with
-        // snapshots that agree with the register. Invalid/nonexistent
+        // matching type, with snapshots that agree with the register. The
+        // Ferramentas allowed_lines value is lookup/filter data only; it is not
+        // a save-time machine compatibility certification. Invalid/nonexistent
         // combinations are rejected BEFORE any write — a revision can never
         // persist an invented tool. Read-only: nothing is created in
         // Ferramentas or Armazém.
-        var toolError = await ValidateToolAssociationsAsync(jobOn, request.Components, cancellationToken);
+        var toolError = await ValidateToolAssociationsAsync(request.Components, cancellationToken);
         if (toolError is not null)
             return Result<Guid, DomainError>.Failure(toolError);
 
@@ -479,13 +480,14 @@ public sealed class JobOnService
     /// <summary>
     /// Save-time validation of CM/MF/BQ tool associations (identity tuple):
     /// a component with a physical link (source tool/lot ids) must resolve to a
-    /// REAL registered lot of the matching type, registered for the Job On's
-    /// machine/line, with reference/lot snapshots that agree with the register.
+    /// REAL registered lot of the matching type, with reference/lot snapshots
+    /// that agree with the register. Ferramentas allowed_lines is deliberately
+    /// not checked here: it is filter data for lookup, not server-side machine
+    /// compatibility enforcement.
     /// Components without a link (snapshot-only, e.g. legacy manual values or
     /// PU/CS production configuration) are not register-backed and pass through.
     /// </summary>
     private async Task<DomainError?> ValidateToolAssociationsAsync(
-        JobOnEntity jobOn,
         IReadOnlyList<JobOnComponent> components,
         CancellationToken cancellationToken)
     {
@@ -518,11 +520,6 @@ public sealed class JobOnService
                 return DomainError.Validation(
                     "JOBON_TOOL_TYPE_MISMATCH",
                     "O tipo da ferramenta não corresponde à família selecionada (CM, MF e BQ são ferramentas distintas).");
-
-            if (!option.AllowedLines.Contains(jobOn.MachineCode, StringComparer.Ordinal))
-                return DomainError.Validation(
-                    "JOBON_TOOL_LINE_NOT_ALLOWED",
-                    "O lote selecionado não está registado para a máquina/linha deste Job On.");
 
             if (!string.IsNullOrWhiteSpace(component.ReferenceSnapshot)
                 && !string.Equals(component.ReferenceSnapshot, option.Reference, StringComparison.Ordinal))

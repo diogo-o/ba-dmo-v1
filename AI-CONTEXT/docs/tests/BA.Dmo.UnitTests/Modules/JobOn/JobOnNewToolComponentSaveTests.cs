@@ -364,11 +364,11 @@ public class JobOnNewToolComponentSaveTests
     }
 
     [Fact]
-    public async Task Save_NewComponent_InvalidToolAssociation_Rejected_ByExistingServerValidation_ZeroWrites()
+    public async Task Save_NewComponent_NonexistentRejected_ButRegisteredOtherLineAccepted()
     {
-        // Test #10 — the EXISTING server validation still rejects invalid
-        // associations before any write: a nonexistent registered lot and a lot
-        // registered for another line both fail, leaving zero writes.
+        // Test #10 — save rejects nonexistent identities before any write, but
+        // allowed_lines is filter data and does not reject a real lot selected
+        // explicitly for another Job On line.
         var jobOnId = await CreateRascunhoAsync();
         var currentRevisionId = _repository.JobOns[jobOnId].CurrentRevisionId!.Value;
         var revisionCountBefore = _repository.Revisions.Count;
@@ -385,17 +385,24 @@ public class JobOnNewToolComponentSaveTests
         Assert.Equal(revisionCountBefore, _repository.Revisions.Count);
         Assert.Equal(componentsBefore, _repository.Components.Count);
 
-        // (b) Real lot registered for ANOTHER line (wrong identity tuple).
+        // (b) Real lot registered for ANOTHER line remains saveable.
+        var revisionCountBeforeOtherLine = _repository.Revisions.Count;
         var wrongLine = NewToolComponent(
             Guid.NewGuid(), currentRevisionId, ComponentFamily.MP_CM,
             WrongLineReferenceId, WrongLineLoteId, "CM-5447", "Lote-3", null);
         var wrongLineResult = await _service.SaveRevisionAsync(new SaveJobOnRevisionRequest(
             jobOnId, "Notas", null, null, new[] { wrongLine }));
-        Assert.True(wrongLineResult.IsFailure);
-        Assert.Equal("JOBON_TOOL_LINE_NOT_ALLOWED", wrongLineResult.Error.Code);
-        Assert.Equal(revisionCountBefore, _repository.Revisions.Count);
-        Assert.Equal(componentsBefore, _repository.Components.Count);
-        Assert.Equal(currentRevisionId, _repository.JobOns[jobOnId].CurrentRevisionId);
+        Assert.True(wrongLineResult.IsSuccess,
+            wrongLineResult.IsFailure ? wrongLineResult.Error.Code : null);
+        Assert.Equal(revisionCountBeforeOtherLine + 1, _repository.Revisions.Count);
+        Assert.Equal(componentsBefore + 1, _repository.Components.Count);
+        var savedOtherLine = Assert.Single(_repository.Components
+            .Where(c => c.JobOnRevisionId == wrongLineResult.Value));
+        Assert.Equal(WrongLineReferenceId, savedOtherLine.SourceToolId);
+        Assert.Equal(WrongLineLoteId, savedOtherLine.SourceLotId);
+        Assert.Equal("CM-5447", savedOtherLine.ReferenceSnapshot);
+        Assert.Equal("Lote-3", savedOtherLine.LotSnapshot);
+        Assert.Equal(wrongLineResult.Value, _repository.JobOns[jobOnId].CurrentRevisionId);
 
         // The register stays untouched: no Ferramentas record is created.
         Assert.Equal(4, _tools.Lots.Count);
