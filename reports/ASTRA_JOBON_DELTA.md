@@ -5,10 +5,12 @@ Repository: `diogo-o/ba-dmo-v1`, branch `main`
 
 ## 1. Current state
 
-- Remote HEAD verified: `0e5ee0a943f1ad2f957ebae1fd503077026f749d`
-- HEAD message: `Fix Job On new tool component revision binding`.
+- Implementation baseline inspected: `0e5ee0a943f1ad2f957ebae1fd503077026f749d`
+- Baseline message: `Fix Job On new tool component revision binding`.
+- Astra handoff/delta commit: `e61875e345d15bdff8d5cfdb20f7873644472171`.
+- The implementation baseline above is not the current repository tip after the delta file was committed.
 - The remote repository contains the Job On implementation and context files.
-- No local checkout exists in the current workspace, therefore local uncommitted changes cannot be inspected or classified. Do not infer that the remote HEAD is the user's complete working tree.
+- No local checkout exists in the current workspace, therefore local uncommitted changes cannot be inspected or classified. Astra MUST inspect the actual working tree before modifying Job On. Recent lifecycle work may exist uncommitted locally. Do not treat this delta as proof that remote GitHub contains all current Job On work, and do not infer that the implementation baseline is the user's complete working tree.
 
 Recent Job On commits at/behind HEAD include:
 
@@ -50,9 +52,20 @@ Directly verified in current source:
 - The current page has visible summary controls for reference, production, sections, drop count, type, stop, weight, and process. Their persistence/materialization must be tested against the authoritative model; do not assume that being rendered as an input means they save.
 - The current UI materializes the canonical card set (CM, BQ, AN, MF, PU, ARR, CAL, PI, CS, TP, FO), but the old four-page print authority contains richer per-tool rows, quantities, lot data, observations, and team/document content. The current sheet/renderer must be checked for complete materialization of that content. Design simplification must not remove it.
 - The current print button is labelled “Imprimir 4 folhas”, but source verification here confirms the request path and renderer existence, not that all four current pages contain all required live values. Treat print completeness as an outstanding acceptance gap.
+- Initial verification occurrence generation for a newly associated tool/lot remains **unresolved**. Existing verification confirmation is implemented, and duplication can regenerate pending occurrences from existing source occurrences. That does not prove that the new CM/MF/BQ association path loads active Ferramentas verification rules and creates the initial Job On verification occurrences. Astra must verify this save/association path end-to-end; do not implement it from this delta.
 - No direct browser/runtime interaction was possible in this verification session; reachability and round-trip behavior still require targeted execution tests.
 
+### Central UI regression
+
+The current Job On visual sheet must **not** be treated as the functional specification. During the design port, a previously more complete Job On presentation/content was simplified and significant information appears to have been lost from the visible UI.
+
+Astra must compare the last functionally complete Job On presentation against the current implementation, identify disappeared fields/content/controls, and restore missing functional content while preserving the current backend, revision, tool-association, and verification functionality. Functional content must never be removed merely to match the current visual design.
+
+Do not perform that comparison as part of this delta.
+
 ## 5. Supabase PROD reality
+
+BA-DMO-PROD is still the main environment being completed. It is not yet in operational use. DEV must not become the target merely because it exists. Astra should work against the established PROD reality unless the owner explicitly changes this. Do not alter PROD now.
 
 BA-DMO-PROD is active/healthy (project ref `bddfhbyrmchktqotpzgb`). Read-only inspection confirmed these tables exist:
 
@@ -69,6 +82,20 @@ BA-DMO-PROD is active/healthy (project ref `bddfhbyrmchktqotpzgb`). Read-only in
 The component/revision/verification schema is present. Current row counts are zero for all inspected Job On tables, including `job_on`, revisions, components, verifications, and audit events. No production Job On data currently exists to validate with.
 
 ## 6. Astra starting point
+
+Astra must begin in this order:
+
+A. Inspect the actual working tree and all uncommitted Job On work.
+B. Read this delta plus the existing authoritative Manual, Maps, and AI-CONTEXT material.
+C. Verify only the stale or unresolved points identified here.
+D. Finish Job On end-to-end, including functional content, round-trips, and print output.
+E. Do not redesign until functional completeness is proven.
+
+A field is not implemented merely because it renders as an input/select. For every editable field, prove the complete chain:
+
+`UI → request payload → service request → repository persistence → reload/hydration → print output where applicable`
+
+If any link is missing, classify the field as incomplete.
 
 Start at `src/BA.Dmo.Web/Pages/JobOn/Index.cshtml`, `Index.cshtml.cs`, `wwwroot/scripts/jobon.js`, `Application/Modules/JobOn/JobOnService.cs`, and `Infrastructure/Access/DapperJobOnRepository.cs`.
 
