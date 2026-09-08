@@ -1305,9 +1305,40 @@
   const renderCatalogLabel = label => `<strong>${esc(label)}</strong>`;
   void renderCatalogLabel;
 
-  // PHASE 3: the production rail (state, rail card clicks, mobile toggle)
-  // is owned by the single shared script wwwroot/scripts/production-rail.js
-  // — Job On no longer loads current-production rail data independently.
+  async function loadRail() {
+    const panel = $("#linePanel");
+    if (!panel) return;
+    try {
+      const response = await fetch("/api/boquilhas/production-context", { credentials: "same-origin" });
+      if (!response.ok) throw new Error("production context unavailable");
+      const cards = await response.json();
+      const byLine = Object.fromEntries(cards.map(card => [card.line, card]));
+      $$(".line-card", panel).forEach(button => {
+        const card = byLine[button.dataset.line];
+        if (!card?.hasActiveContext) {
+          button.innerHTML = `<span class="line-code">${esc(button.dataset.line)}</span><span class="line-state idle">Sem produção</span><small>Sem Job On ativo</small>`;
+          return;
+        }
+        button.dataset.jobId = card.jobOnId || "";
+        button.innerHTML = `<span class="line-code">${esc(button.dataset.line)}</span><span class="line-state running">Ativo</span><strong>${esc(card.reference || "—")}</strong><small>Produção ${esc(card.productionCode || "—")}</small>`;
+      });
+    } catch {
+      $$(".line-card", panel).forEach(button => {
+        button.innerHTML = `<span class="line-code">${esc(button.dataset.line)}</span><span class="line-state idle">Indisponível</span><small>Contexto não carregado</small>`;
+      });
+    }
+  }
+  $$(".line-card").forEach(button => button.addEventListener("click", () => {
+    $$(".line-card").forEach(item => item.classList.toggle("active", item === button));
+    if (button.dataset.jobId) window.location.assign(`/jobon?id=${encodeURIComponent(button.dataset.jobId)}`);
+  }));
+  $("#railToggle")?.addEventListener("click", () => {
+    const rail = $("#productionRail");
+    rail?.classList.toggle("open");
+    const open = rail?.classList.contains("open") === true;
+    $("#railToggle").setAttribute("aria-expanded", String(open));
+    $("#railToggle").textContent = open ? "Ocultar linhas" : "Ver linhas";
+  });
 
   const image = $("#article-reference-image");
   const imageEmpty = $("#article-image-empty");
@@ -1387,4 +1418,6 @@
   });
 
   openView(root.dataset.initialView || "planning");
+  if (innerWidth <= 980) $("#productionRail")?.classList.add("open");
+  loadRail();
 })();
