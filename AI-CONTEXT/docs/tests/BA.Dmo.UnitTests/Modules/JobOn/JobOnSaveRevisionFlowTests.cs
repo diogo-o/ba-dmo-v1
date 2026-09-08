@@ -155,6 +155,39 @@ public class JobOnSaveRevisionFlowTests
     }
 
     [Fact]
+    public async Task SaveEdit_RevisionHeaderValues_RoundTripWithoutChangingPreviousRevision()
+    {
+        var jobOnId = await CreateRascunhoAsync();
+        var previousId = _repository.JobOns[jobOnId].CurrentRevisionId!.Value;
+        var request = new SaveJobOnRevisionRequest(
+            jobOnId, "observações completas", null, null, Array.Empty<JobOnComponent>())
+        {
+            Values = new JobOnRevisionValues(
+                "7080C002", 12, 3, "6 1/4\"", "P2", 145.50m, "NNPB")
+        };
+
+        var result = await _service.SaveRevisionAsync(request);
+
+        Assert.True(result.IsSuccess);
+        var reloaded = (await _repository.GetByIdAsync(jobOnId))!;
+        var current = reloaded.CurrentRevision!;
+        Assert.Equal(result.Value, current.JobOnRevisionId);
+        Assert.Equal("{\"article_reference\":\"7080C002\"}", current.ReferenceSnapshot);
+        Assert.Equal("12", current.Sections);
+        Assert.Equal(3m, current.DropCount);
+        Assert.Equal("6 1/4\"", current.TypeSnapshot);
+        Assert.Equal("P2", current.StopSnapshot);
+        Assert.Equal(145.50m, current.WeightSnapshot);
+        Assert.Equal("NNPB", current.ProcessSnapshot);
+        Assert.Equal("observações completas", current.GeneralNotes);
+
+        var previous = reloaded.Revisions.Single(revision => revision.JobOnRevisionId == previousId);
+        Assert.NotEqual(current.ReferenceSnapshot, previous.ReferenceSnapshot);
+        Assert.Equal("{}", previous.Sections);
+        Assert.Null(previous.DropCount);
+    }
+
+    [Fact]
     public async Task SaveEdit_ComponentGraph_FieldsCalRowsVerifications_Persisted()
     {
         // Test #9 — the complete component graph (components + fields + CAL rows +

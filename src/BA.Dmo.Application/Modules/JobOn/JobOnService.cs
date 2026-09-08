@@ -32,7 +32,24 @@ public sealed record SaveJobOnRevisionRequest(
     // Legacy transport member retained for compatibility. Article images are
     // reference-owned and are changed only through the dedicated image actions.
     string? ImageAssetId,
-    IReadOnlyList<JobOnComponent> Components);
+    IReadOnlyList<JobOnComponent> Components)
+{
+    /// <summary>
+    /// Complete revision-owned header values. Null means an older client did
+    /// not submit this block, in which case the current revision is preserved.
+    /// Values inside a supplied block may themselves be null to clear a field.
+    /// </summary>
+    public JobOnRevisionValues? Values { get; init; }
+}
+
+public sealed record JobOnRevisionValues(
+    string? Reference,
+    int? Sections,
+    decimal? DropCount,
+    string? TypeSnapshot,
+    string? StopSnapshot,
+    decimal? WeightSnapshot,
+    string? ProcessSnapshot);
 
 /// <summary>
 /// "Alterar data" — change the planned dates of an EXISTING Job On. The operation
@@ -88,6 +105,7 @@ public sealed class JobOnService
     private readonly IClock _clock;
     private readonly IFerramentasIdentityLookup _toolLookup;
     private readonly IArticleReferenceImageRepository? _articleImages;
+    private readonly IFerramentasRuleLookup? _ruleLookup;
 
     public JobOnService(
         JobOnAuthorizationGate gate,
@@ -95,7 +113,8 @@ public sealed class JobOnService
         IJobOnUserContextRepository userContextRepository,
         IClock clock,
         IFerramentasIdentityLookup toolLookup,
-        IArticleReferenceImageRepository? articleImages = null)
+        IArticleReferenceImageRepository? articleImages = null,
+        IFerramentasRuleLookup? ruleLookup = null)
     {
         _gate = gate ?? throw new ArgumentNullException(nameof(gate));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
@@ -104,6 +123,7 @@ public sealed class JobOnService
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _toolLookup = toolLookup ?? throw new ArgumentNullException(nameof(toolLookup));
         _articleImages = articleImages;
+        _ruleLookup = ruleLookup;
     }
 
     /// <summary>
@@ -284,26 +304,33 @@ public sealed class JobOnService
         // come from the already-loaded current revision only — never invented, and
         // preserved as null when genuinely absent (owner D2 decision).
         var currentRevision = jobOn.CurrentRevision;
+        var components = await MaterializeVerificationOccurrencesAsync(
+            currentRevision, request.Components, cancellationToken);
 
         // Audit "before": the previous revision of the SAME Job On (the state the
         // edit started from). Writes never touch that revision.
         var beforeSnapshot = SaveAuditSnapshot(jobOn.CurrentRevisionId);
 
+        var values = request.Values;
         var revision = new JobOnRevision
         {
             JobOnRevisionId = Guid.NewGuid(),
             JobOnId = jobOn.Id,
             RevisionNumber = jobOn.RevisionCount + 1,
             ProductionSnapshot = SnapshotJson.Production(jobOn.ProductionCode),
-            ReferenceSnapshot = currentRevision?.ReferenceSnapshot,
+            ReferenceSnapshot = values is null
+                ? currentRevision?.ReferenceSnapshot
+                : SnapshotJson.Reference(values.Reference?.Trim() ?? string.Empty),
             MachineSnapshot = SnapshotJson.Machine(jobOn.MachineCode),
             DatesSnapshot = SnapshotJson.Dates(jobOn.PlannedStartAt, jobOn.PlannedEndAt),
-            TypeSnapshot = currentRevision?.TypeSnapshot,
-            StopSnapshot = currentRevision?.StopSnapshot,
-            WeightSnapshot = currentRevision?.WeightSnapshot,
-            ProcessSnapshot = currentRevision?.ProcessSnapshot,
-            Sections = currentRevision?.Sections ?? "{}",
-            DropCount = currentRevision?.DropCount,
+            TypeSnapshot = values is null ? currentRevision?.TypeSnapshot : NormalizeOptional(values.TypeSnapshot),
+            StopSnapshot = values is null ? currentRevision?.StopSnapshot : NormalizeOptional(values.StopSnapshot),
+            WeightSnapshot = values is null ? currentRevision?.WeightSnapshot : values.WeightSnapshot,
+            ProcessSnapshot = values is null ? currentRevision?.ProcessSnapshot : NormalizeOptional(values.ProcessSnapshot),
+            Sections = values is null
+                ? currentRevision?.Sections ?? "{}"
+                : values.Sections?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "{}",
+            DropCount = values is null ? currentRevision?.DropCount : values.DropCount,
             GeneralNotes = request.GeneralNotes,
             // The legacy revision column remains dormant for historical
             // compatibility. The active image association is master-reference owned.
@@ -311,7 +338,7 @@ public sealed class JobOnService
             ChangeReason = request.ChangeReason,
             SavedBy = gate.Value.ActorId,
             SavedAtUtc = _clock.UtcNow.DateTime,
-            Components = request.Components
+            Components = components
         };
 
         // Audit "after": the new revision id.
@@ -330,6 +357,67 @@ public sealed class JobOnService
 
         return Result<Guid, DomainError>.Success(revision.JobOnRevisionId);
     }
+
+    /// <summary>
+    /// Makes verification state server-authoritative during a revision save.
+    /// An unchanged CM/MF/BQ lot carries the persisted occurrence state into the
+    /// new immutable revision. A newly associated/changed lot loads the active
+    /// Ferramentas rules and materializes fresh pending occurrences. Browser
+    /// payloads can therefore neither forge confirmations nor suppress the
+    /// initial occurrences required by the selected lot.
+    /// </summary>
+    private async Task<IReadOnlyList<JobOnComponent>> MaterializeVerificationOccurrencesAsync(
+        JobOnRevision? currentRevision,
+        IReadOnlyList<JobOnComponent> submittedComponents,
+        CancellationToken cancellationToken)
+    {
+        var currentByFamily = (currentRevision?.Components ?? Array.Empty<JobOnComponent>())
+            .GroupBy(component => component.Family)
+            .ToDictionary(group => group.Key, group => group.First());
+        var materialized = new List<JobOnComponent>(submittedComponents.Count);
+        var now = _clock.UtcNow.UtcDateTime;
+
+        foreach (var component in submittedComponents)
+        {
+            if (!IsRegisteredVerificationFamily(component.Family)
+                || component.SourceLotId is not { } sourceLotId)
+            {
+                materialized.Add(component);
+                continue;
+            }
+
+            currentByFamily.TryGetValue(component.Family, out var current);
+            IReadOnlyList<JobOnVerificationOccurrence> occurrences;
+
+            if (current?.SourceLotId == sourceLotId
+                && current.Verifications is { Count: > 0 } persisted)
+            {
+                occurrences = persisted.Select(occurrence => occurrence with
+                {
+                    JobOnVerificationOccurrenceId = Guid.NewGuid(),
+                    JobOnComponentId = component.JobOnComponentId
+                }).ToList().AsReadOnly();
+            }
+            else
+            {
+                var rules = _ruleLookup is null
+                    ? Array.Empty<VerificationRule>()
+                    : await _ruleLookup.ResolveActiveRulesAsync(sourceLotId, cancellationToken);
+                occurrences = JobOnVerificationGenerator.Generate(
+                    component.JobOnComponentId, rules, now);
+            }
+
+            materialized.Add(component with { Verifications = occurrences });
+        }
+
+        return materialized.AsReadOnly();
+    }
+
+    private static bool IsRegisteredVerificationFamily(ComponentFamily family) =>
+        family is ComponentFamily.MP_CM or ComponentFamily.MF or ComponentFamily.BQ;
+
+    private static string? NormalizeOptional(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     /// <summary>
     /// "Alterar CM/MF/BQ associado" — read-only tool selection options (Manual 10
@@ -539,7 +627,15 @@ public sealed class JobOnService
         return Result<Guid, DomainError>.Success(revision.JobOnRevisionId);
     }
 
-    /// <summary>Transition the lifecycle state with validation (TD-27).</summary>
+    /// <summary>
+    /// Transition the lifecycle state with validation (TD-27). The transition
+    /// rules are the domain's (rascunho → planeado → em_fabrico → fechado, with
+    /// cancelado reachable only from rascunho/planeado); terminal states reject
+    /// every transition. Cancelling REQUIRES a non-blank reason: a cancellation
+    /// without a reason is rejected with a clean validation error before any
+    /// write. No Job On revision is created by a lifecycle transition (TD-18:
+    /// revisions are snapshot saves, never lifecycle facts).
+    /// </summary>
     public async Task<Result<JobOnLifecycleState, DomainError>> TransitionAsync(
         TransitionJobOnRequest request, CancellationToken cancellationToken = default)
     {
@@ -551,6 +647,12 @@ public sealed class JobOnService
         if (jobOn is null)
             return Result<JobOnLifecycleState, DomainError>.Failure(DomainError.NotFound(
                 "JOBON_NOT_FOUND", "Job On não encontrado."));
+
+        if (request.NewState == JobOnLifecycleState.Cancelado
+            && string.IsNullOrWhiteSpace(request.CancelReason))
+            return Result<JobOnLifecycleState, DomainError>.Failure(DomainError.Validation(
+                "JOBON_CANCEL_REASON_REQUIRED",
+                "Cancelar um Job On exige um motivo."));
 
         try
         {

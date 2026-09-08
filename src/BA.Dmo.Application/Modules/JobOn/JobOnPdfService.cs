@@ -50,12 +50,45 @@ public sealed class JobOnPdfService
             return Result<GeneratedJobOnDocument, DomainError>.Failure(DomainError.NotFound(
                 "JOBON_NOT_FOUND", "Job On não encontrado."));
 
-        var data = BuildPdfData(jobOn);
+        return await GenerateRevisionCoreAsync(renderer, jobOn, jobOn.CurrentRevision, ct);
+    }
+
+    /// <summary>Generates the document for one exact immutable revision.</summary>
+    public async Task<Result<GeneratedJobOnDocument, DomainError>> GenerateRevisionAsync(
+        IJobOnPdfRenderer renderer,
+        Guid jobOnId,
+        Guid revisionId,
+        CancellationToken ct = default)
+    {
+        var gate = _gate.Require(JobonModuleCatalog.JobonViewCapabilityId);
+        if (gate.IsFailure)
+            return Result<GeneratedJobOnDocument, DomainError>.Failure(gate.Error);
+
+        var jobOn = await _repository.GetByIdAsync(jobOnId, ct);
+        if (jobOn is null)
+            return Result<GeneratedJobOnDocument, DomainError>.Failure(DomainError.NotFound(
+                "JOBON_NOT_FOUND", "Job On não encontrado."));
+
+        var revision = jobOn.Revisions.SingleOrDefault(r => r.JobOnRevisionId == revisionId);
+        if (revision is null)
+            return Result<GeneratedJobOnDocument, DomainError>.Failure(DomainError.NotFound(
+                "JOBON_REVISION_NOT_FOUND", "Revisão Job On não encontrada."));
+
+        return await GenerateRevisionCoreAsync(renderer, jobOn, revision, ct);
+    }
+
+    private async Task<Result<GeneratedJobOnDocument, DomainError>> GenerateRevisionCoreAsync(
+        IJobOnPdfRenderer renderer,
+        JobOnEntity jobOn,
+        JobOnRevision? revision,
+        CancellationToken ct)
+    {
+        var data = BuildPdfData(jobOn, revision);
         if (_imageProvider is not null)
         {
             // A historical revision does not own an image snapshot. Printing
             // consumes the current master association for its Article/Reference.
-            var image = await _imageProvider.ResolveAsync(jobOnId, ct);
+            var image = await _imageProvider.ResolveAsync(jobOn.Id, ct);
             if (image is not null)
             {
                 data = data with
@@ -66,14 +99,13 @@ public sealed class JobOnPdfService
             }
         }
         var pdfBytes = renderer.RenderJobOnDocument(data);
-        var fileName = BuildFileName(jobOn);
+        var fileName = BuildFileName(jobOn, revision);
 
         return Result<GeneratedJobOnDocument, DomainError>.Success(new GeneratedJobOnDocument(pdfBytes, fileName));
     }
 
-    private static JobOnPdfData BuildPdfData(JobOnEntity jobOn)
+    private static JobOnPdfData BuildPdfData(JobOnEntity jobOn, JobOnRevision? revision)
     {
-        var revision = jobOn.CurrentRevision;
         if (revision is null)
         {
             // Return minimal data — no revision means no tool data at all.
@@ -96,15 +128,16 @@ public sealed class JobOnPdfService
         {
             Reference = ArticleReferenceImageRules.ExtractReferenceCode(
                 revision.ReferenceSnapshot),
-            ProductionCode = jobOn.ProductionCode,
-            MachineCode = jobOn.MachineCode,
+            ProductionCode = ExtractSnapshotString(revision.ProductionSnapshot, "production_code") ?? jobOn.ProductionCode,
+            MachineCode = ExtractSnapshotString(revision.MachineSnapshot, "machine_code") ?? jobOn.MachineCode,
             Sections = ParseSections(revision.Sections),
             DropCount = revision.DropCount,
             Weight = revision.WeightSnapshot,
             TypeSnapshot = revision.TypeSnapshot,
+            StopSnapshot = revision.StopSnapshot,
             ProcessSnapshot = revision.ProcessSnapshot,
-            PlannedStartAt = jobOn.PlannedStartAt,
-            PlannedEndAt = jobOn.PlannedEndAt,
+            PlannedStartAt = ExtractSnapshotDate(revision.DatesSnapshot, "start_at") ?? jobOn.PlannedStartAt,
+            PlannedEndAt = ExtractSnapshotDate(revision.DatesSnapshot, "end_at") ?? jobOn.PlannedEndAt,
             GeneralNotes = revision.GeneralNotes,
             RevisionNumber = revision.RevisionNumber,
 
@@ -182,8 +215,35 @@ public sealed class JobOnPdfService
             TechnicalName = comp.TechnicalNameSnapshot,
             Usage = comp.UsageSnapshot,
             Notes = comp.Notes,
+            Stock = comp.StockSnapshot,
+            MachineQuantity = comp.PlannedQuantity,
             Fields = fields
         };
+    }
+
+    private static string? ExtractSnapshotString(string? json, string property)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.TryGetProperty(property, out var value)
+                ? value.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static DateTimeOffset? ExtractSnapshotDate(string? json, string property)
+    {
+        var value = ExtractSnapshotString(json, property);
+        return DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.RoundtripKind, out var parsed)
+            ? parsed
+            : null;
     }
 
     private static int ParseSections(string? sectionsJson)
@@ -199,10 +259,13 @@ public sealed class JobOnPdfService
         }
     }
 
-    internal static string BuildFileName(JobOnEntity jobOn)
+    internal static string BuildFileName(JobOnEntity jobOn, JobOnRevision? revision = null)
     {
         var reference = ArticleReferenceImageRules.ExtractReferenceCode(
-            jobOn.CurrentRevision?.ReferenceSnapshot);
-        return $"JobOn_{jobOn.ProductionCode}_{reference}_{jobOn.MachineCode}.pdf";
+            (revision ?? jobOn.CurrentRevision)?.ReferenceSnapshot);
+        var revisionSuffix = revision is not null && revision.JobOnRevisionId != jobOn.CurrentRevisionId
+            ? $"_R{revision.RevisionNumber}"
+            : string.Empty;
+        return $"JobOn_{jobOn.ProductionCode}_{reference}_{jobOn.MachineCode}{revisionSuffix}.pdf";
     }
 }

@@ -246,6 +246,123 @@
     });
   }
 
+  // =============================================================
+  // REAL LIFECYCLE FLOW — "Planear" / "Iniciar produção" / "Fechar" /
+  // "Cancelar" (POST /api/jobon/{id}/transition). The buttons are
+  // server-rendered ONLY for the transitions valid in the Job On's
+  // current lifecycle state, and only for users with jobon.edit
+  // (view-only users never see them; the route policy + service gate
+  // fail closed server-side regardless). The simple transitions
+  // confirm through a dialog and submit { newState }; the cancellation
+  // requires a reason (dialog input) and submits
+  // { newState: "Cancelado", cancelReason }. The server persists the
+  // status + terminal timestamps + the jobon.transicao audit atomically
+  // (NO revision is created) and the SAME folha reopens via
+  // /jobon?id={sameJobOnId} rendering the new lifecycle state.
+  // =============================================================
+  const resetLifecycleError = errorEl => {
+    if (errorEl) { errorEl.textContent = ""; errorEl.classList.remove("visible"); }
+  };
+  const showLifecycleError = (errorEl, message) => {
+    if (errorEl) { errorEl.textContent = message; errorEl.classList.add("visible"); }
+  };
+
+  const submitLifecycleTransition = async (newState, cancelReason) => {
+    const jobOnId = $("meta[name='jobon-id']")?.getAttribute("content");
+    if (!jobOnId) return { ok: false, message: "Não foi possível identificar o Job On." };
+    try {
+      const response = await fetch(`/api/jobon/${encodeURIComponent(jobOnId)}/transition`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cancelReason ? { newState, cancelReason } : { newState })
+      });
+      if (response.ok) {
+        // Reopen the SAME Job On folha, now rendering the new lifecycle state.
+        window.location.assign(`/jobon?id=${encodeURIComponent(jobOnId)}`);
+        return { ok: true };
+      }
+      let message = "Não foi possível concluir a transição de estado.";
+      try {
+        const body = await response.json();
+        if (body && body.message) message = body.message;
+      } catch { /* keep the default message */ }
+      return { ok: false, message };
+    } catch {
+      return { ok: false, message: "Não foi possível concluir a transição. Verifique a ligação e tente novamente." };
+    }
+  };
+
+  const lifecycleTransitionDialog = $("#lifecycleTransitionDialog");
+  let pendingLifecycleState = null;
+
+  $$("[data-new-state]").forEach(button => button.addEventListener("click", () => {
+    if (!lifecycleTransitionDialog || typeof lifecycleTransitionDialog.showModal !== "function") return;
+    pendingLifecycleState = button.dataset.newState;
+    const copy = {
+      Planeado: {
+        title: "Planear produção",
+        description: "Passa a produção para planeado. A produção fica ativa no contexto da linha e pode iniciar produção."
+      },
+      EmFabrico: {
+        title: "Iniciar produção",
+        description: "Passa a produção para em fabrico. Depois disso, a única transição disponível é fechar a produção."
+      },
+      Fechado: {
+        title: "Fechar produção",
+        description: "Fecha a produção. Depois de fechada, apenas alterações motivadas são admitidas."
+      }
+    }[pendingLifecycleState];
+    $("#lifecycleTransitionTitle")?.replaceChildren(document.createTextNode(copy?.title ?? "Transição de estado"));
+    $("#lifecycleTransitionDescription")?.replaceChildren(document.createTextNode(copy?.description ?? "Confirmar a transição de estado."));
+    resetLifecycleError($("#lifecycleTransitionError"));
+    lifecycleTransitionDialog.showModal();
+  }));
+
+  const lifecycleTransitionConfirm = $("#lifecycleTransitionConfirm");
+  if (lifecycleTransitionConfirm && lifecycleTransitionDialog) {
+    lifecycleTransitionConfirm.addEventListener("click", async () => {
+      if (!pendingLifecycleState) return;
+      lifecycleTransitionConfirm.disabled = true;
+      try {
+        const result = await submitLifecycleTransition(pendingLifecycleState, null);
+        if (!result.ok) showLifecycleError($("#lifecycleTransitionError"), result.message);
+      } finally {
+        lifecycleTransitionConfirm.disabled = false;
+      }
+    });
+    $("#lifecycleTransitionClose")?.addEventListener("click", () => lifecycleTransitionDialog.close());
+    lifecycleTransitionDialog.addEventListener("click", event => { if (event.target === lifecycleTransitionDialog) lifecycleTransitionDialog.close(); });
+  }
+
+  const cancelButton = $("#cancelJobOn");
+  const cancelDialog = $("#cancelJobOnDialog");
+  if (cancelButton && cancelDialog && typeof cancelDialog.showModal === "function") {
+    cancelButton.addEventListener("click", () => {
+      resetLifecycleError($("#cancelJobOnError"));
+      cancelDialog.showModal();
+    });
+    $("#cancelJobOnDialogClose")?.addEventListener("click", () => cancelDialog.close());
+    cancelDialog.addEventListener("click", event => { if (event.target === cancelDialog) cancelDialog.close(); });
+    $("#cancelJobOnForm")?.addEventListener("submit", async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const submit = $("#cancelJobOnSubmit");
+      const reason = form.elements.cancelReason.value.trim();
+      if (!reason) {
+        showLifecycleError($("#cancelJobOnError"), "O motivo do cancelamento é obrigatório.");
+        return;
+      }
+      submit.disabled = true;
+      try {
+        const result = await submitLifecycleTransition("Cancelado", reason);
+        if (!result.ok) showLifecycleError($("#cancelJobOnError"), result.message);
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  }
+
   const setMode = mode => {
     document.body.dataset.mode = mode;
     const label = $("#modeIndicator strong");
@@ -292,6 +409,10 @@
     || (revisionGraph[0] ? revisionGraph[0].jobOnRevisionId : null);
   const changeReasonRequired = root?.dataset.changeReasonRequired === "true";
   const initialGeneralNotes = $(".general-notes textarea")?.value ?? null;
+  const initialControlValues = new Map(
+    $$("#sheetView input:not([type='file']), #sheetView textarea, #sheetView select")
+      .map(control => [control, control.value]));
+  const initialCalRowsHtml = $("#calRows")?.innerHTML ?? null;
 
   // uuid v4 fallback for browsers without crypto.randomUUID.
   function uuid() {
@@ -322,6 +443,20 @@
     const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
     if (!match) return "";
     return `${match[3]}/${match[2]}/${match[1]}`;
+  }
+
+  function optionalNumber(value) {
+    const normalized = String(value ?? "").trim().replace(",", ".");
+    if (normalized === "") return null;
+    const number = Number(normalized);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function optionalInteger(value) {
+    const normalized = String(value ?? "").trim();
+    if (normalized === "") return null;
+    const number = Number(normalized);
+    return Number.isInteger(number) && number >= 0 ? number : null;
   }
 
   // Applies a DOM input value onto a typed field record (the only revision-owned
@@ -358,23 +493,77 @@
     const lotInput = card.querySelector('input[aria-label^="Lote"]');
     const notes = card.querySelector("textarea");
 
-    const fields = (component.fields || []).map(field => ({ ...field }));
-    if (fields.length > 0) {
-      const fieldInputs = [...(card.querySelectorAll(".tool-fields input") || [])]
-        .filter(input => input !== refInput && input !== lotInput);
-      fields.forEach((field, index) => {
-        const input = fieldInputs[index];
-        if (input) Object.assign(field, applyFieldValue(field, input.value));
-      });
-    }
+    const existing = new Map((component.fields || []).map(field => [field.fieldKey, field]));
+    const fields = [...card.querySelectorAll("[data-field-key]")].flatMap((input, index) => {
+      const fieldKey = input.dataset.fieldKey;
+      const prior = existing.get(fieldKey);
+      const value = String(input.value ?? "").trim();
+      if (!prior && value === "") return [];
+      const field = prior || {
+        jobOnComponentFieldId: uuid(),
+        jobOnComponentId: component.jobOnComponentId,
+        fieldKey,
+        valueType: input.dataset.valueType || "text",
+        displayOrder: Number(input.dataset.displayOrder || index)
+      };
+      return [applyFieldValue(field, value)];
+    });
 
     return {
       ...component,
       referenceSnapshot: refInput ? refInput.value : component.referenceSnapshot,
       lotSnapshot: lotInput ? lotInput.value : component.lotSnapshot,
+      stockSnapshot: optionalNumber(card.querySelector('[data-component-property="stockSnapshot"]')?.value),
+      plannedQuantity: optionalNumber(card.querySelector('[data-component-property="plannedQuantity"]')?.value),
       notes: notes ? notes.value : component.notes,
       fields
     };
+  }
+
+  function newManualComponent(cardCode) {
+    const family = cardCodeToFamily[cardCode];
+    const card = document.querySelector(`.tool-card[data-family="${cardCode}"]`);
+    if (!family || !card) return null;
+    const reference = card.querySelector('input[aria-label^="Referência"]')?.value.trim() || null;
+    const lot = card.querySelector('input[aria-label^="Lote"]')?.value.trim() || null;
+    const notes = card.querySelector("textarea")?.value.trim() || null;
+    const stockSnapshot = optionalNumber(card.querySelector('[data-component-property="stockSnapshot"]')?.value);
+    const plannedQuantity = optionalNumber(card.querySelector('[data-component-property="plannedQuantity"]')?.value);
+    const fieldInputs = [...card.querySelectorAll("[data-field-key]")];
+    const hasFieldValue = fieldInputs.some(input => String(input.value ?? "").trim() !== "");
+    if (!reference && !lot && !notes && stockSnapshot === null && plannedQuantity === null && !hasFieldValue) return null;
+    const componentId = uuid();
+    const fields = fieldInputs.flatMap((input, index) => {
+      if (String(input.value ?? "").trim() === "") return [];
+      return [applyFieldValue({
+        jobOnComponentFieldId: uuid(), jobOnComponentId: componentId,
+        fieldKey: input.dataset.fieldKey, valueType: input.dataset.valueType || "text",
+        displayOrder: Number(input.dataset.displayOrder || index)
+      }, input.value)];
+    });
+    return {
+      jobOnComponentId: componentId, jobOnRevisionId: currentRevisionIdForSave,
+      family, sourceToolId: null, sourceLotId: null,
+      referenceSnapshot: reference, lotSnapshot: lot, technicalNameSnapshot: null,
+      plannedQuantity, stockSnapshot, usageSnapshot: null, notes,
+      displayOrder: Object.keys(familyToCardCode).indexOf(family),
+      fields, rows: [], verifications: []
+    };
+  }
+
+  function readCalRows(componentId) {
+    return [...document.querySelectorAll("#calRows tr:not(.cal-empty)")].flatMap((row, index) => {
+      const element = row.querySelector('[data-cal="element"]')?.value.trim() || "";
+      const value = row.querySelector('[data-cal="value"]')?.value.trim() || "";
+      const unit = row.querySelector('[data-cal="unit"]')?.value.trim() || null;
+      const quantity = optionalNumber(row.querySelector('[data-cal="quantity"]')?.value);
+      if (!element && !value && !unit && quantity === null) return [];
+      return [{
+        jobOnComponentRowId: uuid(), jobOnComponentId: componentId,
+        elementLabel: element, valueDecimal: null, valueText: value || null,
+        unit, machineQuantity: quantity, displayOrder: index
+      }];
+    });
   }
 
   // Builds the new-revision graph: the current revision's components with the
@@ -452,6 +641,30 @@
       }
     });
 
+    ["PU", "AN", "ARR", "PI", "CS", "TP", "FO"].forEach(cardCode => {
+      const family = cardCodeToFamily[cardCode];
+      if (graph.some(component => component.family === family)) return;
+      const component = newManualComponent(cardCode);
+      if (component) graph.push(component);
+    });
+
+    let calIndex = graph.findIndex(component => component.family === "CAL");
+    if (calIndex >= 0) {
+      graph[calIndex] = { ...graph[calIndex], rows: readCalRows(graph[calIndex].jobOnComponentId) };
+    } else {
+      const componentId = uuid();
+      const rows = readCalRows(componentId);
+      if (rows.length > 0) {
+        graph.push({
+          jobOnComponentId: componentId, jobOnRevisionId: currentRevisionIdForSave,
+          family: "CAL", sourceToolId: null, sourceLotId: null,
+          referenceSnapshot: null, lotSnapshot: null, technicalNameSnapshot: null,
+          plannedQuantity: null, stockSnapshot: null, usageSnapshot: null, notes: null,
+          displayOrder: graph.length, fields: [], rows, verifications: []
+        });
+      }
+    }
+
     return graph;
   }
 
@@ -459,6 +672,10 @@
   // and the notes textarea — the cancel-edit reset. Pure DOM, zero writes.
   function restoreOriginalValues() {
     resetPickerState(); // discards any staged (unsaved) tool selection
+    if (initialCalRowsHtml !== null && $("#calRows")) $("#calRows").innerHTML = initialCalRowsHtml;
+    initialControlValues.forEach((value, control) => {
+      if (control.isConnected) control.value = value;
+    });
     const notes = $(".general-notes textarea");
     if (notes && initialGeneralNotes !== null) notes.value = initialGeneralNotes;
     (Array.isArray(revisionGraph) ? revisionGraph : []).forEach(component => {
@@ -471,10 +688,8 @@
       if (refInput) refInput.value = component.referenceSnapshot ?? "";
       if (lotInput) lotInput.value = component.lotSnapshot ?? "";
       if (notesInput) notesInput.value = component.notes ?? "";
-      const fieldInputs = [...(card.querySelectorAll(".tool-fields input") || [])]
-        .filter(input => input !== refInput && input !== lotInput);
-      (component.fields || []).forEach((field, index) => {
-        const input = fieldInputs[index];
+      (component.fields || []).forEach(field => {
+        const input = card.querySelector(`[data-field-key="${CSS.escape(field.fieldKey)}"]`);
         if (!input) return;
         switch (field.valueType) {
           case "integer": input.value = field.valueInteger == null ? "" : String(field.valueInteger); break;
@@ -511,7 +726,10 @@
   let pickerFamily = null;   // card code currently loaded in the picker
   let selectedOption = null; // the row selected in the current picker list
 
-  const cardCodeToFamily = { CM: "MP_CM", MF: "MF", BQ: "BQ" };
+  const cardCodeToFamily = {
+    CM: "MP_CM", MF: "MF", BQ: "BQ", PU: "PU", AN: "AN", ARR: "ARR",
+    PI: "PI", CS: "CS", TP: "TP", FO: "FO", CAL: "CAL"
+  };
   const pickerBody = $("#pickerOptionsBody");
   const pickerSelectionCount = $("#pickerSelectionCount");
   const applyToolSelectionButton = $("#applyToolSelection");
@@ -736,6 +954,15 @@
       generalNotes: $(".general-notes textarea")?.value ?? null,
       changeReason,
       imageAssetId: null,
+      values: {
+        reference: $("#sheetReference")?.value.trim() || null,
+        sections: optionalInteger($("#sheetSections")?.value),
+        dropCount: optionalNumber($("#sheetDropCount")?.value),
+        typeSnapshot: $("#sheetType")?.value.trim() || null,
+        stopSnapshot: $("#sheetStop")?.value.trim() || null,
+        weightSnapshot: optionalNumber($("#sheetWeight")?.value),
+        processSnapshot: $("#sheetProcess")?.value.trim() || null
+      },
       components: buildEditedComponentsGraph()
     };
     submit.disabled = true;
@@ -966,6 +1193,22 @@
     field?.classList.toggle("expanded");
     button.textContent = field?.classList.contains("expanded") ? "Recolher" : "Expandir";
   }));
+  $("#addCalRow")?.addEventListener("click", () => {
+    const rows = $("#calRows");
+    if (!rows) return;
+    rows.querySelector(".cal-empty")?.remove();
+    const row = document.createElement("tr");
+    row.innerHTML = `<td><input data-cal="element" aria-label="Elemento CAL"></td>
+      <td><input data-cal="value" aria-label="Valor CAL"></td>
+      <td><input data-cal="unit" aria-label="Unidade CAL"></td>
+      <td><input type="number" step="0.01" data-cal="quantity" aria-label="Quantidade em máquina"></td>
+      <td class="edit-only"><button class="button compact ghost cal-remove" type="button">Remover</button></td>`;
+    rows.appendChild(row);
+  });
+  $("#calRows")?.addEventListener("click", event => {
+    const button = event.target.closest(".cal-remove");
+    if (button) button.closest("tr")?.remove();
+  });
   $("#goChecks")?.addEventListener("click", () => $("#checksSection")?.scrollIntoView({ behavior: "smooth", block: "start" }));
 
   // =============================================================
@@ -1062,40 +1305,9 @@
   const renderCatalogLabel = label => `<strong>${esc(label)}</strong>`;
   void renderCatalogLabel;
 
-  async function loadRail() {
-    const panel = $("#linePanel");
-    if (!panel) return;
-    try {
-      const response = await fetch("/api/boquilhas/production-context", { credentials: "same-origin" });
-      if (!response.ok) throw new Error("production context unavailable");
-      const cards = await response.json();
-      const byLine = Object.fromEntries(cards.map(card => [card.line, card]));
-      $$(".line-card", panel).forEach(button => {
-        const card = byLine[button.dataset.line];
-        if (!card?.hasActiveContext) {
-          button.innerHTML = `<span class="line-code">${esc(button.dataset.line)}</span><span class="line-state idle">Sem produção</span><small>Sem Job On ativo</small>`;
-          return;
-        }
-        button.dataset.jobId = card.jobOnId || "";
-        button.innerHTML = `<span class="line-code">${esc(button.dataset.line)}</span><span class="line-state running">Ativo</span><strong>${esc(card.reference || "—")}</strong><small>Produção ${esc(card.productionCode || "—")}</small>`;
-      });
-    } catch {
-      $$(".line-card", panel).forEach(button => {
-        button.innerHTML = `<span class="line-code">${esc(button.dataset.line)}</span><span class="line-state idle">Indisponível</span><small>Contexto não carregado</small>`;
-      });
-    }
-  }
-  $$(".line-card").forEach(button => button.addEventListener("click", () => {
-    $$(".line-card").forEach(item => item.classList.toggle("active", item === button));
-    if (button.dataset.jobId) window.location.assign(`/jobon?id=${encodeURIComponent(button.dataset.jobId)}`);
-  }));
-  $("#railToggle")?.addEventListener("click", () => {
-    const rail = $("#productionRail");
-    rail?.classList.toggle("open");
-    const open = rail?.classList.contains("open") === true;
-    $("#railToggle").setAttribute("aria-expanded", String(open));
-    $("#railToggle").textContent = open ? "Ocultar linhas" : "Ver linhas";
-  });
+  // PHASE 3: the production rail (state, rail card clicks, mobile toggle)
+  // is owned by the single shared script wwwroot/scripts/production-rail.js
+  // — Job On no longer loads current-production rail data independently.
 
   const image = $("#article-reference-image");
   const imageEmpty = $("#article-image-empty");
@@ -1160,7 +1372,11 @@
     const button = $("#printJobOn");
     button.disabled = true;
     try {
-      const response = await fetch(`/api/jobon/${jobOnId}/document`, { method: "POST", credentials: "same-origin" });
+      const revisionId = $("meta[name='jobon-revision-id']")?.getAttribute("content");
+      const documentUrl = revisionId
+        ? `/api/jobon/${jobOnId}/revisions/${revisionId}/document`
+        : `/api/jobon/${jobOnId}/document`;
+      const response = await fetch(documentUrl, { method: "POST", credentials: "same-origin" });
       if (!response.ok) throw new Error("document generation failed");
       const blobUrl = URL.createObjectURL(await response.blob());
       window.open(blobUrl, "_blank", "noopener");
@@ -1171,6 +1387,4 @@
   });
 
   openView(root.dataset.initialView || "planning");
-  if (innerWidth <= 980) $("#productionRail")?.classList.add("open");
-  loadRail();
 })();

@@ -409,6 +409,10 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
         Assert.Contains("meta name=\"jobon-id\" content=\"" + jobOnId, beforeHtml);
         Assert.Contains("meta name=\"jobon-revision-id\"", beforeHtml);
         Assert.DoesNotContain("Notas editadas na revisao 2", beforeHtml);
+        var beforeRevisionMatch = System.Text.RegularExpressions.Regex.Match(
+            beforeHtml, "name=\"jobon-revision-id\" content=\"([0-9a-fA-F-]{36})\"");
+        Assert.True(beforeRevisionMatch.Success);
+        var beforeRevisionId = Guid.Parse(beforeRevisionMatch.Groups[1].Value);
 
         // 2. Save an edited revision of the SAME Job On.
         var saved = await client.PostAsJsonAsync(
@@ -419,6 +423,16 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
                 generalNotes = "Notas editadas na revisao 2",
                 changeReason = (string?)null,
                 imageAssetId = (string?)null,
+                values = new
+                {
+                    reference = "REF-ROUNDTRIP",
+                    sections = 24,
+                    dropCount = 2.5m,
+                    typeSnapshot = "TIPO-ROUNDTRIP",
+                    stopSnapshot = "STOP-ROUNDTRIP",
+                    weightSnapshot = 123.45m,
+                    processSnapshot = "PROCESS-ROUNDTRIP"
+                },
                 components = Array.Empty<object>()
             });
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
@@ -435,7 +449,32 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
         Assert.Contains("meta name=\"jobon-revision-id\" content=\"" + payload.RevisionId, afterHtml);
         Assert.Contains("Notas editadas na revisao 2", afterHtml); // edited value renders
         Assert.Contains("202608", afterHtml);   // production unchanged
-        Assert.Contains("5447T173", afterHtml); // reference unchanged
+        Assert.Contains("value=\"REF-ROUNDTRIP\"", afterHtml);
+        Assert.Contains("value=\"24\"", afterHtml);
+        Assert.Contains("value=\"2.5\"", afterHtml);
+        Assert.Contains("value=\"TIPO-ROUNDTRIP\"", afterHtml);
+        Assert.Contains("value=\"STOP-ROUNDTRIP\"", afterHtml);
+        Assert.Contains("value=\"123.45\"", afterHtml);
+        Assert.Contains("value=\"PROCESS-ROUNDTRIP\"", afterHtml);
+        Assert.Contains($"revision={beforeRevisionId}", afterHtml);
+
+        // The previous immutable revision remains directly usable and renders
+        // its original snapshot, never the newly saved values.
+        var historical = await client.GetAsync($"/jobon?id={jobOnId}&revision={beforeRevisionId}");
+        Assert.Equal(HttpStatusCode.OK, historical.StatusCode);
+        var historicalHtml = await historical.Content.ReadAsStringAsync();
+        Assert.Contains("value=\"5447T173\"", historicalHtml);
+        Assert.DoesNotContain("REF-ROUNDTRIP", historicalHtml);
+        Assert.DoesNotContain("id=\"editSheet\"", historicalHtml);
+
+        // Printing the selected revision consumes its persisted projection.
+        var printed = await client.PostAsync(
+            $"/api/jobon/{jobOnId}/revisions/{payload.RevisionId}/document", content: null);
+        Assert.Equal(HttpStatusCode.OK, printed.StatusCode);
+        var printedText = System.Text.Encoding.UTF8.GetString(await printed.Content.ReadAsByteArrayAsync());
+        Assert.Contains("REF-ROUNDTRIP", printedText);
+        Assert.Contains("TIPO-ROUNDTRIP", printedText);
+        Assert.Contains("STOP-ROUNDTRIP", printedText);
     }
 
     // ---- "Alterar CM/MF/BQ associado" — tool-selection options (TD-18) ------
@@ -698,6 +737,237 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
         Assert.Equal(mutationsBefore + 1, _fixture.JobOnRepository.ConfirmMutationCount);
     }
 
+    // ---- lifecycle transitions (TD-27) ---------------------------------------
+    // The transition rules, audit facts, terminal timestamps, the
+    // no-revision / no-mutation contracts and the active-context resolver
+    // are unit-proven (JobOnLifecycleTransitionSurfaceTests). These tests
+    // only prove the UI/API-facing route + authorization + persistence/
+    // reload through the real pipeline.
+
+    [Fact]
+    public async Task ResponsibleProfile_TransitionsRascunhoToPlaneadoToEmFabricoToFechado_ThroughRealEndpoint()
+    {
+        // The REAL HTTP flow: the SAME JobOnId drives the whole lifecycle
+        // through POST /api/jobon/{id}/transition, every request succeeds,
+        // and reloading the same folha renders the persisted state.
+        _fixture.Repository.User = _fixture.JobOnResponsible();
+        var client = await LoginAsync();
+        var jobOnId = await CreateJobOnAsync(client, "202611", "C7", "5447T173");
+
+        var planned = await client.PostAsJsonAsync(
+            $"/api/jobon/{jobOnId}/transition", new { newState = "Planeado" });
+        Assert.Equal(HttpStatusCode.OK, planned.StatusCode);
+        var plannedBody = await planned.Content.ReadFromJsonAsync<TransitionResponse>();
+        Assert.Equal(jobOnId, plannedBody?.JobOnId);
+        Assert.Equal("planeado", plannedBody?.Status); // storage form in the response
+
+        // NOTE: the wire format is the enum NAME (same as the UI submits via
+        // data-new-state); the RESPONSE reports the storage form.
+        var started = await client.PostAsJsonAsync(
+            $"/api/jobon/{jobOnId}/transition", new { newState = "EmFabrico" });
+        Assert.Equal(HttpStatusCode.OK, started.StatusCode);
+        var startedBody = await started.Content.ReadFromJsonAsync<TransitionResponse>();
+        Assert.Equal(jobOnId, startedBody?.JobOnId);
+        Assert.Equal("em_fabrico", startedBody?.Status);
+
+        var closed = await client.PostAsJsonAsync(
+            $"/api/jobon/{jobOnId}/transition", new { newState = "Fechado" });
+        Assert.Equal(HttpStatusCode.OK, closed.StatusCode);
+        var closedBody = await closed.Content.ReadFromJsonAsync<TransitionResponse>();
+        Assert.Equal(jobOnId, closedBody?.JobOnId);
+        Assert.Equal("fechado", closedBody?.Status);
+
+        // Reload the SAME folha: the persisted terminal state renders and no
+        // lifecycle action is offered for a fechado Job On.
+        var folha = await client.GetAsync($"/jobon?id={jobOnId}");
+        Assert.Equal(HttpStatusCode.OK, folha.StatusCode);
+        var html = await folha.Content.ReadAsStringAsync();
+        Assert.Contains("meta name=\"jobon-id\" content=\"" + jobOnId, html);
+        Assert.Contains("Fechado", html);
+        Assert.DoesNotContain("id=\"planJobOn\"", html);
+        Assert.DoesNotContain("id=\"cancelJobOn\"", html);
+        Assert.DoesNotContain("id=\"lifecycleTransitionDialog\"", html);
+    }
+
+    [Fact]
+    public async Task ResponsibleProfile_CancelsRascunhoWithReason_ReloadShowsCancelled_NoNewRevision()
+    {
+        _fixture.Repository.User = _fixture.JobOnResponsible();
+        var client = await LoginAsync();
+        var jobOnId = await CreateJobOnAsync(client, "202612", "C8", "5447T173");
+        var revisionsBefore = (await _fixture.JobOnRepository.GetRevisionsAsync(jobOnId)).Count;
+
+        var cancelled = await client.PostAsJsonAsync(
+            $"/api/jobon/{jobOnId}/transition",
+            new { newState = "Cancelado", cancelReason = "Produção descontinuada" });
+        Assert.Equal(HttpStatusCode.OK, cancelled.StatusCode);
+        var body = await cancelled.Content.ReadFromJsonAsync<TransitionResponse>();
+        Assert.Equal(jobOnId, body?.JobOnId);
+        Assert.Equal("cancelado", body?.Status);
+
+        // Reloading the SAME folha renders the persisted cancelled state.
+        var folha = await client.GetAsync($"/jobon?id={jobOnId}");
+        Assert.Equal(HttpStatusCode.OK, folha.StatusCode);
+        var html = await folha.Content.ReadAsStringAsync();
+        Assert.Contains("meta name=\"jobon-id\" content=\"" + jobOnId, html);
+        Assert.Contains("Cancelado", html);
+
+        // Cancellation is a lifecycle fact, never a snapshot save: no new
+        // revision of the Job On is created.
+        Assert.Equal(
+            revisionsBefore,
+            (await _fixture.JobOnRepository.GetRevisionsAsync(jobOnId)).Count);
+    }
+
+    [Fact]
+    public async Task OperatorWithoutEditCapability_CannotTransition_LifecycleUntouched()
+    {
+        // Operator/Controller holds jobon.view but NOT jobon.edit: the
+        // transition WRITE is denied at the route-level capability policy
+        // (403) and the Job On's lifecycle/revision graph is untouched.
+        _fixture.Repository.User = _fixture.JobOnResponsible();
+        var responsible = await LoginAsync();
+        var jobOnId = await CreateJobOnAsync(responsible, "202613", "C9", "5447T173");
+
+        _fixture.Repository.User = _fixture.JobOnOperator();
+        var operatorClient = await LoginAsync();
+
+        var denied = await operatorClient.PostAsJsonAsync(
+            $"/api/jobon/{jobOnId}/transition", new { newState = "planeado" });
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+
+        // Zero lifecycle mutation: the folha still renders rascunho, the
+        // revision graph is exactly the creation revision and no
+        // jobon.transicao audit fact was emitted.
+        var folha = await operatorClient.GetAsync($"/jobon?id={jobOnId}");
+        Assert.Equal(HttpStatusCode.OK, folha.StatusCode);
+        var html = await folha.Content.ReadAsStringAsync();
+        Assert.Contains("Rascunho", html);
+        Assert.Single(await _fixture.JobOnRepository.GetRevisionsAsync(jobOnId));
+        Assert.DoesNotContain(
+            _fixture.JobOnRepository.AuditEvents,
+            a => a.EventType == "jobon.transicao" && a.JobId == jobOnId);
+    }
+
+    [Fact]
+    public async Task ResponsibleProfile_TransitionPreservesVerificationAndToolData()
+    {
+        // Data safety at the HTTP boundary: a lifecycle transition must not
+        // touch the current revision's verification occurrence or the
+        // component's tool association (the no-mutation semantics are
+        // unit-proven; this proves the REAL endpoint leaves them intact).
+        _fixture.Repository.User = _fixture.JobOnResponsible();
+        var client = await LoginAsync();
+        var jobOnId = await CreateJobOnAsync(client, "202614", "C10", "5447T173");
+
+        // Shortest setup: reuse the create flow + the same save pattern as
+        // the confirm-flow test above (one revision with a PENDING
+        // verification occurrence on a CM component).
+        var page = await client.GetAsync($"/jobon?id={jobOnId}");
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        var pageHtml = await page.Content.ReadAsStringAsync();
+        var revisionIdMatch = System.Text.RegularExpressions.Regex.Match(
+            pageHtml, "name=\"jobon-revision-id\" content=\"([0-9a-fA-F-]{36})\"");
+        Assert.True(revisionIdMatch.Success, "The folha must embed the current revision id.");
+        var currentRevisionId = Guid.Parse(revisionIdMatch.Groups[1].Value);
+        var componentId = Guid.NewGuid();
+        var occurrenceId = Guid.NewGuid();
+        var saved = await client.PostAsJsonAsync($"/api/jobon/{jobOnId}/revision", new
+        {
+            jobOnId,
+            generalNotes = (string?)null,
+            changeReason = (string?)null,
+            imageAssetId = (string?)null,
+            components = new object[]
+            {
+                new
+                {
+                    jobOnComponentId = componentId,
+                    jobOnRevisionId = currentRevisionId,
+                    family = "MP_CM",
+                    referenceSnapshot = "5447",
+                    lotSnapshot = "1",
+                    technicalNameSnapshot = (string?)null,
+                    plannedQuantity = (decimal?)null,
+                    stockSnapshot = (decimal?)null,
+                    usageSnapshot = (decimal?)null,
+                    notes = (string?)null,
+                    displayOrder = 0,
+                    fields = Array.Empty<object>(),
+                    rows = Array.Empty<object>(),
+                    verifications = new object[]
+                    {
+                        new
+                        {
+                            jobOnVerificationOccurrenceId = occurrenceId,
+                            jobOnComponentId = componentId,
+                            sourceRuleId = (Guid?)null,
+                            ruleTextSnapshot = "Verificar junta da boquilha",
+                            status = "pendente",
+                            completionSource = "manual_job_on",
+                            completedBy = (string?)null,
+                            completedAtUtc = (DateTime?)null,
+                            createdAtUtc = new DateTime(2026, 8, 17, 12, 0, 0, DateTimeKind.Utc),
+                            updatedAtUtc = new DateTime(2026, 8, 17, 12, 0, 0, DateTimeKind.Utc)
+                        }
+                    }
+                }
+            }
+        });
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+
+        // rascunho -> planeado through the REAL transition endpoint.
+        var planned = await client.PostAsJsonAsync(
+            $"/api/jobon/{jobOnId}/transition", new { newState = "planeado" });
+        Assert.Equal(HttpStatusCode.OK, planned.StatusCode);
+
+        // Reload: the verification occurrence still renders PENDING with the
+        // same rule text, and the CM tool association is unchanged.
+        var after = await client.GetAsync($"/jobon?id={jobOnId}");
+        Assert.Equal(HttpStatusCode.OK, after.StatusCode);
+        var afterHtml = await after.Content.ReadAsStringAsync();
+        Assert.Contains($"data-occurrence-id=\"{occurrenceId}\"", afterHtml);
+        Assert.Contains("Verificar junta da boquilha", afterHtml);
+        Assert.Contains("Por confirmar", afterHtml);
+        Assert.Contains("1 pendentes", afterHtml);
+        Assert.Contains("value=\"5447\" aria-label=\"Referência CM\"", afterHtml);
+        Assert.Contains("value=\"1\" aria-label=\"Lote CM\"", afterHtml);
+    }
+
+    [Fact]
+    public async Task ActiveContext_ResolvesAfterPlaneado_AndStillAfterEmFabrico_ThroughRealTransitions()
+    {
+        // Focused active-context visibility proof: rascunho is invisible to
+        // the canonical active-context lookup (the GetActiveAsync read model
+        // the shared production-context reader mirrors), the Job On resolves
+        // once it is planeado through the REAL endpoint, and it still
+        // resolves after em_fabrico. Production Rail is not involved.
+        const string line = "C11";
+        _fixture.Repository.User = _fixture.JobOnResponsible();
+        var client = await LoginAsync();
+        var jobOnId = await CreateJobOnAsync(client, "202615", line, "5447T173");
+
+        // rascunho is NOT active: the line's active-context lookup sees nothing.
+        Assert.Empty(await _fixture.JobOnRepository.GetActiveAsync(line));
+
+        var planned = await client.PostAsJsonAsync(
+            $"/api/jobon/{jobOnId}/transition", new { newState = "planeado" });
+        Assert.Equal(HttpStatusCode.OK, planned.StatusCode);
+        var resolvedPlaneado = Assert.Single(
+            await _fixture.JobOnRepository.GetActiveAsync(line), j => j.Id == jobOnId);
+        Assert.Equal(JobOnLifecycleState.Planeado, resolvedPlaneado.LifecycleState);
+
+        var started = await client.PostAsJsonAsync(
+            // HTTP JSON binds the enum name; storage spelling is returned by the endpoint.
+            $"/api/jobon/{jobOnId}/transition", new { newState = "EmFabrico" });
+        Assert.Equal(HttpStatusCode.OK, started.StatusCode);
+        var resolvedEmFabrico = Assert.Single(
+            await _fixture.JobOnRepository.GetActiveAsync(line), j => j.Id == jobOnId);
+        Assert.Equal(JobOnLifecycleState.EmFabrico, resolvedEmFabrico.LifecycleState);
+    }
+
+    private sealed record TransitionResponse(Guid JobOnId, string Status);
+
     private sealed record ConfirmResponse(Guid JobOnId, Guid OccurrenceId, string Status);
 
     private async Task<Guid> CreateJobOnAsync(
@@ -900,6 +1170,9 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
                     stored.PlannedEndAt,
                     revisions);
                 SetId(jobOn, id);
+                // Mirror the real repository's row mapping: the persisted
+                // lifecycle state (status + terminal facts) hydrates the aggregate.
+                CopyLifecycleState(jobOn, stored);
                 foreach (var revision in revisions)
                     jobOn.SaveRevision(revision);
                 return Task.FromResult<Domain.Modules.JobOn.JobOn?>(jobOn);
@@ -913,16 +1186,51 @@ public class JobOnAuthorizationTests : IClassFixture<JobOnAuthorizationTests.Aut
             }
 
             public Task<IReadOnlyList<Domain.Modules.JobOn.JobOn>> GetActiveAsync(
-                string machineCode, DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default) =>
-                Task.FromResult<IReadOnlyList<Domain.Modules.JobOn.JobOn>>(Array.Empty<Domain.Modules.JobOn.JobOn>());
+                string machineCode, DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default)
+            {
+                // Mirror the real repository's active predicate (status IN
+                // 'planeado','em_fabrico'): the active-context lookup sees exactly
+                // the stored Job Ons that are lifecycle-active on the line.
+                var active = _jobOns.Values
+                    .Where(j => j.MachineCode == machineCode && j.IsActive)
+                    .ToList();
+                return Task.FromResult<IReadOnlyList<Domain.Modules.JobOn.JobOn>>(active);
+            }
 
             public Task<Domain.Modules.JobOn.JobOn?> GetByProductionCodeAsync(
                 string productionCode, CancellationToken cancellationToken = default) =>
                 Task.FromResult<Domain.Modules.JobOn.JobOn?>(null);
 
             public Task TransitionLifecycleAsync(
-                Domain.Modules.JobOn.JobOn jobOn, string actorId, CancellationToken cancellationToken = default) =>
-                Task.CompletedTask;
+                Domain.Modules.JobOn.JobOn jobOn, string actorId, CancellationToken cancellationToken = default)
+            {
+                // Mirror the real repository: persist the lifecycle status + the
+                // terminal facts (close/cancel) onto the stored header — NO
+                // revision, NO component/verification write — so a reload renders
+                // the transitioned state.
+                if (_jobOns.TryGetValue(jobOn.Id, out var stored))
+                    CopyLifecycleState(stored, jobOn);
+                return Task.CompletedTask;
+            }
+
+            /// <summary>
+            /// Copies the persisted lifecycle fields (status + terminal
+            /// timestamps/reason/actor) between aggregate instances — the
+            /// aggregate's lifecycle properties have private setters (same as
+            /// the real domain), so this mirrors the existing SetId pattern.
+            /// </summary>
+            private static void CopyLifecycleState(
+                Domain.Modules.JobOn.JobOn target, Domain.Modules.JobOn.JobOn source)
+            {
+                var type = typeof(Domain.Modules.JobOn.JobOn);
+                static void Set(Type jobOnType, string name, object? value, Domain.Modules.JobOn.JobOn target) =>
+                    jobOnType.GetProperty(name)!.SetValue(target, value);
+                Set(type, "LifecycleState", source.LifecycleState, target);
+                Set(type, "ClosedAtUtc", source.ClosedAtUtc, target);
+                Set(type, "CancelledAtUtc", source.CancelledAtUtc, target);
+                Set(type, "CancelledBy", source.CancelledBy, target);
+                Set(type, "CancelReason", source.CancelReason, target);
+            }
 
             public Task InsertRevisionAsync(JobOnRevision revision, CancellationToken cancellationToken = default) =>
                 Task.CompletedTask;

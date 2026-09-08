@@ -58,7 +58,11 @@ public class IndexModel : PageModel
     // ---- U-13 authoritative JobOn data ----
     public Domain.Modules.JobOn.JobOn? JobOn { get; private set; }
     public Guid? JobOnId => JobOn?.Id;
-    public Guid? CurrentRevisionId => JobOn?.CurrentRevision?.JobOnRevisionId;
+    public JobOnRevision? DisplayedRevision { get; private set; }
+    public Guid? CurrentRevisionId => DisplayedRevision?.JobOnRevisionId;
+    public bool IsHistoricalRevision => JobOn?.CurrentRevisionId is { } current
+        && DisplayedRevision?.JobOnRevisionId != current;
+    public bool CanEditCurrentRevision => CanEdit && !IsHistoricalRevision;
 
     /// <summary>
     /// The CURRENT revision's complete component graph (components + fields + CAL
@@ -70,7 +74,7 @@ public class IndexModel : PageModel
     public string CurrentRevisionGraphJson { get; private set; } = "[]";
 
     /// <summary>Editing a fechado (closed) revision requires a change reason (modules/05 §4/§5.4).</summary>
-    public bool ChangeReasonRequired => JobOn?.LifecycleState == JobOnLifecycleState.Fechado;
+    public bool ChangeReasonRequired => !IsHistoricalRevision && JobOn?.LifecycleState == JobOnLifecycleState.Fechado;
 
     // ---- Planeamento ----
     public IReadOnlyList<PlaneamentoItem> PlaneamentoItems { get; private set; } = Array.Empty<PlaneamentoItem>();
@@ -108,32 +112,42 @@ public class IndexModel : PageModel
     };
 
     public string ReferenceDisplay =>
-        ArticleReferenceImageRules.ExtractReferenceCode(JobOn?.CurrentRevision?.ReferenceSnapshot)
+        ArticleReferenceImageRules.ExtractReferenceCode(DisplayedRevision?.ReferenceSnapshot)
         is { Length: > 0 } reference
             ? reference
             : "";
-    public string ProductionDisplay => JobOn?.ProductionCode ?? "";
+    public string ProductionDisplay =>
+        ExtractSnapshotString(DisplayedRevision?.ProductionSnapshot, "production_code")
+        ?? JobOn?.ProductionCode ?? "";
     // Production navigator label: "<production> · atual" when a real production is
     // loaded; a clean no-context state otherwise (never a placeholder dash joined
     // to "atual").
     public string ProductionNavDisplay =>
-        string.IsNullOrWhiteSpace(JobOn?.ProductionCode)
+        string.IsNullOrWhiteSpace(ProductionDisplay)
             ? "Sem produção"
-            : $"{JobOn.ProductionCode} · atual";
-    public string MachineDisplay => JobOn?.MachineCode ?? "";
-    public string StartDateDisplay => JobOn?.PlannedStartAt?.ToString("yyyy-MM-dd") ?? "";
-    public string EndDateDisplay => JobOn?.PlannedEndAt?.ToString("yyyy-MM-dd") ?? "";
-    public string SectionsDisplay => NormalizeSectionsDisplay(JobOn?.CurrentRevision?.Sections);
-    public string DropCountDisplay => JobOn?.CurrentRevision?.DropCount?.ToString("0") ?? "";
-    public string TypeDisplay => JobOn?.CurrentRevision?.TypeSnapshot ?? "";
-    public string StopDisplay => JobOn?.CurrentRevision?.StopSnapshot ?? "";
-    public string WeightDisplay => JobOn?.CurrentRevision?.WeightSnapshot?.ToString("0.00") ?? "";
-    public string ProcessDisplay => JobOn?.CurrentRevision?.ProcessSnapshot ?? "";
-    public string GeneralNotesDisplay => JobOn?.CurrentRevision?.GeneralNotes ?? "";
+            : $"{ProductionDisplay} · {(IsHistoricalRevision ? $"revisão {CurrentRevisionNumber}" : "atual")}";
+    public string MachineDisplay =>
+        ExtractSnapshotString(DisplayedRevision?.MachineSnapshot, "machine_code")
+        ?? JobOn?.MachineCode ?? "";
+    public string StartDateDisplay =>
+        ExtractSnapshotDate(DisplayedRevision?.DatesSnapshot, "start_at")?.ToString("yyyy-MM-dd")
+        ?? JobOn?.PlannedStartAt?.ToString("yyyy-MM-dd") ?? "";
+    public string EndDateDisplay =>
+        ExtractSnapshotDate(DisplayedRevision?.DatesSnapshot, "end_at")?.ToString("yyyy-MM-dd")
+        ?? JobOn?.PlannedEndAt?.ToString("yyyy-MM-dd") ?? "";
+    public string SectionsDisplay => NormalizeSectionsDisplay(DisplayedRevision?.Sections);
+    public string DropCountDisplay => DisplayedRevision?.DropCount?.ToString(
+        "0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+    public string TypeDisplay => DisplayedRevision?.TypeSnapshot ?? "";
+    public string StopDisplay => DisplayedRevision?.StopSnapshot ?? "";
+    public string WeightDisplay => DisplayedRevision?.WeightSnapshot?.ToString(
+        "0.00", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+    public string ProcessDisplay => DisplayedRevision?.ProcessSnapshot ?? "";
+    public string GeneralNotesDisplay => DisplayedRevision?.GeneralNotes ?? "";
     public int RevisionCount => JobOn?.RevisionCount ?? 0;
-    public int CurrentRevisionNumber => JobOn?.CurrentRevision?.RevisionNumber ?? 0;
+    public int CurrentRevisionNumber => DisplayedRevision?.RevisionNumber ?? 0;
     public IReadOnlyList<JobOnComponent> Components =>
-        JobOn?.CurrentRevision?.Components ?? Array.Empty<JobOnComponent>();
+        DisplayedRevision?.Components ?? Array.Empty<JobOnComponent>();
 
     private static string NormalizeSectionsDisplay(string? sections)
     {
@@ -185,9 +199,71 @@ public class IndexModel : PageModel
         "adaptador" => "Adaptador",
         "inversao" => "Inversão",
         "reparador" => "Reparador",
+        "parafuso" => "Parafuso",
+        "terceira_almofada" => "3.ª almofada",
+        "versao" => "Versão",
+        "pincas_material" => "Pinças / material",
+        "diametro" => "Diâmetro",
+        "furos" => "Furos",
+        "tubo" => "Tubo",
+        "diametro_ps" => "Diâmetro PS",
+        "bacia_ps" => "Bacia PS",
         "nominal" => "Nominal",
         "bacia" => "Bacia",
         _ => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(fieldKey.Replace('_', ' '))
+    };
+
+    public static IReadOnlyList<JobOnToolFieldModel> ToolFields(JobOnComponent? component, string code)
+    {
+        var existing = (component?.Fields ?? Array.Empty<JobOnComponentField>())
+            .ToDictionary(field => field.FieldKey, StringComparer.OrdinalIgnoreCase);
+        var keys = DefaultFieldKeys(code).Concat(existing.Keys)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return keys.Select((key, index) =>
+        {
+            existing.TryGetValue(key, out var field);
+            return new JobOnToolFieldModel(
+                key,
+                ComponentFieldLabel(key),
+                field?.ValueType ?? "text",
+                field is null ? string.Empty : ComponentFieldValue(field),
+                field is not null,
+                field?.DisplayOrder ?? index);
+        }).OrderBy(field => field.DisplayOrder).ToList().AsReadOnly();
+    }
+
+    private static string? ExtractSnapshotString(string? json, string property)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.TryGetProperty(property, out var value)
+                && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
+        }
+        catch (JsonException) { return null; }
+    }
+
+    private static DateTimeOffset? ExtractSnapshotDate(string? json, string property)
+    {
+        var text = ExtractSnapshotString(json, property);
+        return DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind, out var value) ? value : null;
+    }
+
+    private static IReadOnlyList<string> DefaultFieldKeys(string code) => code switch
+    {
+        "CM" => new[] { "tipo", "diametro_pata", "diametro_gargalo", "diametro_exterior", "folgas", "adaptador", "inversao", "parafuso", "terceira_almofada", "reparador" },
+        "MF" => new[] { "tipo", "diametro_corpo", "diametro_gargalo", "diametro_exterior", "folgas", "fundo_final", "adaptador", "inversao", "parafuso", "reparador" },
+        "PU" => new[] { "versao" },
+        "PI" => new[] { "pincas_material", "diametro" },
+        "CS" => new[] { "furos", "tubo" },
+        "TP" => new[] { "diametro_ps", "bacia_ps" },
+        "FO" => new[] { "tipo" },
+        _ => Array.Empty<string>()
     };
 
     /// <summary>
@@ -205,7 +281,7 @@ public class IndexModel : PageModel
     /// </summary>
     public string RecordLinesJson { get; private set; } = "{}";
 
-    public async Task OnGetAsync(Guid? id = null, string? date = null)
+    public async Task OnGetAsync(Guid? id = null, Guid? revision = null, string? date = null)
     {
         var user = _currentUserAccessor.Current;
         CanEdit = user?.HasCapability(CanonicalModuleCatalog.JobonEditCapabilityId) == true;
@@ -217,16 +293,20 @@ public class IndexModel : PageModel
         if (id.HasValue)
         {
             JobOn = await _jobOnRepository.GetByIdAsync(id.Value);
+            DisplayedRevision = revision.HasValue
+                ? JobOn?.Revisions.FirstOrDefault(item => item.JobOnRevisionId == revision.Value)
+                : JobOn?.CurrentRevision;
+            DisplayedRevision ??= JobOn?.CurrentRevision;
 
             // The complete CURRENT revision graph is embedded for the edit flow (see
             // CurrentRevisionGraphJson). Serialization escapes HTML-sensitive chars, so
             // the payload is safe inside the <script type="application/json"> block.
-            CurrentRevisionGraphJson = JobOn?.CurrentRevision?.Components is { Count: > 0 } components
+            CurrentRevisionGraphJson = DisplayedRevision?.Components is { Count: > 0 } components
                 ? JsonSerializer.Serialize(components, RevisionGraphJsonOptions)
                 : "[]";
 
             // Build verification items from CurrentRevision.Verifications
-            var verifications = JobOn?.CurrentRevision?.Verifications ?? Array.Empty<JobOnVerificationOccurrence>();
+            var verifications = DisplayedRevision?.Verifications ?? Array.Empty<JobOnVerificationOccurrence>();
             PendingVerificationCount = verifications.Count(v => v.Status == "pendente");
             VerificationItems = verifications
                 .Select(v => new VerificationItem(
@@ -327,3 +407,11 @@ public sealed record JobOnToolCardModel(
     bool CanEdit,
     string? ExtraClass = null
 );
+
+public sealed record JobOnToolFieldModel(
+    string Key,
+    string Label,
+    string ValueType,
+    string Value,
+    bool Existing,
+    int DisplayOrder);

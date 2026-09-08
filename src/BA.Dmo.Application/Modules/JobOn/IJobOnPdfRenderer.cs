@@ -33,6 +33,7 @@ public sealed record JobOnPdfData
     public decimal? DropCount { get; init; }
     public decimal? Weight { get; init; }
     public string? TypeSnapshot { get; init; }
+    public string? StopSnapshot { get; init; }
     public string? ProcessSnapshot { get; init; }
     public DateTimeOffset? PlannedStartAt { get; init; }
     public DateTimeOffset? PlannedEndAt { get; init; }
@@ -70,8 +71,8 @@ public sealed record JobOnPdfComponent
     public string? TechnicalName { get; init; }
     public decimal? Usage { get; init; }
     public string? Notes { get; init; }
-    public int? Stock { get; init; }
-    public int? MachineQuantity { get; init; }
+    public decimal? Stock { get; init; }
+    public decimal? MachineQuantity { get; init; }
 
     /// <summary>Typed field values keyed by field key.</summary>
     public IReadOnlyDictionary<string, string> Fields { get; init; } = new Dictionary<string, string>();

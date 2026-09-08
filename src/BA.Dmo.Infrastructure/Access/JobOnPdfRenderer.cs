@@ -178,6 +178,7 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
         y = WriteCompactSection(t, "Tub. Refrig", data.Arr, y);
         y = WriteCompactSection(t, "C. de Sopro", data.Cs, y);
         y = WriteCompactSection(t, "Pinças", data.Pi, y);
+        y = WriteCompactSection(t, "Forro", data.Fo, y);
 
         // --- Notas block ---
         if (y > 160)
@@ -203,7 +204,7 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
             y -= 14;
             foreach (var cal in data.CalibreRows.Take(6))
             {
-                t.AppendLine($"BT /F1 8 Tf {MarginLeft} {y} Td ({cal.Element}: {cal.Value ?? "\\u2014"}) Tj ET");
+                t.AppendLine($"BT /F1 8 Tf {MarginLeft} {y} Td ({cal.Element}: {cal.Value ?? "\\u2014"} | Qtd: {Fmt(cal.Quantity)}) Tj ET");
                 y -= 10;
                 if (y < BottomMargin + 10) break;
             }
@@ -226,6 +227,9 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
         Pair("Secções", data.Sections.ToString());
         Pair("Gota", Fmt(data.DropCount));
         Pair("Peso", FmtWeight(data.Weight));
+        if (!string.IsNullOrWhiteSpace(data.TypeSnapshot)) Pair("Tipo", data.TypeSnapshot);
+        if (!string.IsNullOrWhiteSpace(data.StopSnapshot)) Pair("Paragem", data.StopSnapshot);
+        if (!string.IsNullOrWhiteSpace(data.ProcessSnapshot)) Pair("Processo", data.ProcessSnapshot);
 
         if (data.PlannedStartAt.HasValue)
         {
@@ -266,6 +270,16 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
                 t.AppendLine($"BT /F1 8 Tf {MarginLeft + 10} {y} Td (Uso: {comp.Usage.Value:P1}) Tj ET");
                 y -= 11;
             }
+            if (comp.Stock.HasValue)
+            {
+                t.AppendLine($"BT /F1 8 Tf {MarginLeft + 10} {y} Td (Stock: {Fmt(comp.Stock)}) Tj ET");
+                y -= 11;
+            }
+            if (comp.MachineQuantity.HasValue)
+            {
+                t.AppendLine($"BT /F1 8 Tf {MarginLeft + 10} {y} Td (Qtd. máquina: {Fmt(comp.MachineQuantity)}) Tj ET");
+                y -= 11;
+            }
             // Additional fields
             foreach (var kvp in comp.Fields.Take(4))
             {
@@ -296,7 +310,10 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
         var lotVal = comp?.Lot ?? "";
         var noteVal = comp?.Notes ?? "";
 
-        t.AppendLine($"BT /F1 9 Tf {MarginLeft} {y} Td ({title}: Ref {refVal}, Lote {lotVal}{(!string.IsNullOrEmpty(noteVal) ? $" - {noteVal}" : "")}) Tj ET");
+        var quantities = comp is null
+            ? string.Empty
+            : $", Stock {Fmt(comp.Stock)}, Qtd. máquina {Fmt(comp.MachineQuantity)}";
+        t.AppendLine($"BT /F1 9 Tf {MarginLeft} {y} Td ({title}: Ref {refVal}, Lote {lotVal}{quantities}{(!string.IsNullOrEmpty(noteVal) ? $" - {Escape(noteVal)}" : "")}) Tj ET");
         y -= 13;
         return y;
     }
@@ -370,6 +387,10 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
 
             if (comp.Usage.HasValue)
                 DetailLine(t, ref y, "Utilização", $"{comp.Usage.Value:P1}");
+            if (comp.Stock.HasValue)
+                DetailLine(t, ref y, "Stock", Fmt(comp.Stock));
+            if (comp.MachineQuantity.HasValue)
+                DetailLine(t, ref y, "Qtd. máquina", Fmt(comp.MachineQuantity));
 
             if (!string.IsNullOrEmpty(comp.Notes))
             {
@@ -430,6 +451,9 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
         Line("Secções", data.Sections.ToString());
         Line("Gotas", Fmt(data.DropCount));
         Line("Peso", FmtWeight(data.Weight));
+        if (!string.IsNullOrWhiteSpace(data.TypeSnapshot)) Line("Tipo", data.TypeSnapshot);
+        if (!string.IsNullOrWhiteSpace(data.StopSnapshot)) Line("Paragem", data.StopSnapshot);
+        if (!string.IsNullOrWhiteSpace(data.ProcessSnapshot)) Line("Processo", data.ProcessSnapshot);
 
         if (data.PlannedStartAt.HasValue)
             Line("Entrada", data.PlannedStartAt.Value.ToString("dd/MM/yyyy"));
@@ -446,13 +470,10 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
         t.AppendLine($"BT /F1 12 Tf {MarginLeft} {y} Td (Lado do Contra-Molde) Tj ET");
         y -= 18;
 
-        if (data.Cm is { } cm)
-        {
-            TableLine(t, ref y, "Contra-Molde", cm.Reference, cm.Lot ?? "");
-            y = WriteCalibreOrTampao(t, ref y, "Tampão", data.Tp);
-            TableLine(t, ref y, "Punção", data.Pu?.Reference ?? "", data.Pu?.Lot ?? "");
-            TableLine(t, ref y, "Tub. Refrigeração", data.Arr?.Reference ?? "", "");
-        }
+        TableLine(t, ref y, "Contra-Molde", data.Cm?.Reference ?? "", data.Cm?.Lot ?? "");
+        y = WriteCalibreOrTampao(t, ref y, "Tampão", data.Tp);
+        TableLine(t, ref y, "Punção", data.Pu?.Reference ?? "", data.Pu?.Lot ?? "");
+        TableLine(t, ref y, "Tub. Refrigeração", data.Arr?.Reference ?? "", data.Arr?.Lot ?? "");
 
         y -= 6;
         t.AppendLine($"{Brand700} {Brand700G} {Brand700B} RG {MarginLeft} {y} m {MarginRight} {y} l S");
@@ -462,12 +483,12 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
         t.AppendLine($"BT /F1 12 Tf {MarginLeft} {y} Td (Lado do Molde Final) Tj ET");
         y -= 18;
 
-        if (data.Mf is { } mf)
-        {
-            TableLine(t, ref y, "Molde Final", mf.Reference, mf.Lot ?? "");
-            TableLine(t, ref y, "Boquiha", data.Bq?.Reference ?? "", data.Bq?.Lot ?? "");
-            TableLine(t, ref y, "Pinça", data.Pi?.Reference ?? "", "");
-        }
+        TableLine(t, ref y, "Molde Final", data.Mf?.Reference ?? "", data.Mf?.Lot ?? "");
+        TableLine(t, ref y, "Fundo Final", data.Mf?.Fields.GetValueOrDefault("fundo_final") ?? "", "");
+        TableLine(t, ref y, "Boquilha", data.Bq?.Reference ?? "", data.Bq?.Lot ?? "");
+        TableLine(t, ref y, "Anilha", data.An?.Reference ?? "", data.An?.Lot ?? "");
+        TableLine(t, ref y, "C. de Sopro", data.Cs?.Reference ?? "", data.Cs?.Lot ?? "");
+        TableLine(t, ref y, "Pinça", data.Pi?.Reference ?? "", data.Pi?.Lot ?? "");
 
         y -= 6;
         t.AppendLine($"{Brand700} {Brand700G} {Brand700B} RG {MarginLeft} {y} m {MarginRight} {y} l S");
@@ -479,9 +500,20 @@ public sealed class JobOnPdfRenderer : IJobOnPdfRenderer
 
         foreach (var cal in data.CalibreRows.Take(8))
         {
-            t.AppendLine($"BT /F1 9 Tf {MarginLeft + 10} {y} Td ({cal.Element}: {cal.Value ?? "\\u2014"}) Tj ET");
+            t.AppendLine($"BT /F1 9 Tf {MarginLeft + 10} {y} Td ({cal.Element}: {cal.Value ?? "\\u2014"} | Qtd: {Fmt(cal.Quantity)}) Tj ET");
             y -= 12;
             if (y < BottomMargin + 40) break;
+        }
+
+        if (!string.IsNullOrWhiteSpace(data.GeneralNotes) && y > BottomMargin + 90)
+        {
+            t.AppendLine($"BT /F1 10 Tf {MarginLeft} {y} Td (Observações) Tj ET");
+            y -= 14;
+            foreach (var line in WrapText(data.GeneralNotes, 75).Take(4))
+            {
+                t.AppendLine($"BT /F1 8 Tf {MarginLeft + 10} {y} Td ({line}) Tj ET");
+                y -= 10;
+            }
         }
 
         // Banner footer

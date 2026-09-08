@@ -65,6 +65,8 @@ public class JobOnPdfTests
                     ReferenceSnapshot = "9400",
                     LotSnapshot = "10",
                     UsageSnapshot = 76m,
+                    StockSnapshot = 12m,
+                    PlannedQuantity = 4m,
                     Notes = "CX-BQ RODAR LIVRE",
                     Fields = new[]
                     {
@@ -239,6 +241,8 @@ public class JobOnPdfTests
         Assert.Equal("9400", data.Cm.Reference);
         Assert.Equal("10", data.Cm.Lot);
         Assert.Equal(76m, data.Cm.Usage);
+        Assert.Equal(12m, data.Cm.Stock);
+        Assert.Equal(4m, data.Cm.MachineQuantity);
         Assert.NotNull(data.Mf);
         Assert.Equal("9400", data.Mf.Reference);
         Assert.NotNull(data.Bq);
@@ -335,6 +339,62 @@ public class JobOnPdfTests
 
         Assert.True(data.Cm.Fields.ContainsKey("diametro_exterior"));
         Assert.Equal("136,3", data.Cm.Fields["diametro_exterior"]);
+    }
+
+    [Fact]
+    public async Task GenerateRevisionAsync_UsesExactImmutableRevision()
+    {
+        var jobOnId = await CreateJobOnWithRevision();
+        var currentRevisionId = _repository.JobOns[jobOnId].CurrentRevisionId;
+        var components = _repository.Revisions.Single(r => r.JobOnRevisionId == currentRevisionId).Components!;
+
+        var first = await _jobOnService.SaveRevisionAsync(new SaveJobOnRevisionRequest(
+            jobOnId,
+            "Observação histórica",
+            null,
+            null,
+            components)
+        {
+            Values = new JobOnRevisionValues("REF-HIST", 24, 2m, "Tipo A", "Paragem A", 123.45m, "Processo A")
+        });
+        Assert.True(first.IsSuccess);
+
+        var second = await _jobOnService.SaveRevisionAsync(new SaveJobOnRevisionRequest(
+            jobOnId,
+            "Observação atual",
+            null,
+            null,
+            components)
+        {
+            Values = new JobOnRevisionValues("REF-ATUAL", 30, 4m, "Tipo B", "Paragem B", 999m, "Processo B")
+        });
+        Assert.True(second.IsSuccess);
+
+        var result = await _pdfService.GenerateRevisionAsync(_renderer, jobOnId, first.Value);
+
+        Assert.True(result.IsSuccess);
+        var data = Assert.Single(_renderer.RenderedDocuments);
+        Assert.Equal("REF-HIST", data.Reference);
+        Assert.Equal(24, data.Sections);
+        Assert.Equal(2m, data.DropCount);
+        Assert.Equal("Tipo A", data.TypeSnapshot);
+        Assert.Equal("Paragem A", data.StopSnapshot);
+        Assert.Equal(123.45m, data.Weight);
+        Assert.Equal("Processo A", data.ProcessSnapshot);
+        Assert.Equal("Observação histórica", data.GeneralNotes);
+        Assert.Contains("_R", result.Value.FileName);
+    }
+
+    [Fact]
+    public async Task GenerateRevisionAsync_RejectsRevisionOutsideJobOn()
+    {
+        var jobOnId = await CreateJobOnWithRevision();
+
+        var result = await _pdfService.GenerateRevisionAsync(_renderer, jobOnId, Guid.NewGuid());
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("JOBON_REVISION_NOT_FOUND", result.Error.Code);
+        Assert.Empty(_renderer.RenderedDocuments);
     }
 
     // ---- PDF-12: Empty optional components are null ----

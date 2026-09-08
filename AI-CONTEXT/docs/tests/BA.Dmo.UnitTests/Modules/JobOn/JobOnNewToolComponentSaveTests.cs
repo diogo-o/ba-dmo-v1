@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using BA.Dmo.Application.Modules.Ferramentas;
 using BA.Dmo.Application.Modules.JobOn;
 using BA.Dmo.Domain.Modules.Ferramentas;
 using BA.Dmo.Domain.Modules.JobOn;
@@ -52,6 +53,7 @@ public class JobOnNewToolComponentSaveTests
 
     private readonly FakeJobOnRepository _repository = new();
     private readonly FakeFerramentasToolLookup _tools = new();
+    private readonly FakeRuleLookup _rules = new();
     private readonly NewToolSaveIdentity _identity = new();
     private readonly JobOnService _service;
 
@@ -74,7 +76,8 @@ public class JobOnNewToolComponentSaveTests
             gate, _repository, new FakeJobOnUserContextRepository(),
             new FixedClock(new DateTimeOffset(2026, 8, 18, 9, 0, 0, TimeSpan.Zero)),
             _tools,
-            articleImages: null);
+            articleImages: null,
+            ruleLookup: _rules);
         _identity.GrantResponsible();
     }
 
@@ -100,6 +103,103 @@ public class JobOnNewToolComponentSaveTests
             ComponentFamily.BQ, BqReferenceId, BqLoteId,
             expectedReference: "BQ-2205", expectedLot: "Lote-1",
             expectedTechnicalName: "Boquilha 2205");
+
+    [Fact]
+    public async Task Save_NewCmComponent_LoadsActiveRules_AndPersistsPendingOccurrences()
+    {
+        var activeRuleId = Guid.NewGuid();
+        _rules.ByLot[CmLoteId] = new[]
+        {
+            new VerificationRule(activeRuleId, "Confirmar folga", VerificationFrequency.PerProduction)
+        };
+        var jobOnId = await CreateRascunhoAsync();
+        var currentRevisionId = _repository.JobOns[jobOnId].CurrentRevisionId!.Value;
+        var component = NewToolComponent(
+            Guid.NewGuid(), currentRevisionId, ComponentFamily.MP_CM,
+            CmReferenceId, CmLoteId, "CM-5447", "Lote-3", "Contra-molde 5447");
+
+        var result = await _service.SaveRevisionAsync(new SaveJobOnRevisionRequest(
+            jobOnId, null, null, null, new[] { component }));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(CmLoteId, Assert.Single(_rules.RequestedLots));
+        var reloaded = (await _repository.GetByIdAsync(jobOnId))!;
+        var occurrence = Assert.Single(reloaded.CurrentRevision!.Verifications!);
+        Assert.Equal(activeRuleId, occurrence.SourceRuleId);
+        Assert.Equal("Confirmar folga", occurrence.RuleTextSnapshot);
+        Assert.Equal("pendente", occurrence.Status);
+        Assert.Null(occurrence.CompletedBy);
+        Assert.Null(occurrence.CompletedAtUtc);
+    }
+
+    [Fact]
+    public async Task Save_UnchangedLot_PreservesPersistedConfirmation_NotBrowserState()
+    {
+        var jobOnId = await CreateRascunhoAsync();
+        var seeded = await SeedCurrentRevisionWithCmAsync(jobOnId);
+        var persisted = seeded.Components!.Single();
+        var persistedOccurrence = new JobOnVerificationOccurrence
+        {
+            JobOnVerificationOccurrenceId = Guid.NewGuid(),
+            JobOnComponentId = persisted.JobOnComponentId,
+            SourceRuleId = Guid.NewGuid(),
+            RuleTextSnapshot = "Confirmar encaixe",
+            Status = "confirmada",
+            CompletionSource = "manual_job_on",
+            CompletedBy = "operador-real",
+            CompletedAtUtc = new DateTime(2026, 8, 18, 8, 0, 0, DateTimeKind.Utc),
+            CreatedAtUtc = new DateTime(2026, 8, 18, 7, 0, 0, DateTimeKind.Utc),
+            UpdatedAtUtc = new DateTime(2026, 8, 18, 8, 0, 0, DateTimeKind.Utc)
+        };
+        var revisionWithOccurrence = seeded with
+        {
+            JobOnRevisionId = Guid.NewGuid(),
+            RevisionNumber = seeded.RevisionNumber + 1,
+            Components = new[]
+            {
+                persisted with
+                {
+                    SourceToolId = CmReferenceId,
+                    SourceLotId = CmLoteId,
+                    ReferenceSnapshot = "CM-5447",
+                    LotSnapshot = "Lote-3",
+                    TechnicalNameSnapshot = "Contra-molde 5447",
+                    Verifications = new[] { persistedOccurrence }
+                }
+            }
+        };
+        await _repository.SaveRevisionGraphAsync(
+            revisionWithOccurrence, "jobon.guardar", "actor-new-tool");
+        var current = (await _repository.GetByIdAsync(jobOnId))!.CurrentRevision!;
+        var currentComponent = current.Components!.Single();
+        var submittedId = Guid.NewGuid();
+        var submitted = currentComponent with
+        {
+            JobOnComponentId = submittedId,
+            Verifications = new[]
+            {
+                persistedOccurrence with
+                {
+                    JobOnVerificationOccurrenceId = Guid.NewGuid(),
+                    JobOnComponentId = submittedId,
+                    Status = "pendente",
+                    CompletedBy = null,
+                    CompletedAtUtc = null
+                }
+            }
+        };
+
+        var result = await _service.SaveRevisionAsync(new SaveJobOnRevisionRequest(
+            jobOnId, null, null, null, new[] { submitted }));
+
+        Assert.True(result.IsSuccess);
+        var reloaded = (await _repository.GetByIdAsync(jobOnId))!;
+        var occurrence = Assert.Single(reloaded.CurrentRevision!.Verifications!);
+        Assert.Equal("confirmada", occurrence.Status);
+        Assert.Equal("operador-real", occurrence.CompletedBy);
+        Assert.NotNull(occurrence.CompletedAtUtc);
+        Assert.Empty(_rules.RequestedLots);
+    }
 
     /// <summary>
     /// Full brand-new-component save assertions (tests #1–#7): add a brand-new
@@ -501,5 +601,20 @@ public class JobOnNewToolComponentSaveTests
     private sealed class FixedClock(DateTimeOffset fixedUtcNow) : IClock
     {
         public DateTimeOffset UtcNow => fixedUtcNow;
+    }
+
+    private sealed class FakeRuleLookup : IFerramentasRuleLookup
+    {
+        public Dictionary<Guid, IReadOnlyList<VerificationRule>> ByLot { get; } = new();
+        public List<Guid> RequestedLots { get; } = new();
+
+        public Task<IReadOnlyList<VerificationRule>> ResolveActiveRulesAsync(
+            Guid toolLoteId, CancellationToken ct = default)
+        {
+            RequestedLots.Add(toolLoteId);
+            return Task.FromResult(
+                ByLot.GetValueOrDefault(toolLoteId)
+                ?? (IReadOnlyList<VerificationRule>)Array.Empty<VerificationRule>());
+        }
     }
 }

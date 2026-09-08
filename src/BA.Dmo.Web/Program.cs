@@ -356,6 +356,39 @@ app.MapPost("/api/jobon/{jobOnId:guid}/date", async (
     return Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(CapabilityPolicies.JobonEdit);
 
+// Lifecycle transition (TD-27): rascunho → planeado ("Planear"), planeado →
+// em_fabrico ("Iniciar produção"), em_fabrico → fechado ("Fechar"), and
+// rascunho/planeado → cancelado ("Cancelar", reason required). TRANSITION IS A
+// WRITE: the route-level capability policy requires jobon.edit and the service
+// gate re-checks the canonical capability server-side (fail closed), so an
+// Operator/Controller with only jobon.view is denied regardless of UI
+// visibility. The service applies the domain transition rules (terminal states
+// reject every transition; an invalid transition is a clean 400 domain
+// conflict), persists the status + terminal timestamps through the existing
+// atomic TransitionLifecycleAsync (which also emits the jobon.transicao audit
+// fact) and creates NO revision. On success the client reopens the SAME Folha
+// Job On via /jobon?id={jobOnId} rendering the new lifecycle state.
+app.MapPost("/api/jobon/{jobOnId:guid}/transition", async (
+    Guid jobOnId,
+    TransitionJobOnRequest request,
+    JobOnService service,
+    CancellationToken cancellationToken) =>
+{
+    var result = await service.TransitionAsync(
+        request with { JobOnId = jobOnId }, cancellationToken);
+    if (result.IsSuccess)
+        return Results.Ok(new
+        {
+            jobOnId,
+            status = BA.Dmo.Domain.Modules.JobOn.JobOnLifecycleStateCodec.ToStorage(result.Value)
+        });
+    if (result.Error.Category == ErrorCategory.Forbidden)
+        return Results.Forbid();
+    if (result.Error.Category == ErrorCategory.NotFound)
+        return Results.NotFound(new { code = result.Error.Code, message = result.Error.Message });
+    return Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+}).RequireAuthorization(CapabilityPolicies.JobonEdit);
+
 // "Confirmar verificação" — confirm a manual verification occurrence (modules/05
 // §7, capability jobon.confirmar). CONFIRM IS A WRITE: the route-level capability
 // policy requires jobon.confirmar (the operational capability the OPERATOR holds —
@@ -596,6 +629,20 @@ app.MapPost("/api/jobon/{jobOnId:guid}/document", async (
     CancellationToken cancellationToken) =>
 {
     var result = await service.GenerateAsync(renderer, jobOnId, cancellationToken);
+    if (!result.IsSuccess)
+        return Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+
+    return Results.File(result.Value.PdfBytes, "application/pdf", result.Value.FileName);
+}).RequireAuthorization(CapabilityPolicies.JobonView);
+
+app.MapPost("/api/jobon/{jobOnId:guid}/revisions/{revisionId:guid}/document", async (
+    Guid jobOnId,
+    Guid revisionId,
+    JobOnPdfService service,
+    IJobOnPdfRenderer renderer,
+    CancellationToken cancellationToken) =>
+{
+    var result = await service.GenerateRevisionAsync(renderer, jobOnId, revisionId, cancellationToken);
     if (!result.IsSuccess)
         return Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 
