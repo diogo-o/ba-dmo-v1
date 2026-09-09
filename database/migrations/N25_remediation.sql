@@ -154,6 +154,12 @@ BEGIN
             RAISE EXCEPTION 'BA DMO: approved peso control % identity cannot be updated', OLD.peso_controlo_id;
         END IF;
     END IF;
+    -- RETURN NEW here would RETURN NULL in a DELETE trigger (NEW is unassigned),
+    -- which silently SKIPS the row and makes every draft delete a no-op while
+    -- reporting success. DELETE must return OLD so the deletion proceeds.
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
     RETURN NEW;
 END
 $$;

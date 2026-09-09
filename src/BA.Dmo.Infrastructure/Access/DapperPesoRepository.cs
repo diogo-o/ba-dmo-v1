@@ -282,6 +282,37 @@ FROM peso_leituras WHERE peso_controlo_id = @ControlId ORDER BY cm_number;",
         finally { await DisposeAsync(conn); }
     }
 
+    public async Task<bool> ExistsByIdentityAsync(
+        string moldNumber, string neckringNumber, string productionCode, string line,
+        string lote, DateTime controlDate, CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT EXISTS (
+                SELECT 1 FROM peso_controlos
+                WHERE mold_number = @Mold
+                  AND neckring_number = @Neck
+                  AND production_code = @Production
+                  AND line = @Line
+                  AND lote = @Lote
+                  AND control_date = @ControlDate::date)
+            """;
+        var conn = await Open(_connectionFactory, ct);
+        try
+        {
+            var exists = await Db.ExecuteScalarAsync<bool>(conn, sql, new
+            {
+                Mold = moldNumber,
+                Neck = neckringNumber,
+                Production = productionCode,
+                Line = line,
+                Lote = lote,
+                ControlDate = controlDate
+            }, cancellationToken: ct);
+            return exists;
+        }
+        finally { await DisposeAsync(conn); }
+    }
+
     public async Task<IReadOnlyList<PesoControl>> GetControlsAsync(
         Guid? referenceId, string? search, string? status, PesoRecordType? type,
         DateTime? from, DateTime? to, CancellationToken ct = default)

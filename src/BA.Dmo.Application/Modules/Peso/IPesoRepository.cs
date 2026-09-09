@@ -31,6 +31,16 @@ public interface IPesoRepository
     Task UpdateControlAsync(PesoControl control, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Whether a control with the exact identity columns
+    /// (mold, neckring, production, line, lote, date) already exists — the
+    /// uq_peso_controlos_identity members. Guards the daily-control invariant
+    /// before insert so a duplicate surfaces as a domain error instead of 23505.
+    /// </summary>
+    Task<bool> ExistsByIdentityAsync(
+        string moldNumber, string neckringNumber, string productionCode, string line,
+        string lote, DateTime controlDate, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Header-only update of a control (N40 pairing). Rewrites NO readings —
     /// used by the workflow transitions (submit/approve/reject/reopen/decide)
     /// so an approved baseline is never re-written through the readings table;

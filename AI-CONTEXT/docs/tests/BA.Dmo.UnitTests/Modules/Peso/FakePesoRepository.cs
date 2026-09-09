@@ -61,6 +61,14 @@ public sealed class FakePesoRepository : IPesoRepository
         return Task.FromResult(control.PesoControloId);
     }
 
+    public Task<bool> ExistsByIdentityAsync(
+        string moldNumber, string neckringNumber, string productionCode, string line,
+        string lote, DateTime controlDate, CancellationToken ct = default)
+        => Task.FromResult(Controls.Values.Any(c =>
+            c.MoldNumber == moldNumber && c.NeckringNumber == neckringNumber
+            && c.ProductionCode == productionCode && c.Line == line
+            && c.Lote == lote && c.ControlDate == controlDate));
+
     public Task<PesoControl?> GetControlByIdAsync(Guid id, CancellationToken ct = default)
         => Task.FromResult(Controls.GetValueOrDefault(id));
 

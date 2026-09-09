@@ -1,4 +1,9 @@
+using BA.Dmo.Application.Modules.Peso;
+using BA.Dmo.Application.Shared.Persistence;
+using BA.Dmo.Domain.Modules.JobOn;
 using BA.Dmo.Domain.Modules.Peso;
+using BA.Dmo.Domain.Shared.Access;
+using BA.Dmo.Domain.Shared.Kernel;
 using BA.Dmo.Infrastructure.Access;
 using BA.Dmo.Infrastructure.Persistence;
 using Npgsql;
@@ -84,6 +89,115 @@ public sealed class PesoControlSearchPostgresTests
         Assert.Empty(controls);
     }
 
+    [Fact]
+    public async Task CreateControl_TwiceForSameIdentity_SecondFailsWithDomainError()
+    {
+        // uq_peso_controlos_identity (mold, neckring, production, line, lote,
+        // date) is enforced by the database; the service must turn a duplicate
+        // daily control into a domain error instead of leaking 23505 as a 500.
+        if (SkipIfNoDatabase()) return;
+        var context = await SeedServiceContextAsync();
+        var repository = new DapperPesoRepository(CreateFactory("peso-dup-" + context.Suffix));
+        var jobOnRepository = new DapperJobOnRepository(CreateFactory("peso-dup-jobon-" + context.Suffix));
+        var accessor = new PesoOperadorAccessor(context.ActorId);
+        var service = new PesoService(
+            new PesoAuthorizationGate(accessor), repository, jobOnRepository,
+            new FixedTestClock(new DateTimeOffset(2026, 9, 10, 8, 0, 0, TimeSpan.Zero)));
+
+        var first = await service.CreateControlAsync(new CreateControlRequest(
+            context.JobOnId, new DateTime(2026, 9, 10), null, null, "obs",
+            [new PesoLeituraInput("CM1", 152.43m)]));
+        if (!first.IsSuccess)
+            throw new Xunit.Sdk.XunitException(
+                $"first create failed: {first.Error.Code} {first.Error.Message}");
+
+        var duplicate = await service.CreateControlAsync(new CreateControlRequest(
+            context.JobOnId, new DateTime(2026, 9, 10), null, null, "obs",
+            [new PesoLeituraInput("CM1", 152.43m)]));
+
+        Assert.True(duplicate.IsFailure);
+        Assert.Equal("PESO_CONTROL_DUPLICATE", duplicate.Error.Code);
+
+        // Leave the DB as found so re-runs do not collide with the previous
+        // run's (identity-unique) control.
+        await repository.DeleteControlAsync(first.Value);
+    }
+
+    [Fact]
+    public async Task DeleteControl_NonApproved_RemovesTheRow()
+    {
+        // Regression for ba_dmo_guard_peso_approved (N25): the BEFORE DELETE
+        // trigger returned NEW — which is NULL on DELETE — so every delete was
+        // silently SKIPPED (reported "0 rows" with no error). The repository
+        // delete must physically remove non-approved controls.
+        if (SkipIfNoDatabase()) return;
+        var context = await SeedContextAsync();
+        var repository = new DapperPesoRepository(CreateFactory("peso-del-" + context.Suffix));
+
+        await repository.DeleteControlAsync(context.ControlId);
+
+        var gone = await repository.GetControlByIdAsync(context.ControlId);
+        Assert.Null(gone);
+    }
+
+    [Fact]
+    public async Task DeleteControl_Approved_StillRaisesTheGuard()
+    {
+        // The N25 guard must keep blocking approved-control deletion after the
+        // DELETE return-value correction.
+        if (SkipIfNoDatabase()) return;
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var referenceId = Guid.NewGuid();
+        var loteId = Guid.NewGuid();
+        var jobOnId = Guid.NewGuid();
+        var revisionId = Guid.NewGuid();
+        var controlId = Guid.NewGuid();
+        var productionCode = "2026" + Guid.NewGuid().ToString("N")[..6];
+
+        await ExecuteAsync(
+            """
+            INSERT INTO peso_references
+                (peso_reference_id, mold_number, neckring_number, change_log)
+            VALUES
+                (@ReferenceId, 'APR-GUARD-' || @Suffix, 'NK-GUARD-' || @Suffix, '[]'::jsonb);
+
+            INSERT INTO job_on
+                (job_on_id, production_code, machine_code, status)
+            VALUES
+                (@JobOnId, @ProductionCode, 'L1', 'rascunho');
+
+            INSERT INTO job_on_revision
+                (job_on_revision_id, job_on_id, revision_number, sections)
+            VALUES
+                (@RevisionId, @JobOnId, 1, '{}'::jsonb);
+
+            INSERT INTO peso_lotes
+                (peso_lote_id, peso_reference_id, lote, processo, allowed_lines, report_subfolder)
+            VALUES
+                (@LoteId, @ReferenceId, 'LOTE-GUARD-' || @Suffix, 'NNPB', ARRAY['L1'], 'guard');
+
+            INSERT INTO peso_controlos
+                (peso_controlo_id, peso_reference_id, peso_lote_id, record_type,
+                 mold_number, neckring_number, production_code, line, lote,
+                 control_date, job_on_id, job_on_revision_id, status, approved_at_utc)
+            VALUES
+                (@ControlId, @ReferenceId, @LoteId, 'novo_controlo',
+                 'APR-GUARD-' || @Suffix, 'NK-GUARD-' || @Suffix, @ProductionCode, 'L1', 'LOTE-GUARD-' || @Suffix,
+                 DATE '2026-09-10', @JobOnId, @RevisionId, 'aprovado', now());
+            """,
+            new NpgsqlParameter("Suffix", suffix),
+            new NpgsqlParameter("ReferenceId", referenceId),
+            new NpgsqlParameter("LoteId", loteId),
+            new NpgsqlParameter("JobOnId", jobOnId),
+            new NpgsqlParameter("RevisionId", revisionId),
+            new NpgsqlParameter("ControlId", controlId),
+            new NpgsqlParameter("ProductionCode", productionCode));
+
+        var repository = new DapperPesoRepository(CreateFactory("peso-del-apr-" + suffix));
+        await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+            repository.DeleteControlAsync(controlId));
+    }
+
     private static bool SkipIfNoDatabase()
     {
         if (!string.IsNullOrWhiteSpace(ConnectionString)) return false;
@@ -160,11 +274,106 @@ public sealed class PesoControlSearchPostgresTests
 
     private static async Task ExecuteAsync(string sql, params NpgsqlParameter[] parameters)
     {
-        await using var connection = new NpgsqlConnection(ConnectionString!);
+        // Non-pooled: the raw connection-string pool showed deterministic
+        // reset-on-reuse socket failures on this host (IOException while
+        // reading the batch result) when earlier tests in the class had reused
+        // same-pool connections. Seeding is rare; a fresh connection per seed
+        // is cheaper than chasing pool reset flakiness.
+        var builder = new NpgsqlConnectionStringBuilder(ConnectionString!) { Pooling = false };
+        await using var connection = new NpgsqlConnection(builder.ConnectionString);
         await connection.OpenAsync();
         await using var command = new NpgsqlCommand(sql, connection);
         command.Parameters.AddRange(parameters);
         await command.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>
+    /// Full production context for the duplicate-control proof: an actor, a
+    /// Job On with a canonical reference snapshot and NNPB process revision,
+    /// plus the registered Peso reference (mold 2099 / neckring SMK101) and
+    /// its lote. The reference text 2099SMK101 resolves through
+    /// ExtractReferenceCode + the mold/neckring split.
+    /// </summary>
+    private static async Task<ServiceContext> SeedServiceContextAsync()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var jobOnId = Guid.NewGuid();
+        var productionCode = "2026" + Guid.NewGuid().ToString("N")[..6];
+        var actorId = Guid.NewGuid().ToString();
+
+        await ExecuteAsync(
+            """
+            INSERT INTO access_templates (template_id, name)
+            VALUES ('tpl-peso-' || @Suffix, 'Peso smoke ' || @Suffix);
+
+            INSERT INTO internal_users
+                (actor_id, auth_user_id, template_id, display_name, active)
+            VALUES
+                (@ActorId, @AuthUserId, 'tpl-peso-' || @Suffix, 'Peso smoke ' || @Suffix, TRUE);
+
+            INSERT INTO job_on
+                (job_on_id, production_code, machine_code, status)
+            VALUES
+                (@JobOnId, @ProductionCode, 'B2', 'rascunho');
+
+            INSERT INTO peso_references
+                (peso_reference_id, mold_number, neckring_number, change_log)
+            VALUES
+                (@ReferenceId, '2099', 'SMK' || @NeckSuffix, '[]'::jsonb);
+
+            INSERT INTO peso_lotes
+                (peso_lote_id, peso_reference_id, lote, processo, allowed_lines, report_subfolder)
+            VALUES
+                (@LoteId, @ReferenceId, 'L' || @Suffix, 'NNPB', ARRAY['B2'], 'SMOKE');
+            """,
+            new NpgsqlParameter("Suffix", suffix),
+            new NpgsqlParameter("NeckSuffix", suffix.ToUpperInvariant() + "A"),
+            new NpgsqlParameter("ActorId", actorId),
+            new NpgsqlParameter("AuthUserId", Guid.NewGuid()),
+            new NpgsqlParameter("JobOnId", jobOnId),
+            new NpgsqlParameter("ProductionCode", productionCode),
+            new NpgsqlParameter("ReferenceId", Guid.NewGuid()),
+            new NpgsqlParameter("LoteId", Guid.NewGuid()));
+
+        // Persist the current revision through the real repository so the
+        // current-revision wiring matches production.
+        var revisionId = Guid.NewGuid();
+        var jobOnRepository = new DapperJobOnRepository(CreateFactory("peso-dup-seed-" + suffix));
+        await jobOnRepository.SaveRevisionGraphAsync(
+            new JobOnRevision
+            {
+                JobOnRevisionId = revisionId,
+                JobOnId = jobOnId,
+                RevisionNumber = 2,
+                ProductionSnapshot = "{\"production_code\":\"" + productionCode + "\"}",
+                ReferenceSnapshot = "{\"article_reference\":\"2099SMK" + suffix.ToUpperInvariant() + "A\"}",
+                MachineSnapshot = "{\"machine_code\":\"B2\"}",
+                DatesSnapshot = "{\"start_at\":null,\"end_at\":null}",
+                Sections = "{}",
+                TypeSnapshot = null,
+                StopSnapshot = null,
+                ProcessSnapshot = "NNPB",
+                GeneralNotes = null,
+                ChangeReason = null,
+                SavedBy = actorId,
+                SavedAtUtc = DateTime.UtcNow
+            },
+            "jobon.guardar", actorId, "{}", "{}");
+
+        return new ServiceContext(suffix, jobOnId, actorId);
+    }
+
+    private sealed record ServiceContext(string Suffix, Guid JobOnId, string ActorId);
+
+    private sealed class PesoOperadorAccessor(string actorId) : ICurrentUserAccessor
+    {
+        public CurrentUser? Current => new(
+            Guid.Parse(actorId), "Operador", ["peso"], Array.Empty<string>());
+    }
+
+    private sealed class FixedTestClock(DateTimeOffset fixedUtcNow) : IClock
+    {
+        public DateTimeOffset UtcNow => fixedUtcNow;
     }
 
     private sealed record TestContext(string Suffix, Guid ControlId, string MoldNumber, string NeckringNumber);

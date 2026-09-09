@@ -252,6 +252,27 @@ public class PesoServiceTests
         Assert.Equal("PESO_LOTE_DUPLICATE", result.Error.Code);
     }
 
+    [Fact]
+    public async Task CreateControl_DuplicateDailyControl_ReturnsValidationError()
+    {
+        // (mold, neckring, production, line, lote, date) is unique; a second
+        // control for the same day used to surface uq_peso_controlos_identity
+        // as an unhandled 23505 and a 500.
+        var jobOnId = SeedJobOn();
+        SeedReference();
+
+        var first = await _service.CreateControlAsync(new CreateControlRequest(
+            jobOnId, new DateTime(2026, 8, 17), 20m, "Novo", null, [new PesoLeituraInput("12", 152.43m)]));
+        Assert.True(first.IsSuccess);
+
+        var duplicate = await _service.CreateControlAsync(new CreateControlRequest(
+            jobOnId, new DateTime(2026, 8, 17), 20m, "Novo", null, [new PesoLeituraInput("12", 152.43m)]));
+
+        Assert.True(duplicate.IsFailure);
+        Assert.Equal(ErrorCategory.ValidationError, duplicate.Error.Category);
+        Assert.Equal("PESO_CONTROL_DUPLICATE", duplicate.Error.Code);
+    }
+
     // ---- approval workflow ---------------------------------------------------
 
     [Fact]

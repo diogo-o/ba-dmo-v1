@@ -376,17 +376,28 @@ public sealed class PesoService
         var processo = lote.Processo;
         var constante = await ResolveProcessDensityAsync(processo, ct);
 
+        var molde = reference.MoldNumber;
+        var gargalo = reference.NeckringNumber;
+        var loteText = context.Value.CmLoteText ?? lote.Lote;
+        var exists = await _repository.ExistsByIdentityAsync(
+            molde, gargalo, context.Value.ProductionCode, context.Value.MachineCode,
+            loteText, request.ControlDate, ct);
+        if (exists)
+            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+                "PESO_CONTROL_DUPLICATE",
+                "Já existe um controlo para esta referência/lote na data indicada."));
+
         var control = new PesoControl
         {
             PesoControloId = Guid.NewGuid(),
             PesoReferenceId = reference.PesoReferenceId,
             PesoLoteId = lote.PesoLoteId,
             RecordType = PesoRecordType.NovoControlo,
-            MoldNumber = reference.MoldNumber,
-            NeckringNumber = reference.NeckringNumber,
+            MoldNumber = molde,
+            NeckringNumber = gargalo,
             ProductionCode = context.Value.ProductionCode,
             Line = context.Value.MachineCode,
-            Lote = context.Value.CmLoteText ?? lote.Lote,
+            Lote = loteText,
             Processo = processo,
             ConstanteGlassUsada = constante,
             ControlDate = request.ControlDate,
