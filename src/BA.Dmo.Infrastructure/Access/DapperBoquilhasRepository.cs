@@ -391,7 +391,11 @@ FROM repairers r WHERE (@OnlyActive = FALSE OR r.active = TRUE) ORDER BY r.name;
                 new { OnlyActive = onlyActive }, cancellationToken: ct);
 
             // Bulk-load supported_types for all returned repairers in one query (UD-03).
-            var ids = rows.Select(r => r.repairer_id).ToArray();
+            // NOTE: rows are dynamic, so the cast to Guid[] is required — an
+            // object[] arrives at Npgsql without a pg type and throws
+            // InvalidCastException ("Writing values of 'System.Object[]' is not
+            // supported for parameters having no NpgsqlDbType").
+            var ids = rows.Select(r => (Guid)r.repairer_id).ToArray();
             var typesMap = ids.Length > 0
                 ? await Db.QueryAsync<dynamic>(conn,
                     @"SELECT repairer_id, repair_type FROM repairer_repair_types WHERE repairer_id = ANY(@Ids);",
