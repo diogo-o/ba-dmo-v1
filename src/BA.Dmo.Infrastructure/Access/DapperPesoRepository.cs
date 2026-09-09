@@ -293,8 +293,8 @@ LEFT JOIN peso_references ref ON ref.peso_reference_id = c.peso_reference_id
 WHERE (@ReferenceId IS NULL OR c.peso_reference_id = @ReferenceId)
   AND (@Status IS NULL OR c.status = @Status)
   AND (@Type IS NULL OR c.record_type = @Type)
-  AND (@From IS NULL OR c.control_date >= @From)
-  AND (@To IS NULL OR c.control_date <= @To)
+  AND (@From::date IS NULL OR c.control_date >= @From::date)
+  AND (@To::date IS NULL OR c.control_date <= @To::date)
   AND (@Search IS NULL
        OR c.mold_number ILIKE '%'||@Search||'%'
        OR c.production_code ILIKE '%'||@Search||'%'
@@ -535,7 +535,7 @@ VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'peso', @Action,
         ProductionCode = (string)row.production_code,
         Line = (string)row.line,
         Lote = (string)row.lote,
-        ControlDate = (DateTime)row.control_date,
+        ControlDate = ToControlDate(row.control_date),
         JobOnId = (Guid)row.job_on_id,
         JobOnRevisionId = (Guid)row.job_on_revision_id,
         CmSnapshotJson = row.cm_snapshot?.ToString(),
@@ -551,11 +551,23 @@ VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'peso', @Action,
 
     private static PesoLeitura MapLeitura(dynamic row) => new()
     {
-        PesoLeituraId = (Guid)row.peso_leitura_id,
         PesoControloId = (Guid)row.peso_controlo_id,
         CmNumber = (string)row.cm_number,
         PesoEmAgua = DeserializeReadings(row.readings)?.PesoEmAgua,
         PesoVidro = DeserializeReadings(row.readings)?.PesoVidro
+    };
+
+    /// <summary>
+    /// Npgsql reads PG <c>date</c> columns as <see cref="DateOnly"/> (Dapper
+    /// dynamic rows); the PesoControl contract is DateTime. Accept both shapes
+    /// so the mapping survives regardless of the Npgsql/Dapper version.
+    /// </summary>
+    private static DateTime ToControlDate(object? value) => value switch
+    {
+        DateTime dateTime => dateTime,
+        DateOnly date => date.ToDateTime(TimeOnly.MinValue),
+        _ => throw new InvalidOperationException(
+            $"Unsupported control_date value '{value}' ({value?.GetType().Name ?? "null"}).")
     };
 
     /// <summary>
