@@ -230,6 +230,12 @@ public sealed class PesoService
         if (validation is not null)
             return Result<Guid, DomainError>.Failure(DomainError.Validation(validation.Code, validation.Message));
 
+        var duplicates = await _repository.GetLotesAsync(request.ReferenceId, ct);
+        if (duplicates.Any(l => string.Equals(l.Lote, request.Lote.Trim(), StringComparison.OrdinalIgnoreCase)))
+            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+                "PESO_LOTE_DUPLICATE",
+                "Já existe um lote com este identificador para a referência."));
+
         var lote = new PesoLote
         {
             PesoLoteId = Guid.NewGuid(),
@@ -258,6 +264,12 @@ public sealed class PesoService
         var validation = PesoValidator.ValidateLote(request.Lote, request.Processo, request.AllowedLines, request.ReportSubfolder);
         if (validation is not null)
             return Result<Guid, DomainError>.Failure(DomainError.Validation(validation.Code, validation.Message));
+
+        var duplicates = await _repository.GetLotesAsync(source.PesoReferenceId, ct);
+        if (duplicates.Any(l => string.Equals(l.Lote, request.Lote.Trim(), StringComparison.OrdinalIgnoreCase)))
+            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+                "PESO_LOTE_DUPLICATE",
+                "Já existe um lote com este identificador para a referência."));
 
         var lote = new PesoLote
         {
@@ -346,24 +358,31 @@ public sealed class PesoService
         if (context.IsFailure) return Result<Guid, DomainError>.Failure(context.Error);
 
         var reference = await FindReferenceByTextAsync(context.Value.ReferenceText, ct);
-        var lote = reference is not null
-            ? (await _repository.GetLotesAsync(reference.PesoReferenceId, ct)).FirstOrDefault()
-            : null;
+        if (reference is null)
+            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+                "PESO_REF_NOT_FOUND",
+                "A referência do Job On não está registada no Peso — registe a referência antes de criar o controlo."));
 
-        var processo = lote?.Processo ?? context.Value.Processo;
+        var lote = (await _repository.GetLotesAsync(reference.PesoReferenceId, ct)).FirstOrDefault();
+        if (lote is null)
+            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+                "PESO_LOTE_NOT_FOUND",
+                "A referência não tem nenhum lote registado — crie o lote antes de criar o controlo."));
+
+        var processo = lote.Processo;
         var constante = await ResolveProcessDensityAsync(processo, ct);
 
         var control = new PesoControl
         {
             PesoControloId = Guid.NewGuid(),
-            PesoReferenceId = reference?.PesoReferenceId ?? Guid.Empty,
-            PesoLoteId = lote?.PesoLoteId ?? Guid.Empty,
+            PesoReferenceId = reference.PesoReferenceId,
+            PesoLoteId = lote.PesoLoteId,
             RecordType = PesoRecordType.NovoControlo,
-            MoldNumber = reference?.MoldNumber ?? context.Value.ReferenceText,
-            NeckringNumber = reference?.NeckringNumber ?? string.Empty,
+            MoldNumber = reference.MoldNumber,
+            NeckringNumber = reference.NeckringNumber,
             ProductionCode = context.Value.ProductionCode,
             Line = context.Value.MachineCode,
-            Lote = context.Value.CmLoteText ?? lote?.Lote ?? string.Empty,
+            Lote = context.Value.CmLoteText ?? lote.Lote,
             Processo = processo,
             ConstanteGlassUsada = constante,
             ControlDate = request.ControlDate,
@@ -374,7 +393,7 @@ public sealed class PesoService
             TemperaturaC = request.TemperaturaC,
             EstadoMolde = request.EstadoMolde,
             Notas = request.Notas,
-            PesoNominal = lote?.NominalWeight,
+            PesoNominal = lote.NominalWeight,
             CreatedAtUtc = _clock.UtcNow,
             CreatedBy = gate.Value.ActorId,
             Leituras = MapLeituras(request.Leituras)

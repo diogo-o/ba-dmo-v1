@@ -164,6 +164,59 @@ public class PesoServiceTests
         Assert.Single(control.Leituras);
     }
 
+    [Fact]
+    public async Task CreateControl_WhenJobOnReferenceNotRegistered_ReturnsValidationError()
+    {
+        // The Job On context reference text must resolve to a registered Peso
+        // reference (mold+neckring split); an unresolved text used to insert
+        // Guid.Empty and crash into the reference FK (23503) as a 500.
+        var jobOnId = SeedJobOn("9999T999");
+
+        var result = await _service.CreateControlAsync(new CreateControlRequest(
+            jobOnId, new DateTime(2026, 8, 17), 20m, "Novo", "obs", [new PesoLeituraInput("12", 152.43m)]));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ErrorCategory.ValidationError, result.Error.Category);
+        Assert.Equal("PESO_REF_NOT_FOUND", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task CreateControl_WhenReferenceHasNoLote_ReturnsValidationError()
+    {
+        // Controls belong to a lote; a reference without any lote used to
+        // insert Guid.Empty and crash into the lote FK (23503) as a 500.
+        var jobOnId = SeedJobOn("5447T173");
+        var refId = Guid.NewGuid();
+        _repository.References[refId] = new PesoReference
+        {
+            PesoReferenceId = refId,
+            MoldNumber = "5447",
+            NeckringNumber = "T173"
+        };
+
+        var result = await _service.CreateControlAsync(new CreateControlRequest(
+            jobOnId, new DateTime(2026, 8, 17), 20m, "Novo", "obs", [new PesoLeituraInput("12", 152.43m)]));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ErrorCategory.ValidationError, result.Error.Category);
+        Assert.Equal("PESO_LOTE_NOT_FOUND", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task CreateLote_DuplicateNameForReference_ReturnsValidationError()
+    {
+        // The (reference, lote) pair is unique in the schema; a duplicate name
+        // used to surface the 23505 unique violation as an unhandled 500.
+        var refId = SeedReference();
+
+        var result = await _service.CreateLoteAsync(new CreateLoteRequest(
+            refId, "4", PesoProcesso.Nnpb, ["B3"], "5447T173", 200m));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ErrorCategory.ValidationError, result.Error.Category);
+        Assert.Equal("PESO_LOTE_DUPLICATE", result.Error.Code);
+    }
+
     // ---- approval workflow ---------------------------------------------------
 
     [Fact]
