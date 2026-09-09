@@ -3,6 +3,7 @@ using BA.Dmo.Application.Modules.Pegamentos;
 using BA.Dmo.Application.Modules.Peso;
 using BA.Dmo.Application.Shared.Persistence;
 using BA.Dmo.Domain.Modules.JobOn;
+using BA.Dmo.Domain.Modules.Peso;
 using BA.Dmo.Domain.Shared.Access;
 using BA.Dmo.Domain.Shared.Kernel;
 using BA.Dmo.UnitTests.Modules.Pegamentos;
@@ -67,6 +68,27 @@ public class JobOnRevisionImmutabilityIntegrationTests
         // Persist revision A (immutable) with the full historical context. It must carry
         // a Peso process + reference snapshot so Peso resolves its context from A.
         var revAId = await SeedRevisionA(jobOnId);
+
+        // Register the Peso reference + lote the control context resolves to
+        // (the real workflow requires the registered reference; the reference
+        // text 5447T173 splits into mold 5447 + neckring T173).
+        var pesoRefId = Guid.NewGuid();
+        _peso.References[pesoRefId] = new PesoReference
+        {
+            PesoReferenceId = pesoRefId,
+            MoldNumber = "5447",
+            NeckringNumber = "T173"
+        };
+        _peso.Lotes[pesoRefId] = new PesoLote
+        {
+            PesoLoteId = Guid.NewGuid(),
+            PesoReferenceId = pesoRefId,
+            Lote = "0",
+            Processo = PesoProcesso.Nnpb,
+            AllowedLines = ["B1"],
+            ReportSubfolder = "5447T173",
+            NominalWeight = 200m
+        };
 
         // The Lookup maps the REAL revision A → a Pegamento context (same id).
         _pegLookup.ContextByRevision[revAId] = PegamentoContextBuilder.Complete(
