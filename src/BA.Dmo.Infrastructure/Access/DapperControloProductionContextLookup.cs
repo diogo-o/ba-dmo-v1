@@ -139,15 +139,10 @@ ORDER BY c.family, c.reference_snapshot;";
         if (raw is null || raw is DBNull) return null;
         var text = raw switch { string s => s, _ => raw.ToString() };
         if (string.IsNullOrWhiteSpace(text)) return null;
-        try
-        {
-            using var doc = JsonDocument.Parse(text);
-            if (doc.RootElement.ValueKind == JsonValueKind.String)
-                return doc.RootElement.GetString();
-            return doc.RootElement.TryGetProperty("reference", out var refProp) && refProp.ValueKind == JsonValueKind.String
-                ? refProp.GetString()
-                : null;
-        }
-        catch (JsonException) { return null; }
+        // Canonical reference_snapshot parsing (06_JOB_ON): string root or
+        // object keys article_reference/reference/code/value (the Job On
+        // module writes { article_reference = code } per the owner D2 rule).
+        var code = ArticleReferenceImageRules.ExtractReferenceCode(text);
+        return string.IsNullOrWhiteSpace(code) ? null : code;
     }
 }
