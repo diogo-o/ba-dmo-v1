@@ -580,13 +580,30 @@ VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'peso', @Action,
         CreatedAtUtc = ((DateTime)row.created_at_utc).ToUniversalTime()
     };
 
-    private static PesoLeitura MapLeitura(dynamic row) => new()
+    private static PesoLeitura MapLeitura(dynamic row) => MapLeituraCore(
+        (Guid)row.peso_leitura_id,
+        (Guid)row.peso_controlo_id,
+        (string)row.cm_number,
+        row.readings);
+
+    /// <summary>
+    /// Strongly-typed core: passing the dynamic row into DeserializeReadings
+    /// would make the whole invocation dynamic and tuple ELEMENT NAMES are not
+    /// visible through dynamic dispatch (RuntimeBinderException on
+    /// .PesoEmAgua/.PesoVidro once the parse succeeds).
+    /// </summary>
+    private static PesoLeitura MapLeituraCore(Guid leituraId, Guid controlId, string cmNumber, object? readings)
     {
-        PesoControloId = (Guid)row.peso_controlo_id,
-        CmNumber = (string)row.cm_number,
-        PesoEmAgua = DeserializeReadings(row.readings)?.PesoEmAgua,
-        PesoVidro = DeserializeReadings(row.readings)?.PesoVidro
-    };
+        var parsed = DeserializeReadings(readings);
+        return new PesoLeitura
+        {
+            PesoLeituraId = leituraId,
+            PesoControloId = controlId,
+            CmNumber = cmNumber,
+            PesoEmAgua = parsed?.PesoEmAgua,
+            PesoVidro = parsed?.PesoVidro
+        };
+    }
 
     /// <summary>
     /// Npgsql reads PG <c>date</c> columns as <see cref="DateOnly"/> (Dapper
@@ -607,14 +624,37 @@ VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'peso', @Action,
     /// </summary>
     private static (decimal? PesoEmAgua, decimal? PesoVidro)? DeserializeReadings(object? value)
     {
-        if (value is null) return null;
+        if (value is null or DBNull) return null;
         try
         {
-            var el = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(value.ToString());
-            if (el.TryGetProperty("pesoEmAgua", out var pea) && pea.TryGetDecimal(out var peaVal))
+            // Npgsql may surface the jsonb column as a raw string, a
+            // JsonElement or a JsonDocument depending on the connection's
+            // dynamic-json mode; normalize all three to the JSON text first
+            // (JsonDocument.ToString() yields the TYPE NAME, not the JSON).
+            var json = value switch
+            {
+                string s => s,
+                System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.String } element => element.GetString(),
+                System.Text.Json.JsonElement element => element.GetRawText(),
+                System.Text.Json.JsonDocument jsonDoc => jsonDoc.RootElement.GetRawText(),
+                _ => value.ToString()
+            };
+            if (string.IsNullOrWhiteSpace(json)) return null;
+
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+            var el = document.RootElement;
+            // TryGetDecimal THROWS InvalidOperationException for non-number
+            // elements (pesoVidro is legitimately null until the glass weight
+            // is estimated) — guard with ValueKind so a null sibling property
+            // can never poison the whole readings read.
+            if (el.TryGetProperty("pesoEmAgua", out var pea)
+                && pea.ValueKind == System.Text.Json.JsonValueKind.Number
+                && pea.TryGetDecimal(out var peaVal))
             {
                 decimal? pv = null;
-                if (el.TryGetProperty("pesoVidro", out var ppv) && ppv.TryGetDecimal(out var pvVal))
+                if (el.TryGetProperty("pesoVidro", out var ppv)
+                    && ppv.ValueKind == System.Text.Json.JsonValueKind.Number
+                    && ppv.TryGetDecimal(out var pvVal))
                     pv = pvVal;
                 return (peaVal, pv);
             }

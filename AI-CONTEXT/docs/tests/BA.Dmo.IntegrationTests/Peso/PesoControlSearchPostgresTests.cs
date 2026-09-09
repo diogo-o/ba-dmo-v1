@@ -198,6 +198,81 @@ public sealed class PesoControlSearchPostgresTests
             repository.DeleteControlAsync(controlId));
     }
 
+    [Fact]
+    public async Task GetControlById_RoundTripsPersistedLeitura()
+    {
+        // Regression: Diagram of the Peso data-entry read path. MapLeitura never
+        // assigned PesoLeituraId (the record defaults to a NEW Guid per read, so
+        // every detail/calculate/submit saw phantom ids) and the readings jsonb
+        // parse yielded null weights, making submit report PESO_CONTROL_NO_READING
+        // for a control whose readings exist in the database.
+        if (SkipIfNoDatabase()) return;
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var controlId = Guid.NewGuid();
+        var leituraId = Guid.NewGuid();
+        var loteId = Guid.NewGuid();
+        var refId = Guid.NewGuid();
+        var jobOnId = Guid.NewGuid();
+        var revId = Guid.NewGuid();
+        var prod = "2026" + Guid.NewGuid().ToString("N")[..6];
+        var readingsJson = "{ \"pesoVidro\": null, \"pesoEmAgua\": 123.45 }";
+
+        await ExecuteAsync(
+            """
+            INSERT INTO peso_references
+                (peso_reference_id, mold_number, neckring_number, change_log)
+            VALUES
+                (@RefId, 'RT-M-' || @Suffix, 'RT-N-' || @Suffix, '[]'::jsonb);
+
+            INSERT INTO peso_lotes
+                (peso_lote_id, peso_reference_id, lote, processo, allowed_lines, report_subfolder)
+            VALUES
+                (@LoteId, @RefId, 'L-RT-' || @Suffix, 'NNPB', ARRAY['B1'], 'rt');
+
+            INSERT INTO job_on
+                (job_on_id, production_code, machine_code, status)
+            VALUES
+                (@JobOnId, @Prod, 'B1', 'rascunho');
+
+            INSERT INTO job_on_revision
+                (job_on_revision_id, job_on_id, revision_number, sections)
+            VALUES
+                (@RevId, @JobOnId, 1, '{}'::jsonb);
+
+            INSERT INTO peso_controlos
+                (peso_controlo_id, peso_reference_id, peso_lote_id, record_type,
+                 mold_number, neckring_number, production_code, line, lote,
+                 control_date, job_on_id, job_on_revision_id, status)
+            VALUES
+                (@ControlId, @RefId, @LoteId, 'novo_controlo',
+                 'RT-M-' || @Suffix, 'RT-N-' || @Suffix, @Prod, 'B1', 'L-RT-' || @Suffix,
+                 DATE '2026-09-10', @JobOnId, @RevId, 'rascunho');
+
+            INSERT INTO peso_leituras
+                (peso_leitura_id, peso_controlo_id, cm_number, readings)
+            VALUES
+                (@LeituraId, @ControlId, 'CM-RT', @Readings::jsonb);
+            """,
+            new NpgsqlParameter("Suffix", suffix),
+            new NpgsqlParameter("RefId", refId),
+            new NpgsqlParameter("LoteId", loteId),
+            new NpgsqlParameter("JobOnId", jobOnId),
+            new NpgsqlParameter("RevId", revId),
+            new NpgsqlParameter("ControlId", controlId),
+            new NpgsqlParameter("LeituraId", leituraId),
+            new NpgsqlParameter("Prod", prod),
+            new NpgsqlParameter("Readings", readingsJson));
+
+        var repository = new DapperPesoRepository(CreateFactory("peso-rt-" + suffix));
+        var control = await repository.GetControlByIdAsync(controlId);
+
+        Assert.NotNull(control);
+        var leitura = Assert.Single(control!.Leituras);
+        Assert.Equal(leituraId, leitura.PesoLeituraId);
+        Assert.Equal("CM-RT", leitura.CmNumber);
+        Assert.Equal(123.45m, leitura.PesoEmAgua);
+    }
+
     private static bool SkipIfNoDatabase()
     {
         if (!string.IsNullOrWhiteSpace(ConnectionString)) return false;
