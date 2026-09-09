@@ -307,10 +307,10 @@ VALUES (
                 DatesSnapshot = (object?)revision.DatesSnapshot ,
                 Sections = revision.Sections,
                 DropCount = (object?)revision.DropCount ,
-                TypeSnapshot = (object?)revision.TypeSnapshot ,
-                StopSnapshot = (object?)revision.StopSnapshot ,
+                TypeSnapshot = SerializeText(revision.TypeSnapshot),
+                StopSnapshot = SerializeText(revision.StopSnapshot),
                 WeightSnapshot = SerializeWeight(revision.WeightSnapshot),
-                ProcessSnapshot = (object?)revision.ProcessSnapshot ,
+                ProcessSnapshot = SerializeText(revision.ProcessSnapshot),
                 GeneralNotes = revision.GeneralNotes,
                 ChangeReason = revision.ChangeReason,
                 SavedBy = revision.SavedBy,
@@ -683,10 +683,10 @@ VALUES (
                 DatesSnapshot = (object?)newRevision.DatesSnapshot ,
                 Sections = newRevision.Sections,
                 DropCount = (object?)newRevision.DropCount ,
-                TypeSnapshot = (object?)newRevision.TypeSnapshot ,
-                StopSnapshot = (object?)newRevision.StopSnapshot ,
+                TypeSnapshot = SerializeText(newRevision.TypeSnapshot),
+                StopSnapshot = SerializeText(newRevision.StopSnapshot),
                 WeightSnapshot = SerializeWeight(newRevision.WeightSnapshot),
-                ProcessSnapshot = (object?)newRevision.ProcessSnapshot ,
+                ProcessSnapshot = SerializeText(newRevision.ProcessSnapshot),
                 GeneralNotes = newRevision.GeneralNotes,
                 ChangeReason = newRevision.ChangeReason,
                 SavedBy = newRevision.SavedBy,
@@ -924,10 +924,10 @@ VALUES (
             DatesSnapshot = (object?)revision.DatesSnapshot ,
             Sections = revision.Sections,
             DropCount = (object?)revision.DropCount ,
-            TypeSnapshot = (object?)revision.TypeSnapshot ,
-            StopSnapshot = (object?)revision.StopSnapshot ,
+            TypeSnapshot = SerializeText(revision.TypeSnapshot),
+            StopSnapshot = SerializeText(revision.StopSnapshot),
             WeightSnapshot = SerializeWeight(revision.WeightSnapshot),
-            ProcessSnapshot = (object?)revision.ProcessSnapshot ,
+            ProcessSnapshot = SerializeText(revision.ProcessSnapshot),
             GeneralNotes = revision.GeneralNotes,
             ChangeReason = revision.ChangeReason,
             SavedBy = revision.SavedBy,
@@ -1404,6 +1404,18 @@ ORDER BY created_at_utc ASC;";
             ? null
             : JsonSerializer.Serialize(new { value = weight.Value });
 
+    /// <summary>
+    /// Typed revision text values (type/stop/process) are stored as JSON
+    /// documents <c>{ value: "…" }</c> in the jsonb snapshot columns (the same
+    /// contract as <see cref="SerializeWeight"/>, and the shape the readers
+    /// unwrap via <see cref="JsonSnapshotText"/>). A bare string would be
+    /// rejected by the <c>::jsonb</c> cast with 22P02.
+    /// </summary>
+    private static object? SerializeText(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : JsonSerializer.Serialize(new { value = value.Trim() });
+
     private static decimal? ParseWeight(object? raw)
     {
         if (raw is null || raw is DBNull)
@@ -1445,10 +1457,10 @@ ORDER BY created_at_utc ASC;";
             DatesSnapshot = (string?)row.dates_snapshot,
             Sections = row.sections ?? "{}",
             DropCount = row.drop_count,
-TypeSnapshot = (string?)row.type_snapshot,
-            StopSnapshot = (string?)row.stop_snapshot,
+TypeSnapshot = JsonSnapshotText((string?)row.type_snapshot),
+            StopSnapshot = JsonSnapshotText((string?)row.stop_snapshot),
             WeightSnapshot = ParseWeight(row.weight_snapshot),
-            ProcessSnapshot = (string?)row.process_snapshot,
+            ProcessSnapshot = JsonSnapshotText((string?)row.process_snapshot),
             GeneralNotes = row.general_notes,
             ImageAssetId = null,
             ChangeReason = row.change_reason,
@@ -1463,6 +1475,34 @@ TypeSnapshot = (string?)row.type_snapshot,
             await asyncDisposable.DisposeAsync();
         else
             connection.Dispose();
+    }
+
+    /// <summary>
+    /// Unwraps a typed revision snapshot (type/stop/process) stored as the
+    /// SnapshotJson <c>{ value: "…" }</c> document back to its plain string,
+    /// matching the domain's trimmed-text comparisons (e.g. Peso process
+    /// NNPB/PS). Non-object legacy text passes through unchanged so previously
+    /// stored plain values keep working.
+    /// </summary>
+    private static string? JsonSnapshotText(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("value", out var value) &&
+                value.ValueKind == JsonValueKind.String)
+            {
+                return value.GetString();
+            }
+        }
+        catch (JsonException)
+        {
+            // Not JSON — legacy plain text; return as-is below.
+        }
+
+        return json;
     }
 
     private static ComponentFamily ParseComponentFamily(string stored)
