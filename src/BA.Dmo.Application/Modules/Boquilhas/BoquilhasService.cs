@@ -595,6 +595,8 @@ public sealed class BoquilhasService
                 ExcessQty = disc.ExcessQty,
                 Status = BqDiscrepancyStatus.Resolved,
                 ResolutionNote = request.ResolutionNote.Trim(),
+                ResolvedBy = gate.Value.ActorId,
+                ResolvedAtUtc = _clock.UtcNow,
                 CreatedAtUtc = disc.CreatedAtUtc
             };
             await _repository.UpdateDiscrepancyAsync(uow, target, ct);
