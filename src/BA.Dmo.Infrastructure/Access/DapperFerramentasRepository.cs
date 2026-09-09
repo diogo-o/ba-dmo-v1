@@ -495,14 +495,14 @@ VALUES
 INSERT INTO audit_events (occurred_at_utc, year, actor_user_id, module_id, action_code,
                           entity_type, entity_id, result, before_summary, after_summary)
 VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'ferramentas', @Action,
-        'ferramenta', @EntityId, 'succeeded', @Before, @After);";
+        'ferramenta', @EntityId, 'succeeded', @Before::jsonb, @After::jsonb);";
             await Db.ExecuteAsync(conn, insertAudit, new
             {
                 Actor = actorId,
                 Action = "ferramentas.lote.duplicar",
                 EntityId = sourceLoteId?.ToString(),
-                Before = sourceLoteId?.ToString(),
-                After = lote.ToolLoteId.ToString()
+                Before = (object?)AuditJson.Normalize(sourceLoteId?.ToString()),
+                After = (object?)AuditJson.Normalize(lote.ToolLoteId.ToString())
             }, transaction: tx, cancellationToken: token);
 
             return lote.ToolLoteId;
@@ -563,7 +563,7 @@ FROM tool_usage_records WHERE tool_lote_id = @ToolLoteId ORDER BY reading_at_utc
 INSERT INTO audit_events (occurred_at_utc, year, actor_user_id, module_id, action_code,
                           entity_type, entity_id, result, before_summary, after_summary)
 VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'ferramentas', @Action,
-        'ferramenta', @EntityId, 'succeeded', @Before, @After);";
+        'ferramenta', @EntityId, 'succeeded', @Before::jsonb, @After::jsonb);";
         var conn = await Open(_connectionFactory, ct);
         try
         {
@@ -572,8 +572,8 @@ VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'ferramentas', @Action,
                 Actor = actorId,
                 Action = eventType,
                 EntityId = entityId?.ToString(),
-                Before = beforeSnapshot,
-                After = afterSnapshot
+                Before = (object?)AuditJson.Normalize(beforeSnapshot),
+                After = (object?)AuditJson.Normalize(afterSnapshot)
             }, cancellationToken: ct);
         }
         finally { await DisposeAsync(conn); }

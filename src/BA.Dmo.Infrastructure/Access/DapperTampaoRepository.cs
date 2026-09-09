@@ -143,7 +143,7 @@ WHERE tampao_field_value_id = @Id;";
     {
         const string sql = @"
 SELECT tampao_configuration_id, values_json, active, created_at_utc, created_by
-FROM tampao_configurations WHERE values_json = @ValuesJson;";
+FROM tampao_configurations WHERE values_json = @ValuesJson::jsonb;";
         var conn = await _connectionFactory.OpenConnectionAsync(ct);
         try
         {
@@ -201,7 +201,7 @@ FROM tampao_saldos WHERE tampao_configuration_id = @Id;";
     {
         const string sql = @"
 INSERT INTO tampao_configurations (tampao_configuration_id, values_json, active, created_at_utc, created_by)
-VALUES (@Id, @ValuesJson, @Active, @CreatedAtUtc, @CreatedBy);";
+VALUES (@Id, @ValuesJson::jsonb, @Active, @CreatedAtUtc, @CreatedBy);";
         try
         {
             await Db.ExecuteAsync(uow.Connection, sql, new
@@ -250,7 +250,7 @@ INSERT INTO tampao_movements
     (tampao_movement_id, movement_type, origin_configuration_id, destination_configuration_id,
      qty, balances_before, balances_after, actor_id, occurred_at_utc)
 VALUES
-    (@Id, @MovementType, @Origin, @Destination, @Qty, @BalancesBefore, @BalancesAfter, @ActorId, @OccurredAtUtc);";
+    (@Id, @MovementType, @Origin, @Destination, @Qty, @BalancesBefore::jsonb, @BalancesAfter::jsonb, @ActorId, @OccurredAtUtc);";
         return Db.ExecuteAsync(uow.Connection, sql, new
         {
             Id = movement.TampaoMovementId,
@@ -468,12 +468,12 @@ ORDER BY c.values_json;";
 INSERT INTO audit_events (occurred_at_utc, year, actor_user_id, module_id, action_code,
                           entity_type, entity_id, result, before_summary, after_summary)
 VALUES (@OccurredAtUtc, EXTRACT(YEAR FROM @OccurredAtUtc), @Actor, 'tampoes', @Action,
-        @EntityType, @EntityId, @Result, @Before, @After);";
+        @EntityType, @EntityId, @Result, @Before::jsonb, @After::jsonb);";
         return Db.ExecuteAsync(uow.Connection, sql, new
         {
             OccurredAtUtc = occurredAtUtc, Actor = actorId, Action = actionCode,
             EntityType = entityType, EntityId = entityId, Result = result,
-            Before = (object?)beforeSummary, After = (object?)afterSummary
+            Before = (object?)AuditJson.Normalize(beforeSummary), After = (object?)AuditJson.Normalize(afterSummary)
         }, uow.Transaction, ct);
     }
 

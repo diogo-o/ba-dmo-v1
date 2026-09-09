@@ -199,7 +199,7 @@ FROM bq_traces WHERE bq_trace_id = @Id;", new { Id = bqTraceId }, uow.Transactio
 INSERT INTO bq_traces (bq_trace_id, bq_lote_id, status, purpose, start_line, sap_start, sap_end,
                        reopen_history, deleted_movements, created_by, created_at_utc, updated_at_utc)
 VALUES (@Id, @LoteId, @Status, @Purpose, @StartLine, @SapStart, @SapEnd,
-        @ReopenHistory, @DeletedMovements, @CreatedBy, @CreatedAtUtc, @UpdatedAtUtc);", new
+        @ReopenHistory::jsonb, @DeletedMovements::jsonb, @CreatedBy, @CreatedAtUtc, @UpdatedAtUtc);", new
         {
             Id = trace.BqTraceId, LoteId = trace.BqLoteId, Status = BqTraceStatusCodec.ToStorage(trace.Status),
             Purpose = BqTracePurposeCodec.ToStorage(trace.Purpose), StartLine = (object?)trace.StartLine,
@@ -519,11 +519,11 @@ DO UPDATE SET repairer_id = @RepairerId, updated_at_utc = now();",
 INSERT INTO audit_events (occurred_at_utc, year, actor_user_id, module_id, action_code,
                           entity_type, entity_id, result, before_summary, after_summary)
 VALUES (@OccurredAtUtc, EXTRACT(YEAR FROM @OccurredAtUtc), @Actor, 'boquilhas', @Action,
-        @EntityType, @EntityId, @Result, @Before, @After);", new
+        @EntityType, @EntityId, @Result, @Before::jsonb, @After::jsonb);", new
         {
             OccurredAtUtc = occurredAtUtc, Actor = actorId, Action = actionCode,
             EntityType = entityType, EntityId = entityId, Result = result,
-            Before = (object?)beforeSummary, After = (object?)afterSummary
+            Before = (object?)AuditJson.Normalize(beforeSummary), After = (object?)AuditJson.Normalize(afterSummary)
         }, uow.Transaction, ct);
 
     // ---- Mapping ----------------------------------------------------------------

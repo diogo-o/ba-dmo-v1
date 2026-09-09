@@ -38,7 +38,7 @@ INSERT INTO internal_repair_records
 VALUES
     (@Id, @Line, @JobOnId, @JobOnRevisionId, @ProductionCode,
      @Reference, @LotId, @ToolType, @IndividualNumber,
-     @OperatorId, @OccurredAtUtc, @CorrectionOfId, @BeforeSnapshot,
+     @OperatorId, @OccurredAtUtc, @CorrectionOfId, @BeforeSnapshot::jsonb,
      @CorrectionReason, @CreatedAtUtc, @CreatedBy);";
         await Db.ExecuteAsync(uow.Connection, sql, new
         {
@@ -170,7 +170,7 @@ VALUES ('interna', @InternalRecordId, FALSE, @Notes, @ActorId, @OccurredAtUtc);"
 INSERT INTO audit_events (occurred_at_utc, year, actor_user_id, module_id, action_code,
                           entity_type, entity_id, result, job_on_id, before_summary, after_summary)
 VALUES (@OccurredAtUtc, EXTRACT(YEAR FROM @OccurredAtUtc), @Actor, 'reparacao_interna', @Action,
-        @EntityType, @EntityId, @Result, @JobOnId, @Before, @After);";
+        @EntityType, @EntityId, @Result, @JobOnId, @Before::jsonb, @After::jsonb);";
         return Db.ExecuteAsync(uow.Connection, sql, new
         {
             OccurredAtUtc = occurredAtUtc,
@@ -180,8 +180,8 @@ VALUES (@OccurredAtUtc, EXTRACT(YEAR FROM @OccurredAtUtc), @Actor, 'reparacao_in
             EntityId = entityId,
             Result = result,
             JobOnId = (object?)jobOnId,
-            Before = (object?)beforeSummary,
-            After = (object?)afterSummary
+            Before = (object?)AuditJson.Normalize(beforeSummary),
+            After = (object?)AuditJson.Normalize(afterSummary)
         }, uow.Transaction, ct);
     }
 

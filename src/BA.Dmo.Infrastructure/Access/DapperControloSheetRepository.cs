@@ -198,7 +198,7 @@ INSERT INTO controlo_sheet_events
     (controlo_sheet_event_id, controlo_sheet_id, event_type, actor_id, occurred_at_utc,
      before_summary, after_summary, note)
 VALUES
-    (@Id, @SheetId, @EventType, @ActorId, @OccurredAtUtc, @Before, @After, @Note);";
+    (@Id, @SheetId, @EventType, @ActorId, @OccurredAtUtc, @Before::jsonb, @After::jsonb, @Note);";
         await Db.ExecuteAsync(uow.Connection, sql, new
         {
             Id = evt.ControloSheetEventId,

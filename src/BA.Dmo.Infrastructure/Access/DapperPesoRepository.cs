@@ -47,7 +47,7 @@ INSERT INTO peso_references
      volume_neck, volume_pu, calote_tp, change_log)
 VALUES
     (@Id, @MoldNumber, @NeckringNumber, @CounterMold, @Capacity,
-     @VolumeNeck, @VolumePu, @CaloteTp, @ChangeLog);";
+     @VolumeNeck, @VolumePu, @CaloteTp, @ChangeLog::jsonb);";
         var conn = await Open(_connectionFactory, ct);
         try
         {
@@ -122,7 +122,7 @@ FROM peso_references WHERE mold_number = @Mold AND neckring_number = @Neck;";
         const string sql = @"
 UPDATE peso_references
 SET counter_mold = @CounterMold, capacity = @Capacity, volume_neck = @VolumeNeck,
-    volume_pu = @VolumePu, calote_tp = @CaloteTp, change_log = @ChangeLog,
+    volume_pu = @VolumePu, calote_tp = @CaloteTp, change_log = @ChangeLog::jsonb,
     updated_at_utc = now()
 WHERE peso_reference_id = @Id;";
         var conn = await Open(_connectionFactory, ct);
@@ -212,8 +212,8 @@ INSERT INTO peso_controlos
 VALUES
     (@Id, @ReferenceId, @LoteId, @RecordType, @MoldNumber,
      @NeckringNumber, @ProductionCode, @Line, @Lote, @ControlDate, @JobOnId,
-     @JobOnRevisionId, @CmSnapshot, @Status, @Measurements, @ApprovalLog,
-     @PreviousControl, @ComparisonDecisions, @CreatedBy, @CreatedAtUtc);";
+     @JobOnRevisionId, @CmSnapshot::jsonb, @Status, @Measurements::jsonb, @ApprovalLog::jsonb,
+     @PreviousControl::jsonb, @ComparisonDecisions::jsonb, @CreatedBy, @CreatedAtUtc);";
             await Db.ExecuteAsync(conn, insertControl, new
             {
                 Id = control.PesoControloId,
@@ -243,7 +243,7 @@ VALUES
             {
                 const string insertLeitura = @"
 INSERT INTO peso_leituras (peso_leitura_id, peso_controlo_id, cm_number, readings, created_by)
-VALUES (@Id, @ControlId, @CmNumber, @Readings, @CreatedBy);";
+VALUES (@Id, @ControlId, @CmNumber, @Readings::jsonb, @CreatedBy);";
                 await Db.ExecuteAsync(conn, insertLeitura, new
                 {
                     Id = leitura.PesoLeituraId == Guid.Empty ? Guid.NewGuid() : leitura.PesoLeituraId,
@@ -338,7 +338,7 @@ ORDER BY c.control_date DESC;";
             {
                 const string insertLeitura = @"
 INSERT INTO peso_leituras (peso_leitura_id, peso_controlo_id, cm_number, readings, created_by)
-VALUES (@Id, @ControlId, @CmNumber, @Readings, @CreatedBy);";
+VALUES (@Id, @ControlId, @CmNumber, @Readings::jsonb, @CreatedBy);";
                 await Db.ExecuteAsync(conn, insertLeitura, new
                 {
                     Id = leitura.PesoLeituraId == Guid.Empty ? Guid.NewGuid() : leitura.PesoLeituraId,
@@ -372,8 +372,8 @@ VALUES (@Id, @ControlId, @CmNumber, @Readings, @CreatedBy);";
 UPDATE peso_controlos
 SET record_type = @RecordType, mold_number = @MoldNumber, neckring_number = @NeckringNumber,
     production_code = @ProductionCode, line = @Line, lote = @Lote, control_date = @ControlDate,
-    status = @Status, measurements_snapshot = @Measurements, approval_log = @ApprovalLog,
-    comparison_decisions = @ComparisonDecisions,
+    status = @Status, measurements_snapshot = @Measurements::jsonb, approval_log = @ApprovalLog::jsonb,
+    comparison_decisions = @ComparisonDecisions::jsonb,
     approved_by = @ApprovedBy, approved_at_utc = @ApprovedAtUtc,
     updated_at_utc = now()
 WHERE peso_controlo_id = @Id;";
@@ -451,7 +451,7 @@ ORDER BY day;";
     {
         const string sql = @"
 INSERT INTO peso_settings (setting_key, setting_value, updated_by, updated_at_utc)
-VALUES (@Key, @Value, @UpdatedBy, now())
+VALUES (@Key, @Value::jsonb, @UpdatedBy, now())
 ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_by = EXCLUDED.updated_by, updated_at_utc = now();";
         var conn = await Open(_connectionFactory, ct);
         try
@@ -482,7 +482,7 @@ ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, 
 INSERT INTO audit_events (occurred_at_utc, year, actor_user_id, module_id, action_code,
                           entity_type, entity_id, result, before_summary, after_summary)
 VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'peso', @Action,
-        'peso_controlo', @EntityId, 'succeeded', @Before, @After);";
+        'peso_controlo', @EntityId, 'succeeded', @Before::jsonb, @After::jsonb);";
         var conn = await Open(_connectionFactory, ct);
         try
         {
@@ -491,8 +491,8 @@ VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'peso', @Action,
                 Actor = actorId,
                 Action = eventType,
                 EntityId = entityId?.ToString(),
-                Before = beforeSnapshot,
-                After = afterSnapshot
+                Before = (object?)AuditJson.Normalize(beforeSnapshot),
+                After = (object?)AuditJson.Normalize(afterSnapshot)
             }, cancellationToken: ct);
         }
         finally { await DisposeAsync(conn); }
