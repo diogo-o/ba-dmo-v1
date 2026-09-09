@@ -1,5 +1,6 @@
 using System.Data;
 using System.Text.Json;
+using BA.Dmo.Application.Modules.JobOn;
 using BA.Dmo.Application.Modules.Pegamentos;
 using BA.Dmo.Application.Shared.Persistence;
 using BA.Dmo.Domain.Modules.Pegamentos;
@@ -184,8 +185,10 @@ WHERE jc.job_on_revision_id = @JobOnRevisionId
 
     /// <summary>
     /// Extracts the article reference from the revision's reference_snapshot.
-    /// The reference snapshot may be a JSON object with a "reference" property
-    /// or a plain string. Returns null on malformed/missing.
+    /// Canonical parsing (06_JOB_ON): string root or object keys
+    /// article_reference/reference/code/value (the Job On module writes
+    /// { article_reference = code } per the owner D2 rule). Returns null when
+    /// no reference is present.
     /// </summary>
     private static string? ExtractReferenceFromSnapshot(object? raw)
     {
@@ -201,23 +204,7 @@ WHERE jc.job_on_revision_id = @JobOnRevisionId
         if (string.IsNullOrWhiteSpace(text))
             return null;
 
-        try
-        {
-            using var doc = JsonDocument.Parse(text);
-            if (doc.RootElement.ValueKind == JsonValueKind.String)
-                return doc.RootElement.GetString();
-
-            if (doc.RootElement.TryGetProperty("reference", out var refProp) &&
-                refProp.ValueKind == JsonValueKind.String)
-            {
-                return refProp.GetString();
-            }
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-
-        return null;
+        var code = ArticleReferenceImageRules.ExtractReferenceCode(text);
+        return string.IsNullOrWhiteSpace(code) ? null : code;
     }
 }
