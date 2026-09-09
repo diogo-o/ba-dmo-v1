@@ -35,7 +35,7 @@ public class PesoServiceTests
 
     // ---- Job On seed with a revision + MP_CM component -------------------
 
-    private Guid SeedJobOn(string referenceText = "5447T173", string production = "202601", string machine = "B3")
+    private Guid SeedJobOn(string? referenceText = "5447T173", string production = "202601", string machine = "B3", string? snapshot = null)
     {
         var jobOnId = _jobOns.CreateAsync(new JobOnEntity(production, machine, Now, Now.AddHours(8), [])).Result;
         var revision = new JobOnRevision
@@ -43,9 +43,11 @@ public class PesoServiceTests
             JobOnRevisionId = Guid.NewGuid(),
             JobOnId = jobOnId,
             RevisionNumber = 1,
-            ReferenceSnapshot = referenceText,
+            ReferenceSnapshot = snapshot ?? referenceText,
             ProcessSnapshot = "NNPB",
-            Components = [new JobOnComponent { Family = ComponentFamily.MP_CM, ReferenceSnapshot = referenceText, LotSnapshot = "4" }]
+            Components = referenceText is null
+                ? []
+                : [new JobOnComponent { Family = ComponentFamily.MP_CM, ReferenceSnapshot = referenceText, LotSnapshot = "4" }]
         };
         _jobOns.Revisions.Add(revision);
         _jobOns.Components.AddRange(revision.Components.Select(component =>
@@ -178,6 +180,39 @@ public class PesoServiceTests
         Assert.True(result.IsFailure);
         Assert.Equal(ErrorCategory.ValidationError, result.Error.Category);
         Assert.Equal("PESO_REF_NOT_FOUND", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task CreateControl_WithCanonicalArticleReferenceSnapshot_ResolvesReference()
+    {
+        // The Job On revision persists the canonical { article_reference } JSON
+        // snapshot (06_JOB_ON ExtractReferenceCode convention); the Peso context
+        // must decode it before the mold+neckring split instead of treating the
+        // raw JSON document as the reference text (which never matched).
+        var jobOnId = SeedJobOn(referenceText: null, snapshot: "{\"article_reference\":\"2099SMK101\"}");
+        var refId = Guid.NewGuid();
+        _repository.References[refId] = new PesoReference
+        {
+            PesoReferenceId = refId,
+            MoldNumber = "2099",
+            NeckringNumber = "SMK101"
+        };
+        _repository.Lotes[refId] = new PesoLote
+        {
+            PesoLoteId = Guid.NewGuid(),
+            PesoReferenceId = refId,
+            Lote = "7",
+            Processo = PesoProcesso.Nnpb,
+            AllowedLines = ["B3"],
+            ReportSubfolder = "2099SMK101"
+        };
+
+        var result = await _service.CreateControlAsync(new CreateControlRequest(
+            jobOnId, new DateTime(2026, 8, 17), 20m, "Novo", "obs", [new PesoLeituraInput("12", 152.43m)]));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("2099", _repository.Controls[result.Value].MoldNumber);
+        Assert.Equal("SMK101", _repository.Controls[result.Value].NeckringNumber);
     }
 
     [Fact]

@@ -310,9 +310,13 @@ public sealed class PesoService
         var cm = (revision.Components ?? Array.Empty<JobOnComponent>())
             .FirstOrDefault(c => c.Family == ComponentFamily.MP_CM);
 
-        var referenceText = !string.IsNullOrWhiteSpace(revision.ReferenceSnapshot)
-            ? revision.ReferenceSnapshot
-            : cm?.ReferenceSnapshot;
+        // The reference snapshot is the canonical article_reference JSON
+        // document (06_JOB_ON ExtractReferenceCode convention); decode it the
+        // same way the Controlo/Pegamentos context readers do, falling back to
+        // the MP_CM component's snapshot for legacy revisions.
+        var referenceText = ArticleReferenceImageRules.ExtractReferenceCode(revision.ReferenceSnapshot);
+        if (string.IsNullOrWhiteSpace(referenceText) && cm is not null)
+            referenceText = ArticleReferenceImageRules.ExtractReferenceCode(cm.ReferenceSnapshot);
         if (string.IsNullOrWhiteSpace(referenceText))
             return Result<JobOnContext, DomainError>.Failure(DomainError.Validation(
                 "PESO_JOBON_INVALID_REFERENCE",
