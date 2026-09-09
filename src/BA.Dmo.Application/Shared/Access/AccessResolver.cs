@@ -219,6 +219,14 @@ public sealed class AccessResolver
             capabilities.Add(CanonicalModuleCatalog.FerramentasConfigureCapabilityId);
         }
 
+        // Reparação Interna: operators/controllers and responsables correct the
+        // numbers they typed (operational manual 10_MANUAL_OPERACIONAL.md). The
+        // corrigir capability travels with the module grant, like jobon.confirmar.
+        if (modules.Contains(CanonicalModuleCatalog.ReparacaoInternaModuleId))
+        {
+            capabilities.Add(CanonicalModuleCatalog.ReparacaoInternaCorrigirCapabilityId);
+        }
+
         if (!modules.Contains(CanonicalModuleCatalog.ControloAreaId))
             return;
 

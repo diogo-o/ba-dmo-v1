@@ -250,6 +250,48 @@ public class AccessResolverTests
         Assert.Contains(resolver.AccessiblePages(access), page => page.Route == "/novo");
     }
 
+    [Theory]
+    [InlineData(FunctionalProfile.OperatorController)]
+    [InlineData(FunctionalProfile.Responsible)]
+    public void ReparacaoInterna_Grant_AlsoConfersCorrigir(FunctionalProfile profile)
+    {
+        var access = Resolve(
+            profile,
+            new ModuleGrant(CanonicalModuleCatalog.ReparacaoInternaModuleId, []));
+
+        Assert.True(access.HasModule(CanonicalModuleCatalog.ReparacaoInternaModuleId));
+        Assert.True(access.HasCapability(CanonicalModuleCatalog.ReparacaoInternaCorrigirCapabilityId));
+    }
+
+    [Fact]
+    public void ReparacaoInterna_Corrigir_IsNeverGrantedWithoutTheModule()
+    {
+        var access = Resolve(
+            FunctionalProfile.OperatorController,
+            new ModuleGrant(CanonicalModuleCatalog.BoquilhasModuleId, []));
+
+        Assert.False(access.HasCapability(CanonicalModuleCatalog.ReparacaoInternaCorrigirCapabilityId));
+    }
+
+    [Fact]
+    public void LegacyCapabilityArrays_StillCannotShapeProfileManagedCapabilities()
+    {
+        // GLM-ACC: capability arrays inside template JSON are not authorization
+        // input for profile-derived behavior. A legacy array claiming jobon.edit/
+        // jobon.configure must not widen an operator's surface.
+        var access = Resolve(
+            FunctionalProfile.OperatorController,
+            new ModuleGrant(CanonicalModuleCatalog.JobonModuleId,
+            [
+                CanonicalModuleCatalog.JobonEditCapabilityId,
+                CanonicalModuleCatalog.JobonConfigureCapabilityId
+            ]));
+
+        Assert.True(access.HasCapability(CanonicalModuleCatalog.JobonViewCapabilityId));
+        Assert.False(access.HasCapability(CanonicalModuleCatalog.JobonEditCapabilityId));
+        Assert.False(access.HasCapability(CanonicalModuleCatalog.JobonConfigureCapabilityId));
+    }
+
     private static PageDefinition Page(string pageId)
     {
         Assert.True(CanonicalPageCatalog.Instance.TryGetById(pageId, out var page));
