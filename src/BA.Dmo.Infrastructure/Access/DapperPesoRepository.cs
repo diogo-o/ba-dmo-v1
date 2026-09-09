@@ -56,11 +56,11 @@ VALUES
                 Id = r.PesoReferenceId,
                 r.MoldNumber,
                 r.NeckringNumber,
-                CounterMold = (object?)r.CounterMold ?? DBNull.Value,
-                Capacity = (object?)r.Capacity ?? DBNull.Value,
-                VolumeNeck = (object?)r.VolumeNeck ?? DBNull.Value,
-                VolumePu = (object?)r.VolumePu ?? DBNull.Value,
-                CaloteTp = (object?)r.CaloteTp ?? DBNull.Value,
+                CounterMold = (object?)r.CounterMold,
+                Capacity = (object?)r.Capacity,
+                VolumeNeck = (object?)r.VolumeNeck,
+                VolumePu = (object?)r.VolumePu,
+                CaloteTp = (object?)r.CaloteTp,
                 ChangeLog = r.ChangeLogJson ?? "[]"
             }, cancellationToken: ct);
             return r.PesoReferenceId;
@@ -131,11 +131,11 @@ WHERE peso_reference_id = @Id;";
             await Db.ExecuteAsync(conn, sql, new
             {
                 Id = r.PesoReferenceId,
-                CounterMold = (object?)r.CounterMold ?? DBNull.Value,
-                Capacity = (object?)r.Capacity ?? DBNull.Value,
-                VolumeNeck = (object?)r.VolumeNeck ?? DBNull.Value,
-                VolumePu = (object?)r.VolumePu ?? DBNull.Value,
-                CaloteTp = (object?)r.CaloteTp ?? DBNull.Value,
+                CounterMold = (object?)r.CounterMold,
+                Capacity = (object?)r.Capacity,
+                VolumeNeck = (object?)r.VolumeNeck,
+                VolumePu = (object?)r.VolumePu,
+                CaloteTp = (object?)r.CaloteTp,
                 ChangeLog = r.ChangeLogJson ?? "[]"
             }, cancellationToken: ct);
         }
@@ -162,7 +162,7 @@ VALUES
                 Processo = PesoProcessoCodec.ToStorage(lote.Processo),
                 AllowedLines = lote.AllowedLines.ToArray(),
                 ReportSubfolder = lote.ReportSubfolder,
-                NominalWeight = (object?)lote.NominalWeight ?? DBNull.Value
+                NominalWeight = (object?)lote.NominalWeight
             }, cancellationToken: ct);
             return lote.PesoLoteId;
         }
@@ -228,12 +228,12 @@ VALUES
                 ControlDate = control.ControlDate,
                 control.JobOnId,
                 control.JobOnRevisionId,
-                CmSnapshot = (object?)control.CmSnapshotJson ?? DBNull.Value,
+                CmSnapshot = (object?)control.CmSnapshotJson,
                 Status = PesoControlStateCodec.ToStorage(control.Status),
                 Measurements = BuildMeasurementsSnapshot(control),
                 ApprovalLog = control.ApprovalLogJson ?? "[]",
-                PreviousControl = (object?)control.PreviousControlJson ?? DBNull.Value,
-                ComparisonDecisions = (object?)control.ComparisonDecisionsJson ?? DBNull.Value,
+                PreviousControl = (object?)control.PreviousControlJson,
+                ComparisonDecisions = (object?)control.ComparisonDecisionsJson,
                 CreatedBy = control.CreatedBy,
                 CreatedAtUtc = control.CreatedAtUtc.UtcDateTime
             }, tx, token);
@@ -390,8 +390,8 @@ WHERE peso_controlo_id = @Id;";
             Status = PesoControlStateCodec.ToStorage(control.Status),
             Measurements = BuildMeasurementsSnapshot(control),
             ApprovalLog = control.ApprovalLogJson ?? "[]",
-            ComparisonDecisions = (object?)control.ComparisonDecisionsJson ?? DBNull.Value,
-            ApprovedBy = (object?)control.ApprovedBy ?? DBNull.Value,
+            ComparisonDecisions = (object?)control.ComparisonDecisionsJson,
+            ApprovedBy = (object?)control.ApprovedBy,
             ApprovedAtUtc = control.ApprovedAtUtc?.UtcDateTime
         }, tx, token);
     }

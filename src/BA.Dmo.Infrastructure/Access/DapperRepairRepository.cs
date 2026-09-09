@@ -65,12 +65,12 @@ VALUES
         {
             Id = exit.RepairExitId,
             RepairType = RepairTypeCodec.ToStorage(exit.RepairType),
-            RepairerId = (object?)exit.RepairerId ?? DBNull.Value,
-            Snapshot = (object?)snapshotJson ?? DBNull.Value,
-            PlannedDate = (object?)exit.PlannedDate ?? DBNull.Value,
+            RepairerId = (object?)exit.RepairerId,
+            Snapshot = (object?)snapshotJson,
+            PlannedDate = (object?)exit.PlannedDate,
             Status = RepairExitStatusCodec.ToStorage(exit.Status),
             CreatedAtUtc = exit.CreatedAtUtc,
-            CreatedBy = (object?)exit.CreatedBy ?? DBNull.Value,
+            CreatedBy = (object?)exit.CreatedBy,
             UpdatedAtUtc = exit.UpdatedAtUtc
         }, transaction, ct);
         return exit.RepairExitId;
@@ -215,8 +215,8 @@ WHERE repair_exit_item_id = @Id;";
         {
             Id = item.RepairExitItemId,
             Picked = item.Picked,
-            OutAtUtc = (object?)item.OutAtUtc ?? DBNull.Value,
-            OutOperatorId = (object?)item.OutOperatorId ?? DBNull.Value,
+            OutAtUtc = (object?)item.OutAtUtc,
+            OutOperatorId = (object?)item.OutOperatorId,
             Status = item.Status
         }, uow.Transaction, ct);
     }
@@ -232,8 +232,8 @@ WHERE repair_exit_item_id = @Id;";
         return Db.ExecuteAsync(uow.Connection, sql, new
         {
             Id = item.RepairExitItemId,
-            InAtUtc = (object?)item.InAtUtc ?? DBNull.Value,
-            InOperatorId = (object?)item.InOperatorId ?? DBNull.Value,
+            InAtUtc = (object?)item.InAtUtc,
+            InOperatorId = (object?)item.InOperatorId,
             Status = item.Status
         }, uow.Transaction, ct);
     }
@@ -253,8 +253,8 @@ VALUES ('externa', @ExitItemId, FALSE, @Notes, @ActorId, @OccurredAtUtc);";
         return Db.ExecuteAsync(uow.Connection, sql, new
         {
             ExitItemId = repairExitItemId,
-            Notes = (object?)notes ?? DBNull.Value,
-            ActorId = (object?)actorId ?? DBNull.Value,
+            Notes = (object?)notes,
+            ActorId = (object?)actorId,
             OccurredAtUtc = occurredAtUtc
         }, uow.Transaction, ct);
     }
@@ -346,7 +346,7 @@ DO UPDATE SET repairer_id = @RepairerId, updated_at_utc = @UpdatedAtUtc, updated
                 ToolType = lineDefault.ToolType,
                 RepairerId = lineDefault.RepairerId,
                 UpdatedAtUtc = lineDefault.UpdatedAtUtc,
-                UpdatedBy = (object?)lineDefault.UpdatedBy ?? DBNull.Value
+                UpdatedBy = (object?)lineDefault.UpdatedBy
             }, cancellationToken: ct);
         }
         finally { await DisposeAsync(conn); }
@@ -440,15 +440,15 @@ VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'reparacao_externa', @Action,
     {
         Id = item.RepairExitItemId,
         ExitId = item.RepairExitId,
-        BqLoteId = (object?)item.BqLoteId ?? DBNull.Value,
-        PhysicalPieceId = (object?)item.PhysicalPieceId ?? DBNull.Value,
-        Qty = (object?)item.Qty ?? DBNull.Value,
-        IndividualNumber = (object?)item.IndividualNumber ?? DBNull.Value,
+        BqLoteId = (object?)item.BqLoteId,
+        PhysicalPieceId = (object?)item.PhysicalPieceId,
+        Qty = (object?)item.Qty,
+        IndividualNumber = (object?)item.IndividualNumber,
         Picked = item.Picked,
-        OutAtUtc = (object?)item.OutAtUtc ?? DBNull.Value,
-        OutOperatorId = (object?)item.OutOperatorId ?? DBNull.Value,
-        InAtUtc = (object?)item.InAtUtc ?? DBNull.Value,
-        InOperatorId = (object?)item.InOperatorId ?? DBNull.Value,
+        OutAtUtc = (object?)item.OutAtUtc,
+        OutOperatorId = (object?)item.OutOperatorId,
+        InAtUtc = (object?)item.InAtUtc,
+        InOperatorId = (object?)item.InOperatorId,
         Status = item.Status
     };
 

@@ -116,7 +116,7 @@ VALUES
             LocationId = locationId,
             ToolLoteId = toolLoteId,
             OccupiedSinceUtc = inAtUtc,
-            OccupiedBy = (object?)actorId ?? DBNull.Value
+            OccupiedBy = (object?)actorId
         }, uow.Transaction, ct);
 
         await InsertMovementAsync(uow, stockId, "in", repairExitId, actorId!, inAtUtc, ct);
@@ -136,10 +136,10 @@ VALUES
             Id = Guid.NewGuid(),
             StockId = stockId,
             Direction = direction,
-            Qty = DBNull.Value,
-            Destination = (object?)"reparacao_externa" ?? DBNull.Value,
+            Qty = (object?)null,
+            Destination = "reparacao_externa",
             RepairExitId = repairExitId,
-            ActorId = (object?)actorId ?? DBNull.Value,
+            ActorId = (object?)actorId,
             OccurredAtUtc = occurredAtUtc
         }, uow.Transaction, ct);
     }
@@ -157,7 +157,7 @@ INSERT INTO warehouse_locations (warehouse_location_id, code, kind)
 VALUES (@Id, @Code, @Kind)
 ON CONFLICT (code) DO NOTHING;";
         var newId = Guid.NewGuid();
-        await Db.ExecuteAsync(uow.Connection, insert, new { Id = newId, Code = code, Kind = (object?)kind ?? DBNull.Value }, uow.Transaction, ct);
+        await Db.ExecuteAsync(uow.Connection, insert, new { Id = newId, Code = code, Kind = (object?)kind }, uow.Transaction, ct);
 
         const string reselect = "SELECT warehouse_location_id FROM warehouse_locations WHERE code = @Code;";
         var confirmed = await Db.QuerySingleOrDefaultAsync<Guid?>(

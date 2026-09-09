@@ -207,7 +207,7 @@ VALUES (@Id, @ValuesJson, @Active, @CreatedAtUtc, @CreatedBy);";
             await Db.ExecuteAsync(uow.Connection, sql, new
             {
                 Id = config.TampaoConfigurationId, ValuesJson = valuesJson, config.Active, config.CreatedAtUtc,
-                CreatedBy = (object?)config.CreatedBy ?? DBNull.Value
+                CreatedBy = (object?)config.CreatedBy
             }, uow.Transaction, ct);
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
@@ -255,12 +255,12 @@ VALUES
         {
             Id = movement.TampaoMovementId,
             MovementType = TampaoMovementTypeCodec.ToStorage(movement.MovementType),
-            Origin = (object?)movement.OriginConfigurationId ?? DBNull.Value,
-            Destination = (object?)movement.DestinationConfigurationId ?? DBNull.Value,
+            Origin = (object?)movement.OriginConfigurationId,
+            Destination = (object?)movement.DestinationConfigurationId,
             movement.Qty,
-            BalancesBefore = (object?)movement.BalancesBefore ?? DBNull.Value,
-            BalancesAfter = (object?)movement.BalancesAfter ?? DBNull.Value,
-            ActorId = (object?)movement.ActorId ?? DBNull.Value,
+            BalancesBefore = (object?)movement.BalancesBefore,
+            BalancesAfter = (object?)movement.BalancesAfter,
+            ActorId = (object?)movement.ActorId,
             OccurredAtUtc = movement.OccurredAtUtc
         }, uow.Transaction, ct);
     }
@@ -312,9 +312,9 @@ VALUES
             await Db.ExecuteAsync(conn, sql, new
             {
                 Id = plano.TampaoPlanoId, plano.TampaoConfigurationId, plano.PlannedQty, plano.PlannedForDate,
-                JobOnId = (object?)plano.JobOnId ?? DBNull.Value, plano.ProductionCode,
-                Notes = (object?)plano.Notes ?? DBNull.Value, plano.Canceled,
-                plano.CreatedAtUtc, CreatedBy = (object?)plano.CreatedBy ?? DBNull.Value, plano.UpdatedAtUtc
+                JobOnId = (object?)plano.JobOnId, plano.ProductionCode,
+                Notes = (object?)plano.Notes, plano.Canceled,
+                plano.CreatedAtUtc, CreatedBy = (object?)plano.CreatedBy, plano.UpdatedAtUtc
             }, cancellationToken: ct);
             return plano.TampaoPlanoId;
         }
@@ -400,7 +400,7 @@ INSERT INTO tampao_configuration_machine_event
 VALUES (@Id, @ConfigurationId, @Machine, @Action, @ActorId, @OccurredAtUtc);", new
         {
             Id = evt.TampaoConfigurationMachineEventId, ConfigurationId = evt.TampaoConfigurationId,
-            evt.Machine, evt.Action, ActorId = (object?)evt.ActorId ?? DBNull.Value, evt.OccurredAtUtc
+            evt.Machine, evt.Action, ActorId = (object?)evt.ActorId, evt.OccurredAtUtc
         }, uow.Transaction, ct);
 
     public async Task<IReadOnlyList<TampaoMachineEvent>> ListMachineEventsAsync(Guid configurationId, CancellationToken ct = default)
@@ -424,7 +424,7 @@ INSERT INTO tampao_configuration_notes
 VALUES (@Id, @ConfigurationId, @Note, @ActorId, @OccurredAtUtc);", new
         {
             Id = note.TampaoConfigurationNoteId, ConfigurationId = note.TampaoConfigurationId,
-            note.Note, ActorId = (object?)note.ActorId ?? DBNull.Value, note.OccurredAtUtc
+            note.Note, ActorId = (object?)note.ActorId, note.OccurredAtUtc
         }, uow.Transaction, ct);
 
     public async Task<IReadOnlyList<TampaoConfigurationNote>> ListConfigurationNotesAsync(Guid configurationId, CancellationToken ct = default)
@@ -473,7 +473,7 @@ VALUES (@OccurredAtUtc, EXTRACT(YEAR FROM @OccurredAtUtc), @Actor, 'tampoes', @A
         {
             OccurredAtUtc = occurredAtUtc, Actor = actorId, Action = actionCode,
             EntityType = entityType, EntityId = entityId, Result = result,
-            Before = (object?)beforeSummary ?? DBNull.Value, After = (object?)afterSummary ?? DBNull.Value
+            Before = (object?)beforeSummary, After = (object?)afterSummary
         }, uow.Transaction, ct);
     }
 

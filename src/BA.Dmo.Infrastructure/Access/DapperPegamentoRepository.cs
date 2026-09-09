@@ -76,20 +76,20 @@ VALUES
             ControloId = control.PegamentoControloId,
             JobOnId = control.JobOnId,
             JobOnRevisionId = control.JobOnRevisionId,
-            ReferenceSnapshot = (object?)SerializeJson(control.ReferenceSnapshot) ?? DBNull.Value,
+            ReferenceSnapshot = (object?)SerializeJson(control.ReferenceSnapshot),
             ProductionCode = control.ProductionCode,
             MachineCode = control.MachineCode,
-            CmSnapshot = (object?)SerializeToolSnapshot(control.CmSnapshot) ?? DBNull.Value,
-            BqSnapshot = (object?)SerializeToolSnapshot(control.BqSnapshot) ?? DBNull.Value,
-            MfSnapshot = (object?)SerializeToolSnapshot(control.MfSnapshot) ?? DBNull.Value,
-            CmNominal = (object?)control.CmNominal ?? DBNull.Value,
-            BqNominal = (object?)control.BqNominal ?? DBNull.Value,
-            MfNominal = (object?)control.MfNominal ?? DBNull.Value,
+            CmSnapshot = (object?)SerializeToolSnapshot(control.CmSnapshot),
+            BqSnapshot = (object?)SerializeToolSnapshot(control.BqSnapshot),
+            MfSnapshot = (object?)SerializeToolSnapshot(control.MfSnapshot),
+            CmNominal = (object?)control.CmNominal,
+            BqNominal = (object?)control.BqNominal,
+            MfNominal = (object?)control.MfNominal,
             Tolerance = control.Tolerance,
             Status = ToDbStatus(control.Status),
-            Notas = (object?)control.Notas ?? DBNull.Value,
+            Notas = (object?)control.Notas,
             CreatedAtUtc = control.CreatedAtUtc,
-            CreatedBy = (object?)control.CreatedBy ?? DBNull.Value,
+            CreatedBy = (object?)control.CreatedBy,
             // PC-01: the domain factory never sets UpdatedAtUtc; binding an explicit
             // NULL would bypass the NOT NULL DEFAULT now() → 23502. Mirror the
             // UpdateAsync fallback (control.UpdatedAtUtc ?? control.CreatedAtUtc).
@@ -233,7 +233,7 @@ WHERE pegamento_controlo_id = @ControloId;";
             ControloId = control.PegamentoControloId,
             Tolerance = control.Tolerance,
             Status = ToDbStatus(control.Status),
-            Notas = (object?)control.Notas ?? DBNull.Value,
+            Notas = (object?)control.Notas,
             UpdatedAtUtc = control.UpdatedAtUtc ?? control.CreatedAtUtc
         }, uow.Transaction, ct);
     }
@@ -256,11 +256,11 @@ VALUES
             MedicaoId = medicao.PegamentoMedicaoId,
             ControloId = controloId,
             ComponentKey = medicao.ComponentKey.ToString(),
-            ToolNumber = (object?)medicao.ToolNumber ?? DBNull.Value,
+            ToolNumber = (object?)medicao.ToolNumber,
             Costura = medicao.Costura,
-            ContraCostura = (object?)medicao.ContraCostura ?? DBNull.Value,
+            ContraCostura = (object?)medicao.ContraCostura,
             MeasuredAtUtc = medicao.CreatedAtUtc,
-            ActorId = (object?)actorId ?? DBNull.Value
+            ActorId = (object?)actorId
         }, uow.Transaction, ct);
         return medicao.PegamentoMedicaoId;
     }
@@ -310,7 +310,7 @@ ON CONFLICT (pegamento_controlo_id) DO UPDATE SET
             OutputRootSnapshot = document.OutputRootSnapshot,
             ProductionFolderSnapshot = document.ProductionFolderSnapshot,
             GeneratedAtUtc = document.GeneratedAtUtc,
-            GeneratedBy = (object?)document.GeneratedBy ?? DBNull.Value
+            GeneratedBy = (object?)document.GeneratedBy
         }, uow.Transaction, ct);
     }
 

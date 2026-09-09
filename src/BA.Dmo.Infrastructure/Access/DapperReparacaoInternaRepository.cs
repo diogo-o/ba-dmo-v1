@@ -44,20 +44,20 @@ VALUES
         {
             Id = record.InternalRepairRecordId,
             Line = record.Line,
-            JobOnId = (object?)record.JobOnId ?? DBNull.Value,
-            JobOnRevisionId = (object?)record.JobOnRevisionId ?? DBNull.Value,
-            ProductionCode = (object?)record.ProductionCode ?? DBNull.Value,
-            Reference = (object?)record.Reference ?? DBNull.Value,
-            LotId = (object?)record.LotId ?? DBNull.Value,
+            JobOnId = (object?)record.JobOnId,
+            JobOnRevisionId = (object?)record.JobOnRevisionId,
+            ProductionCode = (object?)record.ProductionCode,
+            Reference = (object?)record.Reference,
+            LotId = (object?)record.LotId,
             ToolType = InternalRepairToolTypeCodec.ToStorage(record.ToolType),
             IndividualNumber = record.IndividualNumber,
-            OperatorId = (object?)record.OperatorId ?? DBNull.Value,
+            OperatorId = (object?)record.OperatorId,
             OccurredAtUtc = record.OccurredAtUtc,
-            CorrectionOfId = (object?)record.CorrectionOfId ?? DBNull.Value,
-            BeforeSnapshot = (object?)record.BeforeSnapshot ?? DBNull.Value,
-            CorrectionReason = (object?)record.CorrectionReason ?? DBNull.Value,
+            CorrectionOfId = (object?)record.CorrectionOfId,
+            BeforeSnapshot = (object?)record.BeforeSnapshot,
+            CorrectionReason = (object?)record.CorrectionReason,
             CreatedAtUtc = record.CreatedAtUtc,
-            CreatedBy = (object?)record.CreatedBy ?? DBNull.Value
+            CreatedBy = (object?)record.CreatedBy
         }, uow.Transaction, ct);
         return record.InternalRepairRecordId;
     }
@@ -154,9 +154,9 @@ INSERT INTO repair_events (repair_scope, internal_repair_record_id, canceled, no
 VALUES ('interna', @InternalRecordId, FALSE, @Notes, @ActorId, @OccurredAtUtc);";
         return Db.ExecuteAsync(uow.Connection, sql, new
         {
-            InternalRecordId = (object?)internalRepairRecordId ?? DBNull.Value,
-            Notes = (object?)notes ?? DBNull.Value,
-            ActorId = (object?)actorId ?? DBNull.Value,
+            InternalRecordId = (object?)internalRepairRecordId,
+            Notes = (object?)notes,
+            ActorId = (object?)actorId,
             OccurredAtUtc = occurredAtUtc
         }, uow.Transaction, ct);
     }
@@ -179,9 +179,9 @@ VALUES (@OccurredAtUtc, EXTRACT(YEAR FROM @OccurredAtUtc), @Actor, 'reparacao_in
             EntityType = entityType,
             EntityId = entityId,
             Result = result,
-            JobOnId = (object?)jobOnId ?? DBNull.Value,
-            Before = (object?)beforeSummary ?? DBNull.Value,
-            After = (object?)afterSummary ?? DBNull.Value
+            JobOnId = (object?)jobOnId,
+            Before = (object?)beforeSummary,
+            After = (object?)afterSummary
         }, uow.Transaction, ct);
     }
 

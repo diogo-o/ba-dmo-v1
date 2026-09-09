@@ -100,8 +100,8 @@ WHERE tool_reference_id = @Id;";
             await Db.ExecuteAsync(conn, sql, new
             {
                 Id = reference.ToolReferenceId,
-                TechnicalName = (object?)reference.TechnicalName ?? DBNull.Value,
-                OwnerPlant = (object?)reference.OwnerPlant ?? DBNull.Value,
+                TechnicalName = (object?)reference.TechnicalName,
+                OwnerPlant = (object?)reference.OwnerPlant,
                 UpdatedAtUtc = reference.UpdatedAtUtc
             }, cancellationToken: ct);
         }
@@ -202,10 +202,10 @@ WHERE tool_lote_id = @Id;";
             await Db.ExecuteAsync(conn, sql, new
             {
                 Id = lote.ToolLoteId,
-                Qty = (object?)lote.Qty ?? DBNull.Value,
+                Qty = (object?)lote.Qty,
                 AllowedLines = lote.AllowedLines.ToArray(),
-                DrawingCode = (object?)lote.DrawingCode ?? DBNull.Value,
-                DrawingRevision = (object?)lote.DrawingRevision ?? DBNull.Value,
+                DrawingCode = (object?)lote.DrawingCode,
+                DrawingRevision = (object?)lote.DrawingRevision,
                 UpdatedAtUtc = lote.UpdatedAtUtc
             }, cancellationToken: ct);
         }
@@ -264,7 +264,7 @@ VALUES
                     Number = piece.Number,
                     Status = ToolConditionCodec.ToStorage(piece.Condition),
                     CreatedAtUtc = piece.CreatedAtUtc,
-                    CreatedBy = (object?)piece.CreatedBy ?? DBNull.Value,
+                    CreatedBy = (object?)piece.CreatedBy,
                     UpdatedAtUtc = piece.UpdatedAtUtc
                 }, cancellationToken: ct);
             }
@@ -342,9 +342,9 @@ VALUES
         RuleText = rule.RuleText,
         Frequency = FerramentasCheckFrequencyCodec.ToStorage(rule.Frequency),
         Active = rule.Active,
-        CopiedFrom = (object?)rule.CopiedFromRuleId ?? DBNull.Value,
+        CopiedFrom = (object?)rule.CopiedFromRuleId,
         CreatedAtUtc = rule.CreatedAtUtc,
-        CreatedBy = (object?)rule.CreatedBy ?? DBNull.Value,
+        CreatedBy = (object?)rule.CreatedBy,
         UpdatedAtUtc = rule.UpdatedAtUtc
     };
 
@@ -525,13 +525,13 @@ VALUES (@Id, @ToolLoteId, @SapStart, @SapEnd, @PercentUsed, @ValueAdded, @ValueC
             {
                 Id = reading.ToolUsageRecordId,
                 ToolLoteId = reading.ToolLoteId,
-                SapStart = (object?)reading.SapStart ?? DBNull.Value,
-                SapEnd = (object?)reading.SapEnd ?? DBNull.Value,
-                PercentUsed = (object?)reading.PercentUsed ?? DBNull.Value,
-                ValueAdded = (object?)reading.ValueAdded ?? DBNull.Value,
+                SapStart = (object?)reading.SapStart,
+                SapEnd = (object?)reading.SapEnd,
+                PercentUsed = (object?)reading.PercentUsed,
+                ValueAdded = (object?)reading.ValueAdded,
                 reading.ValueCumulative,
-                Notes = (object?)reading.Notes ?? DBNull.Value,
-                ActorId = (object?)reading.ActorId ?? DBNull.Value,
+                Notes = (object?)reading.Notes,
+                ActorId = (object?)reading.ActorId,
                 reading.ReadingAtUtc
             }, cancellationToken: ct);
         }
@@ -586,10 +586,10 @@ VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'ferramentas', @Action,
         Id = reference.ToolReferenceId,
         ToolType = FerramentasToolTypeCodec.ToStorage(reference.ToolType),
         RefCode = reference.RefCode,
-        TechnicalName = (object?)reference.TechnicalName ?? DBNull.Value,
-        OwnerPlant = (object?)reference.OwnerPlant ?? DBNull.Value,
+        TechnicalName = (object?)reference.TechnicalName,
+        OwnerPlant = (object?)reference.OwnerPlant,
         CreatedAtUtc = reference.CreatedAtUtc,
-        CreatedBy = (object?)reference.CreatedBy ?? DBNull.Value,
+        CreatedBy = (object?)reference.CreatedBy,
         UpdatedAtUtc = reference.UpdatedAtUtc
     };
 
@@ -598,13 +598,13 @@ VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'ferramentas', @Action,
         Id = lote.ToolLoteId,
         ReferenceId = lote.ToolReferenceId,
         Lote = lote.Lote,
-        Qty = (object?)lote.Qty ?? DBNull.Value,
+        Qty = (object?)lote.Qty,
         AllowedLines = lote.AllowedLines.ToArray(),
-        DrawingCode = (object?)lote.DrawingCode ?? DBNull.Value,
-        DrawingRevision = (object?)lote.DrawingRevision ?? DBNull.Value,
-        Processo = (object?)lote.Processo ?? DBNull.Value,
+        DrawingCode = (object?)lote.DrawingCode,
+        DrawingRevision = (object?)lote.DrawingRevision,
+        Processo = (object?)lote.Processo,
         CreatedAtUtc = lote.CreatedAtUtc,
-        CreatedBy = (object?)lote.CreatedBy ?? DBNull.Value,
+        CreatedBy = (object?)lote.CreatedBy,
         UpdatedAtUtc = lote.UpdatedAtUtc
     };
 

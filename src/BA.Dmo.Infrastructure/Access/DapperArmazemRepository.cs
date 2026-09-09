@@ -50,7 +50,7 @@ ON CONFLICT (code) DO NOTHING;";
             {
                 Id = id,
                 Code = code,
-                Kind = (object?)kind ?? DBNull.Value
+                Kind = (object?)kind
             }, tx, ct);
 
             const string selectSql = @"
@@ -194,7 +194,7 @@ VALUES
                 LocationId = stock.WarehouseLocationId,
                 ToolId = stock.ToolId,
                 OccupiedSinceUtc = stock.OccupiedSinceUtc,
-                OccupiedBy = (object?)stock.OccupiedBy ?? DBNull.Value
+                OccupiedBy = (object?)stock.OccupiedBy
             }, tx, ct);
 
             await InsertMovementAsync(conn, tx, ToMovementWithStock(movement, stock.WarehouseStockId), ct);
@@ -216,7 +216,7 @@ WHERE warehouse_stock_id = @Id AND released_at_utc IS NULL;";
             {
                 Id = stockId,
                 ReleasedAtUtc = releasedAtUtc,
-                ReleasedBy = (object?)releasedBy ?? DBNull.Value
+                ReleasedBy = (object?)releasedBy
             }, tx, ct);
             ConcurrencyGuard.EnsureSingleRowUpdated(affected, "warehouse_stock (saída)");
 
@@ -277,7 +277,7 @@ WHERE warehouse_stock_id = @Id AND released_at_utc IS NULL;";
                 {
                     Id = currentStockId.Value,
                     ReleasedAtUtc = outMovement!.OccurredAtUtc,
-                    ReleasedBy = (object?)outMovement.ActorId ?? DBNull.Value
+                    ReleasedBy = (object?)outMovement.ActorId
                 }, tx, ct);
                 ConcurrencyGuard.EnsureSingleRowUpdated(
                     affected, "warehouse_stock (correção de localização)");
@@ -299,7 +299,7 @@ VALUES
                     LocationId = correctedStock.WarehouseLocationId,
                     ToolId = correctedStock.ToolId,
                     OccupiedSinceUtc = correctedStock.OccupiedSinceUtc,
-                    OccupiedBy = (object?)correctedStock.OccupiedBy ?? DBNull.Value
+                    OccupiedBy = (object?)correctedStock.OccupiedBy
                 }, tx, ct);
                 await InsertMovementAsync(
                     conn, tx, ToMovementWithStock(inMovement!, correctedStock.WarehouseStockId), ct);
@@ -399,11 +399,11 @@ VALUES
         await Db.ExecuteAsync(conn, sql, new
         {
             Id = movement.WarehouseMovementId,
-            StockId = (object?)movement.WarehouseStockId ?? DBNull.Value,
+            StockId = (object?)movement.WarehouseStockId,
             Direction = WarehouseMovementDirectionCodec.ToStorage(movement.Direction),
-            Qty = (object?)movement.Qty ?? DBNull.Value,
-            Destination = (object?)movement.Destination ?? DBNull.Value,
-            ActorId = (object?)movement.ActorId ?? DBNull.Value,
+            Qty = (object?)movement.Qty,
+            Destination = (object?)movement.Destination,
+            ActorId = (object?)movement.ActorId,
             OccurredAtUtc = movement.OccurredAtUtc
         }, tx, ct);
     }

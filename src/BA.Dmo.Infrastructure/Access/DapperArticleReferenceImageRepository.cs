@@ -184,10 +184,10 @@ VALUES (
             new
             {
                 JobOnId = jobOnId,
-                JobOnRevisionId = (object?)jobOnRevisionId ?? DBNull.Value,
+                JobOnRevisionId = (object?)jobOnRevisionId,
                 EventType = eventType,
-                BeforeSnapshot = (object?)Snapshot(referenceCode, beforeImageAssetId) ?? DBNull.Value,
-                AfterSnapshot = (object?)Snapshot(referenceCode, afterImageAssetId) ?? DBNull.Value,
+                BeforeSnapshot = (object?)Snapshot(referenceCode, beforeImageAssetId),
+                AfterSnapshot = (object?)Snapshot(referenceCode, afterImageAssetId),
                 ActorId = actorId,
                 OccurredAtUtc = occurredAtUtc
             },

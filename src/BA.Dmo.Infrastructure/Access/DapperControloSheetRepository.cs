@@ -47,15 +47,15 @@ VALUES
             MachineCode = sheet.MachineCode,
             DisplayId = sheet.DisplayId,
             Status = ControloFolhaStateCodec.ToStorage(sheet.State),
-            CreatedBy = (object?)sheet.CreatedBy ?? DBNull.Value,
+            CreatedBy = (object?)sheet.CreatedBy,
             CreatedAtUtc = sheet.CreatedAtUtc,
-            SubmittedBy = (object?)sheet.SubmittedBy ?? DBNull.Value,
-            SubmittedAtUtc = (object?)sheet.SubmittedAtUtc ?? DBNull.Value,
-            SubmittedNote = (object?)sheet.SubmittedNote ?? DBNull.Value,
-            DecidedBy = (object?)sheet.DecidedBy ?? DBNull.Value,
-            DecidedAtUtc = (object?)sheet.DecidedAtUtc ?? DBNull.Value,
-            Decision = sheet.Decision is { } d ? (object?)ControloFolhaStateCodec.ToStorage(d) : DBNull.Value,
-            DecisionNote = (object?)sheet.DecisionNote ?? DBNull.Value,
+            SubmittedBy = (object?)sheet.SubmittedBy,
+            SubmittedAtUtc = (object?)sheet.SubmittedAtUtc,
+            SubmittedNote = (object?)sheet.SubmittedNote,
+            DecidedBy = (object?)sheet.DecidedBy,
+            DecidedAtUtc = (object?)sheet.DecidedAtUtc,
+            Decision = sheet.Decision is { } d ? (object?)ControloFolhaStateCodec.ToStorage(d) : null,
+            DecisionNote = (object?)sheet.DecisionNote,
             UpdatedAtUtc = sheet.UpdatedAtUtc
         }, uow.Transaction, ct);
 
@@ -161,13 +161,13 @@ WHERE controlo_sheet_id = @Id;";
         {
             Id = sheet.ControloSheetId,
             Status = ControloFolhaStateCodec.ToStorage(sheet.State),
-            SubmittedBy = (object?)sheet.SubmittedBy ?? DBNull.Value,
-            SubmittedAtUtc = (object?)sheet.SubmittedAtUtc ?? DBNull.Value,
-            SubmittedNote = (object?)sheet.SubmittedNote ?? DBNull.Value,
-            DecidedBy = (object?)sheet.DecidedBy ?? DBNull.Value,
-            DecidedAtUtc = (object?)sheet.DecidedAtUtc ?? DBNull.Value,
-            Decision = sheet.Decision is { } d ? (object?)ControloFolhaStateCodec.ToStorage(d) : DBNull.Value,
-            DecisionNote = (object?)sheet.DecisionNote ?? DBNull.Value,
+            SubmittedBy = (object?)sheet.SubmittedBy,
+            SubmittedAtUtc = (object?)sheet.SubmittedAtUtc,
+            SubmittedNote = (object?)sheet.SubmittedNote,
+            DecidedBy = (object?)sheet.DecidedBy,
+            DecidedAtUtc = (object?)sheet.DecidedAtUtc,
+            Decision = sheet.Decision is { } d ? (object?)ControloFolhaStateCodec.ToStorage(d) : null,
+            DecisionNote = (object?)sheet.DecisionNote,
             UpdatedAtUtc = sheet.UpdatedAtUtc
         }, uow.Transaction, ct);
 
@@ -184,9 +184,9 @@ WHERE controlo_sheet_item_id = @ItemId AND controlo_sheet_id = @SheetId;";
             {
                 ItemId = item.ControloSheetItemId,
                 SheetId = sheet.ControloSheetId,
-                Result = (object?)item.Result ?? DBNull.Value,
-                Observation = (object?)item.Observation ?? DBNull.Value,
-                McaliperLink = (object?)item.McaliperLink ?? DBNull.Value
+                Result = (object?)item.Result,
+                Observation = (object?)item.Observation,
+                McaliperLink = (object?)item.McaliperLink
             }, uow.Transaction, ct);
         }
     }
@@ -204,11 +204,11 @@ VALUES
             Id = evt.ControloSheetEventId,
             SheetId = evt.ControloSheetId,
             EventType = evt.EventType,
-            ActorId = (object?)evt.ActorId ?? DBNull.Value,
+            ActorId = (object?)evt.ActorId,
             OccurredAtUtc = evt.OccurredAtUtc,
-            Before = (object?)evt.BeforeSummary ?? DBNull.Value,
-            After = (object?)evt.AfterSummary ?? DBNull.Value,
-            Note = (object?)evt.Note ?? DBNull.Value
+            Before = (object?)evt.BeforeSummary,
+            After = (object?)evt.AfterSummary,
+            Note = (object?)evt.Note
         }, uow.Transaction, ct);
     }
 
@@ -232,14 +232,14 @@ VALUES
                 Id = item.ControloSheetItemId,
                 SheetId = sheetId,
                 Family = item.Family,
-                SourceToolId = (object?)item.SourceToolId ?? DBNull.Value,
-                SourceLotId = (object?)item.SourceLotId ?? DBNull.Value,
-                ReferenceSnapshot = (object?)item.ReferenceSnapshot ?? DBNull.Value,
-                LotSnapshot = (object?)item.LotSnapshot ?? DBNull.Value,
-                TechnicalNameSnapshot = (object?)item.TechnicalNameSnapshot ?? DBNull.Value,
-                Result = (object?)item.Result ?? DBNull.Value,
-                Observation = (object?)item.Observation ?? DBNull.Value,
-                McaliperLink = (object?)item.McaliperLink ?? DBNull.Value
+                SourceToolId = (object?)item.SourceToolId,
+                SourceLotId = (object?)item.SourceLotId,
+                ReferenceSnapshot = (object?)item.ReferenceSnapshot,
+                LotSnapshot = (object?)item.LotSnapshot,
+                TechnicalNameSnapshot = (object?)item.TechnicalNameSnapshot,
+                Result = (object?)item.Result,
+                Observation = (object?)item.Observation,
+                McaliperLink = (object?)item.McaliperLink
             }, uow.Transaction, ct);
         }
     }

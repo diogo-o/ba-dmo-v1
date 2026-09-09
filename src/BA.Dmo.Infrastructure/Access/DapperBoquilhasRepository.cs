@@ -100,7 +100,7 @@ VALUES (@Id, @Reference, @BatchCode, @AllowedLines, @LifecycleState,
             {
                 Id = lote.BqLoteId, lote.Reference, lote.BatchCode, AllowedLines = lote.AllowedLines.ToArray(),
                 LifecycleState = BqLifecycleStateCodec.ToStorage(lote.LifecycleState),
-                CreatedBy = (object?)lote.CreatedBy ?? DBNull.Value, lote.CreatedAtUtc, lote.UpdatedAtUtc
+                CreatedBy = (object?)lote.CreatedBy, lote.CreatedAtUtc, lote.UpdatedAtUtc
             }, uow.Transaction, ct);
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
@@ -135,7 +135,7 @@ INSERT INTO bq_lifecycle_history (bq_lifecycle_history_id, bq_lote_id, event, re
 VALUES (@Id, @LoteId, @Event, @Reason, @ActorId, @OccurredAtUtc);", new
         {
             Id = evt.BqLifecycleEventId, LoteId = evt.BqLoteId, Event = BqLifecycleEventKindCodec.ToStorage(evt.Kind),
-            Reason = (object?)evt.Reason ?? DBNull.Value, ActorId = (object?)evt.ActorId ?? DBNull.Value, evt.OccurredAtUtc
+            Reason = (object?)evt.Reason, ActorId = (object?)evt.ActorId, evt.OccurredAtUtc
         }, uow.Transaction, ct);
 
     // ---- Traces ----------------------------------------------------------------
@@ -202,10 +202,10 @@ VALUES (@Id, @LoteId, @Status, @Purpose, @StartLine, @SapStart, @SapEnd,
         @ReopenHistory, @DeletedMovements, @CreatedBy, @CreatedAtUtc, @UpdatedAtUtc);", new
         {
             Id = trace.BqTraceId, LoteId = trace.BqLoteId, Status = BqTraceStatusCodec.ToStorage(trace.Status),
-            Purpose = BqTracePurposeCodec.ToStorage(trace.Purpose), StartLine = (object?)trace.StartLine ?? DBNull.Value,
-            SapStart = (object?)trace.SapStart ?? DBNull.Value, SapEnd = (object?)trace.SapEnd ?? DBNull.Value,
+            Purpose = BqTracePurposeCodec.ToStorage(trace.Purpose), StartLine = (object?)trace.StartLine,
+            SapStart = (object?)trace.SapStart, SapEnd = (object?)trace.SapEnd,
             ReopenHistory = trace.ReopenHistory ?? "[]", DeletedMovements = trace.DeletedMovements ?? "[]",
-            CreatedBy = (object?)trace.CreatedBy ?? DBNull.Value, trace.CreatedAtUtc, trace.UpdatedAtUtc
+            CreatedBy = (object?)trace.CreatedBy, trace.CreatedAtUtc, trace.UpdatedAtUtc
         }, uow.Transaction, ct);
 
     public Task CloseTraceAsync(IDbUnitOfWork uow, Guid bqTraceId, CancellationToken ct = default)
@@ -234,9 +234,9 @@ INSERT INTO bq_movements (bq_movement_id, bq_trace_id, movement_type, qty, excep
 VALUES (@Id, @TraceId, @Type, @Qty, @Exceptional, @Line, @RepairerId, @Notes, @OccurredAtUtc, @ActorId);", new
         {
             Id = movement.BqMovementId, TraceId = movement.BqTraceId, Type = BqMovementTypeCodec.ToStorage(movement.MovementType),
-            Qty = (object?)movement.Qty ?? DBNull.Value, Exceptional = (object?)movement.ExceptionalReceivedQty ?? DBNull.Value,
-            Line = (object?)movement.Line ?? DBNull.Value, RepairerId = (object?)movement.RepairerId ?? DBNull.Value,
-            Notes = (object?)movement.Notes ?? DBNull.Value, movement.OccurredAtUtc, ActorId = (object?)movement.ActorId ?? DBNull.Value
+            Qty = (object?)movement.Qty, Exceptional = (object?)movement.ExceptionalReceivedQty,
+            Line = (object?)movement.Line, RepairerId = (object?)movement.RepairerId,
+            Notes = (object?)movement.Notes, movement.OccurredAtUtc, ActorId = (object?)movement.ActorId
         }, uow.Transaction, ct);
 
     public async Task<IReadOnlyList<BqMovement>> ListMovementsForTraceAsync(Guid bqTraceId, CancellationToken ct = default)
@@ -318,7 +318,7 @@ INSERT INTO bq_utilisation_readings (bq_utilisation_reading_id, bq_trace_id, rea
 VALUES (@Id, @TraceId, @Kind, @Value, @ActorId, @OccurredAtUtc);", new
         {
             Id = reading.BqUtilisationReadingId, TraceId = reading.BqTraceId, Kind = BqUtilisationReadingKindCodec.ToStorage(reading.ReadingKind),
-            Value = reading.Value, ActorId = (object?)reading.ActorId ?? DBNull.Value, reading.OccurredAtUtc
+            Value = reading.Value, ActorId = (object?)reading.ActorId, reading.OccurredAtUtc
         }, uow.Transaction, ct);
 
     public async Task<BqUtilisationReading?> GetUtilisationReadingAsync(Guid bqTraceId, BqUtilisationReadingKind kind, CancellationToken ct = default)
@@ -342,12 +342,12 @@ INSERT INTO bq_discrepancies (bq_discrepancy_id, bq_lote_id, bq_trace_id, expect
 VALUES (@Id, @LoteId, @TraceId, @Expected, @Actual, @Excess, @Status, @ResolutionNote,
         @ResolvedBy, @ResolvedAtUtc, @CreatedBy, @CreatedAtUtc);", new
         {
-            Id = discrepancy.BqDiscrepancyId, LoteId = discrepancy.BqLoteId, TraceId = (object?)discrepancy.BqTraceId ?? DBNull.Value,
+            Id = discrepancy.BqDiscrepancyId, LoteId = discrepancy.BqLoteId, TraceId = (object?)discrepancy.BqTraceId,
             Expected = discrepancy.ExpectedQty, Actual = discrepancy.ActualQty, Excess = discrepancy.ExcessQty,
             Status = BqDiscrepancyStatusCodec.ToStorage(discrepancy.Status),
-            ResolutionNote = (object?)discrepancy.ResolutionNote ?? DBNull.Value,
-            ResolvedBy = (object?)discrepancy.ResolvedBy ?? DBNull.Value, ResolvedAtUtc = (object?)discrepancy.ResolvedAtUtc ?? DBNull.Value,
-            CreatedBy = (object?)discrepancy.CreatedBy ?? DBNull.Value, discrepancy.CreatedAtUtc
+            ResolutionNote = (object?)discrepancy.ResolutionNote,
+            ResolvedBy = (object?)discrepancy.ResolvedBy, ResolvedAtUtc = (object?)discrepancy.ResolvedAtUtc,
+            CreatedBy = (object?)discrepancy.CreatedBy, discrepancy.CreatedAtUtc
         }, uow.Transaction, ct);
 
     public Task UpdateDiscrepancyAsync(IDbUnitOfWork uow, BqDiscrepancy discrepancy, CancellationToken ct = default)
@@ -357,8 +357,8 @@ UPDATE bq_discrepancies SET status = @Status, resolution_note = @ResolutionNote,
 WHERE bq_discrepancy_id = @Id;", new
         {
             Id = discrepancy.BqDiscrepancyId, Status = BqDiscrepancyStatusCodec.ToStorage(discrepancy.Status),
-            ResolutionNote = (object?)discrepancy.ResolutionNote ?? DBNull.Value,
-            ResolvedBy = (object?)discrepancy.ResolvedBy ?? DBNull.Value, ResolvedAtUtc = (object?)discrepancy.ResolvedAtUtc ?? DBNull.Value
+            ResolutionNote = (object?)discrepancy.ResolutionNote,
+            ResolvedBy = (object?)discrepancy.ResolvedBy, ResolvedAtUtc = (object?)discrepancy.ResolvedAtUtc
         }, uow.Transaction, ct);
 
     public async Task<IReadOnlyList<BqDiscrepancy>> ListDiscrepanciesAsync(Guid? bqLoteId, CancellationToken ct = default)
@@ -523,7 +523,7 @@ VALUES (@OccurredAtUtc, EXTRACT(YEAR FROM @OccurredAtUtc), @Actor, 'boquilhas', 
         {
             OccurredAtUtc = occurredAtUtc, Actor = actorId, Action = actionCode,
             EntityType = entityType, EntityId = entityId, Result = result,
-            Before = (object?)beforeSummary ?? DBNull.Value, After = (object?)afterSummary ?? DBNull.Value
+            Before = (object?)beforeSummary, After = (object?)afterSummary
         }, uow.Transaction, ct);
 
     // ---- Mapping ----------------------------------------------------------------
