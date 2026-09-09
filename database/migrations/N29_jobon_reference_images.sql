@@ -8,8 +8,6 @@
 -- name are safe and unambiguous; otherwise the migration fails closed.
 -- ============================================================================
 
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS article_reference_images (
     reference_code  text        PRIMARY KEY,
     image_asset_id  text        NOT NULL,
@@ -153,5 +151,3 @@ BEGIN
             WITH CHECK (true);
     END IF;
 END $$;
-
-COMMIT;

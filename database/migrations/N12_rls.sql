@@ -62,7 +62,7 @@ DECLARE
         'app_settings',
         -- migration tracking (migrate CLI only; no app policy)
         'schema_migrations'
-    ]
+    ];
 BEGIN
     FOREACH t IN ARRAY rls_tables LOOP
         EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
@@ -123,7 +123,7 @@ DECLARE
         'tampao_field_defs', 'tampao_field_values', 'tampao_configurations',
         'tampao_saldos', 'tampao_movements', 'tampao_planos',
         'app_settings'
-    ]
+    ];
 BEGIN
     FOREACH t IN ARRAY policy_tables LOOP
         EXECUTE format('DROP POLICY IF EXISTS ba_dmo_app_access ON %I', t);

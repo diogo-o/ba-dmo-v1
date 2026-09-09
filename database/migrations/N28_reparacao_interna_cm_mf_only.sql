@@ -9,8 +9,6 @@
 -- rewrites a repair record; reconciliation would require separate Owner approval.
 -- ============================================================================
 
-BEGIN;
-
 DO $$
 BEGIN
     IF EXISTS (
@@ -33,5 +31,3 @@ ALTER TABLE internal_repair_records
 
 ALTER TABLE internal_repair_records
     VALIDATE CONSTRAINT ck_internal_repair_records_type;
-
-COMMIT;
