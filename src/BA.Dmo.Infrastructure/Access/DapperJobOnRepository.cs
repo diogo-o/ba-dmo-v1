@@ -161,8 +161,8 @@ WHERE job_on_id = @Id;";
             var jobOn = new JobOnEntity(
                 row.production_code!,
                 row.machine_code!,
-                row.planned_start_at?.ToDateTimeOffset(),
-                row.planned_end_at?.ToDateTimeOffset(),
+                ToDateTimeOffset(row.planned_start_at),
+                ToDateTimeOffset(row.planned_end_at),
                 revisions);
             jobOn.FromRow(row);
             
@@ -1164,8 +1164,8 @@ GROUP BY
                     // the fallback for Job Ons created before the initial-revision flow.
                     ReferenceCode: (string?)(r.revision_reference_code) ?? (string?)(r.reference_code),
                     MachineCode: (string)r.machine_code,
-                    PlannedStartAt: r.planned_start_at?.ToDateTimeOffset() ?? null,
-                    PlannedEndAt: r.planned_end_at?.ToDateTimeOffset() ?? null,
+                    PlannedStartAt: ToDateTimeOffset(r.planned_start_at),
+                    PlannedEndAt: ToDateTimeOffset(r.planned_end_at),
                     CurrentRevisionNumber: r.current_revision_number is null ? 0 : (int)r.current_revision_number,
                     TotalRevisionCount: r.total_revision_count is null ? 0 : (int)r.total_revision_count,
                     LifecycleState: JobOnLifecycleStateCodec.Parse((string)r.status)))
@@ -1183,8 +1183,8 @@ GROUP BY
                 var jobOn = new JobOnEntity(
             row.production_code!,
             row.machine_code!,
-            row.planned_start_at?.ToDateTimeOffset(),
-            row.planned_end_at?.ToDateTimeOffset(),
+            ToDateTimeOffset(row.planned_start_at),
+            ToDateTimeOffset(row.planned_end_at),
             rvs);
         jobOn.FromRow(row);
         return jobOn;
@@ -1423,6 +1423,14 @@ ORDER BY created_at_utc ASC;";
 
         return null;
     }
+
+    // Dapper dynamic rows carry timestamptz values as DateTime (or DateTimeOffset);
+    // extension methods are not visible through dynamic dispatch, so convert via the
+    // same UTC-aware handler used for typed mappings (see PersistenceMappings/Db).
+    private static readonly DateTimeOffsetHandler DateTimeOffsetConverter = new();
+
+    private static DateTimeOffset? ToDateTimeOffset(object? raw) =>
+        raw is null ? null : (DateTimeOffset?)DateTimeOffsetConverter.Parse(raw);
 
     private JobOnRevision MapRevision(dynamic row)
     {
