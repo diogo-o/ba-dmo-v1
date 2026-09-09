@@ -909,8 +909,8 @@ INSERT INTO job_on_revision (
     general_notes, change_reason, saved_by, saved_at_utc)
 VALUES (
     @JobOnRevisionId, @JobOnId, @RevisionNumber,
-    @ProductionSnapshot, @ReferenceSnapshot, @MachineSnapshot, @DatesSnapshot,
-    @Sections, @DropCount, @TypeSnapshot, @StopSnapshot, @WeightSnapshot, @ProcessSnapshot,
+    @ProductionSnapshot::jsonb, @ReferenceSnapshot::jsonb, @MachineSnapshot::jsonb, @DatesSnapshot::jsonb,
+    @Sections::jsonb, @DropCount, @TypeSnapshot::jsonb, @StopSnapshot::jsonb, @WeightSnapshot::jsonb, @ProcessSnapshot::jsonb,
     @GeneralNotes, @ChangeReason, @SavedBy, @SavedAtUtc);";
 
         await Db.ExecuteAsync(connection, insertRevisionSql, new
