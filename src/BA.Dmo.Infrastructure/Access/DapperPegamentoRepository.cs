@@ -66,8 +66,8 @@ INSERT INTO pegamento_controlos
      cm_nominal, bq_nominal, mf_nominal, tolerance, status, notas,
      created_at_utc, created_by, updated_at_utc)
 VALUES
-    (@ControloId, @JobOnId, @JobOnRevisionId, @ReferenceSnapshot,
-     @ProductionCode, @MachineCode, @CmSnapshot, @BqSnapshot, @MfSnapshot,
+    (@ControloId, @JobOnId, @JobOnRevisionId, CAST(@ReferenceSnapshot AS jsonb),
+     @ProductionCode, @MachineCode, CAST(@CmSnapshot AS jsonb), CAST(@BqSnapshot AS jsonb), CAST(@MfSnapshot AS jsonb),
      @CmNominal, @BqNominal, @MfNominal, @Tolerance, @Status, @Notas,
      @CreatedAtUtc, @CreatedBy, @UpdatedAtUtc);";
 
