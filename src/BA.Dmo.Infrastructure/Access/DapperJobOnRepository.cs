@@ -41,11 +41,11 @@ RETURNING job_on_id;";
         var parameters = new DynamicParameters();
         parameters.Add("@ProductionCode", jobOn.ProductionCode);
         parameters.Add("@MachineCode", jobOn.MachineCode);
-        parameters.Add("@PlannedStartAt", (object?)jobOn.PlannedStartAt ?? DBNull.Value);
-        parameters.Add("@PlannedEndAt", (object?)jobOn.PlannedEndAt ?? DBNull.Value);
+        parameters.Add("@PlannedStartAt", (object?)jobOn.PlannedStartAt );
+        parameters.Add("@PlannedEndAt", (object?)jobOn.PlannedEndAt );
         parameters.Add("@LifecycleState", JobOnLifecycleStateCodec.ToStorage(jobOn.LifecycleState));
-        parameters.Add("@CopiedFromJobOnId", (object?)jobOn.CopiedFromJobOnId ?? DBNull.Value);
-        parameters.Add("@ArticleReferenceId", (object?)jobOn.ArticleReferenceId ?? DBNull.Value);
+        parameters.Add("@CopiedFromJobOnId", (object?)jobOn.CopiedFromJobOnId );
+        parameters.Add("@ArticleReferenceId", (object?)jobOn.ArticleReferenceId );
         parameters.Add("@CreatedAtUtc", DateTime.UtcNow);
 
         var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
@@ -266,10 +266,10 @@ WHERE job_on_id = @Id;";
             {
                 Id = jobOn.Id,
                 Status = JobOnLifecycleStateCodec.ToStorage(jobOn.LifecycleState),
-                ClosedAtUtc = (object?)jobOn.ClosedAtUtc ?? DBNull.Value,
-                CanceledAtUtc = (object?)jobOn.CancelledAtUtc ?? DBNull.Value,
-                CanceledBy = (object?)jobOn.CancelledBy ?? DBNull.Value,
-                CancelReason = (object?)jobOn.CancelReason ?? DBNull.Value
+                ClosedAtUtc = (object?)jobOn.ClosedAtUtc ,
+                CanceledAtUtc = (object?)jobOn.CancelledAtUtc ,
+                CanceledBy = (object?)jobOn.CancelledBy ,
+                CancelReason = (object?)jobOn.CancelReason 
             }, transaction, ct);
 
             await InsertAuditEventCoreAsync(
@@ -301,16 +301,16 @@ VALUES (
                 revision.JobOnRevisionId,
                 revision.JobOnId,
                 revision.RevisionNumber,
-                ProductionSnapshot = (object?)revision.ProductionSnapshot ?? DBNull.Value,
-                ReferenceSnapshot = (object?)revision.ReferenceSnapshot ?? DBNull.Value,
-                MachineSnapshot = (object?)revision.MachineSnapshot ?? DBNull.Value,
-                DatesSnapshot = (object?)revision.DatesSnapshot ?? DBNull.Value,
+                ProductionSnapshot = (object?)revision.ProductionSnapshot ,
+                ReferenceSnapshot = (object?)revision.ReferenceSnapshot ,
+                MachineSnapshot = (object?)revision.MachineSnapshot ,
+                DatesSnapshot = (object?)revision.DatesSnapshot ,
                 Sections = revision.Sections,
-                DropCount = (object?)revision.DropCount ?? DBNull.Value,
-                TypeSnapshot = (object?)revision.TypeSnapshot ?? DBNull.Value,
-                StopSnapshot = (object?)revision.StopSnapshot ?? DBNull.Value,
+                DropCount = (object?)revision.DropCount ,
+                TypeSnapshot = (object?)revision.TypeSnapshot ,
+                StopSnapshot = (object?)revision.StopSnapshot ,
                 WeightSnapshot = SerializeWeight(revision.WeightSnapshot),
-                ProcessSnapshot = (object?)revision.ProcessSnapshot ?? DBNull.Value,
+                ProcessSnapshot = (object?)revision.ProcessSnapshot ,
                 GeneralNotes = revision.GeneralNotes,
                 ChangeReason = revision.ChangeReason,
                 SavedBy = revision.SavedBy,
@@ -385,14 +385,14 @@ VALUES (
                     component.JobOnComponentId,
                     component.JobOnRevisionId,
                     Family = component.Family.ToString(),
-                    SourceToolId = (object?)component.SourceToolId ?? DBNull.Value,
-                    SourceLotId = (object?)component.SourceLotId ?? DBNull.Value,
+                    SourceToolId = (object?)component.SourceToolId ,
+                    SourceLotId = (object?)component.SourceLotId ,
                     ReferenceSnapshot = component.ReferenceSnapshot,
                     LotSnapshot = component.LotSnapshot,
                     TechnicalNameSnapshot = component.TechnicalNameSnapshot,
-                    PlannedQuantity = (object?)component.PlannedQuantity ?? DBNull.Value,
-                    StockSnapshot = (object?)component.StockSnapshot ?? DBNull.Value,
-                    UsageSnapshot = (object?)component.UsageSnapshot ?? DBNull.Value,
+                    PlannedQuantity = (object?)component.PlannedQuantity ,
+                    StockSnapshot = (object?)component.StockSnapshot ,
+                    UsageSnapshot = (object?)component.UsageSnapshot ,
                     Notes = component.Notes,
                     DisplayOrder = component.DisplayOrder
                 }, cancellationToken: cancellationToken);
@@ -425,11 +425,11 @@ VALUES (
                     field.JobOnComponentId,
                     FieldKey = field.FieldKey,
                     ValueType = field.ValueType,
-                    ValueText = (object?)field.ValueText ?? DBNull.Value,
-                    ValueInteger = (object?)field.ValueInteger ?? DBNull.Value,
-                    ValueDecimal = (object?)field.ValueDecimal ?? DBNull.Value,
-                    ValueBoolean = (object?)field.ValueBoolean ?? DBNull.Value,
-                    ValueDate = (object?)field.ValueDate ?? DBNull.Value,
+                    ValueText = (object?)field.ValueText ,
+                    ValueInteger = (object?)field.ValueInteger ,
+                    ValueDecimal = (object?)field.ValueDecimal ,
+                    ValueBoolean = (object?)field.ValueBoolean ,
+                    ValueDate = (object?)field.ValueDate ,
                     DisplayOrder = field.DisplayOrder
                 }, cancellationToken: cancellationToken);
             }
@@ -460,10 +460,10 @@ VALUES (
                     rowEntity.JobOnComponentRowId,
                     rowEntity.JobOnComponentId,
                     ElementLabel = rowEntity.ElementLabel,
-                    ValueDecimal = (object?)rowEntity.ValueDecimal ?? DBNull.Value,
-                    ValueText = (object?)rowEntity.ValueText ?? DBNull.Value,
+                    ValueDecimal = (object?)rowEntity.ValueDecimal ,
+                    ValueText = (object?)rowEntity.ValueText ,
                     Unit = rowEntity.Unit,
-                    MachineQuantity = (object?)rowEntity.MachineQuantity ?? DBNull.Value,
+                    MachineQuantity = (object?)rowEntity.MachineQuantity ,
                     DisplayOrder = rowEntity.DisplayOrder
                 }, cancellationToken: cancellationToken);
             }
@@ -493,11 +493,11 @@ try
                 {
                     v.JobOnVerificationOccurrenceId,
                     v.JobOnComponentId,
-                    SourceRuleId = (object?)v.SourceRuleId ?? DBNull.Value,
+                    SourceRuleId = (object?)v.SourceRuleId ,
                     RuleTextSnapshot = v.RuleTextSnapshot,
                     Status = v.Status,
-                    CompletedBy = (object?)v.CompletedBy ?? DBNull.Value,
-                    CompletedAtUtc = (object?)v.CompletedAtUtc ?? DBNull.Value,
+                    CompletedBy = (object?)v.CompletedBy ,
+                    CompletedAtUtc = (object?)v.CompletedAtUtc ,
                     CreatedAtUtc = v.CreatedAtUtc
                 }, cancellationToken: cancellationToken);
             }
@@ -522,8 +522,8 @@ WHERE job_on_verification_occurrence_id = @OccurrenceId;";
             {
                 OccurrenceId = occurrenceId,
                 Status = status,
-                CompletedBy = (object?)completedBy ?? DBNull.Value,
-                CompletedAtUtc = (object?)completedAtUtc ?? DBNull.Value,
+                CompletedBy = (object?)completedBy ,
+                CompletedAtUtc = (object?)completedAtUtc ,
                 UpdatedUtc = DateTime.UtcNow
             }, cancellationToken: cancellationToken);
         }
@@ -633,10 +633,10 @@ VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot::jsonb, @AfterSnapshot:
         return Db.ExecuteAsync(connection, sql, new
         {
             JobId = jobId,
-            RevisionId = (object?)revisionId ?? DBNull.Value,
+            RevisionId = (object?)revisionId ,
             EventType = eventType,
-            BeforeSnapshot = (object?)AuditJson.Normalize(beforeSnapshot) ?? DBNull.Value,
-            AfterSnapshot = (object?)AuditJson.Normalize(afterSnapshot) ?? DBNull.Value,
+            BeforeSnapshot = (object?)AuditJson.Normalize(beforeSnapshot) ,
+            AfterSnapshot = (object?)AuditJson.Normalize(afterSnapshot) ,
             ActorId = actorId,
             OccurredAtUtc = DateTime.UtcNow
         }, transaction, cancellationToken);
@@ -677,16 +677,16 @@ VALUES (
                 newRevision.JobOnRevisionId,
                 newRevision.JobOnId,
                 newRevision.RevisionNumber,
-                ProductionSnapshot = (object?)newRevision.ProductionSnapshot ?? DBNull.Value,
-                ReferenceSnapshot = (object?)newRevision.ReferenceSnapshot ?? DBNull.Value,
-                MachineSnapshot = (object?)newRevision.MachineSnapshot ?? DBNull.Value,
-                DatesSnapshot = (object?)newRevision.DatesSnapshot ?? DBNull.Value,
+                ProductionSnapshot = (object?)newRevision.ProductionSnapshot ,
+                ReferenceSnapshot = (object?)newRevision.ReferenceSnapshot ,
+                MachineSnapshot = (object?)newRevision.MachineSnapshot ,
+                DatesSnapshot = (object?)newRevision.DatesSnapshot ,
                 Sections = newRevision.Sections,
-                DropCount = (object?)newRevision.DropCount ?? DBNull.Value,
-                TypeSnapshot = (object?)newRevision.TypeSnapshot ?? DBNull.Value,
-                StopSnapshot = (object?)newRevision.StopSnapshot ?? DBNull.Value,
+                DropCount = (object?)newRevision.DropCount ,
+                TypeSnapshot = (object?)newRevision.TypeSnapshot ,
+                StopSnapshot = (object?)newRevision.StopSnapshot ,
                 WeightSnapshot = SerializeWeight(newRevision.WeightSnapshot),
-                ProcessSnapshot = (object?)newRevision.ProcessSnapshot ?? DBNull.Value,
+                ProcessSnapshot = (object?)newRevision.ProcessSnapshot ,
                 GeneralNotes = newRevision.GeneralNotes,
                 ChangeReason = newRevision.ChangeReason,
                 SavedBy = newRevision.SavedBy,
@@ -715,10 +715,10 @@ VALUES (@JobId, @RevisionId, @EventType, @BeforeSnapshot::jsonb, @AfterSnapshot:
             await Db.ExecuteAsync(connection, insertAuditSql, new
             {
                 JobId = jobOnId,
-                RevisionId = (object?)newRevision.JobOnRevisionId ?? DBNull.Value,
+                RevisionId = (object?)newRevision.JobOnRevisionId ,
                 EventType = eventType,
-                BeforeSnapshot = (object?)AuditJson.Normalize(beforeImageAssetId) ?? DBNull.Value,
-                AfterSnapshot = (object?)AuditJson.Normalize(afterImageAssetId) ?? DBNull.Value,
+                BeforeSnapshot = (object?)AuditJson.Normalize(beforeImageAssetId) ,
+                AfterSnapshot = (object?)AuditJson.Normalize(afterImageAssetId) ,
                 ActorId = actorId,
                 OccurredAtUtc = DateTime.UtcNow
             }, transaction, ct);
@@ -807,8 +807,8 @@ WHERE job_on_id = @JobOnId;";
             var headerRows = await Db.ExecuteAsync(connection, updateHeaderSql, new
             {
                 JobOnId = jobOnId,
-                PlannedStartAt = (object?)plannedStartAt ?? DBNull.Value,
-                PlannedEndAt = (object?)plannedEndAt ?? DBNull.Value
+                PlannedStartAt = (object?)plannedStartAt ,
+                PlannedEndAt = (object?)plannedEndAt 
             }, transaction, ct);
 
             if (headerRows != 1)
@@ -918,16 +918,16 @@ VALUES (
             revision.JobOnRevisionId,
             revision.JobOnId,
             revision.RevisionNumber,
-            ProductionSnapshot = (object?)revision.ProductionSnapshot ?? DBNull.Value,
-            ReferenceSnapshot = (object?)revision.ReferenceSnapshot ?? DBNull.Value,
-            MachineSnapshot = (object?)revision.MachineSnapshot ?? DBNull.Value,
-            DatesSnapshot = (object?)revision.DatesSnapshot ?? DBNull.Value,
+            ProductionSnapshot = (object?)revision.ProductionSnapshot ,
+            ReferenceSnapshot = (object?)revision.ReferenceSnapshot ,
+            MachineSnapshot = (object?)revision.MachineSnapshot ,
+            DatesSnapshot = (object?)revision.DatesSnapshot ,
             Sections = revision.Sections,
-            DropCount = (object?)revision.DropCount ?? DBNull.Value,
-            TypeSnapshot = (object?)revision.TypeSnapshot ?? DBNull.Value,
-            StopSnapshot = (object?)revision.StopSnapshot ?? DBNull.Value,
+            DropCount = (object?)revision.DropCount ,
+            TypeSnapshot = (object?)revision.TypeSnapshot ,
+            StopSnapshot = (object?)revision.StopSnapshot ,
             WeightSnapshot = SerializeWeight(revision.WeightSnapshot),
-            ProcessSnapshot = (object?)revision.ProcessSnapshot ?? DBNull.Value,
+            ProcessSnapshot = (object?)revision.ProcessSnapshot ,
             GeneralNotes = revision.GeneralNotes,
             ChangeReason = revision.ChangeReason,
             SavedBy = revision.SavedBy,
@@ -962,14 +962,14 @@ VALUES (
             component.JobOnComponentId,
             component.JobOnRevisionId,
             Family = component.Family.ToString(),
-            SourceToolId = (object?)component.SourceToolId ?? DBNull.Value,
-            SourceLotId = (object?)component.SourceLotId ?? DBNull.Value,
+            SourceToolId = (object?)component.SourceToolId ,
+            SourceLotId = (object?)component.SourceLotId ,
             ReferenceSnapshot = component.ReferenceSnapshot,
             LotSnapshot = component.LotSnapshot,
             TechnicalNameSnapshot = component.TechnicalNameSnapshot,
-            PlannedQuantity = (object?)component.PlannedQuantity ?? DBNull.Value,
-            StockSnapshot = (object?)component.StockSnapshot ?? DBNull.Value,
-            UsageSnapshot = (object?)component.UsageSnapshot ?? DBNull.Value,
+            PlannedQuantity = (object?)component.PlannedQuantity ,
+            StockSnapshot = (object?)component.StockSnapshot ,
+            UsageSnapshot = (object?)component.UsageSnapshot ,
             Notes = component.Notes,
             DisplayOrder = component.DisplayOrder
         }, transaction, ct);
@@ -996,11 +996,11 @@ VALUES (
                 field.JobOnComponentId,
                 FieldKey = field.FieldKey,
                 ValueType = field.ValueType,
-                ValueText = (object?)field.ValueText ?? DBNull.Value,
-                ValueInteger = (object?)field.ValueInteger ?? DBNull.Value,
-                ValueDecimal = (object?)field.ValueDecimal ?? DBNull.Value,
-                ValueBoolean = (object?)field.ValueBoolean ?? DBNull.Value,
-                ValueDate = (object?)field.ValueDate ?? DBNull.Value,
+                ValueText = (object?)field.ValueText ,
+                ValueInteger = (object?)field.ValueInteger ,
+                ValueDecimal = (object?)field.ValueDecimal ,
+                ValueBoolean = (object?)field.ValueBoolean ,
+                ValueDate = (object?)field.ValueDate ,
                 DisplayOrder = field.DisplayOrder
             }, transaction, ct);
         }
@@ -1019,10 +1019,10 @@ VALUES (
                 rowEntity.JobOnComponentRowId,
                 rowEntity.JobOnComponentId,
                 ElementLabel = rowEntity.ElementLabel,
-                ValueDecimal = (object?)rowEntity.ValueDecimal ?? DBNull.Value,
-                ValueText = (object?)rowEntity.ValueText ?? DBNull.Value,
+                ValueDecimal = (object?)rowEntity.ValueDecimal ,
+                ValueText = (object?)rowEntity.ValueText ,
                 Unit = rowEntity.Unit,
-                MachineQuantity = (object?)rowEntity.MachineQuantity ?? DBNull.Value,
+                MachineQuantity = (object?)rowEntity.MachineQuantity ,
                 DisplayOrder = rowEntity.DisplayOrder
             }, transaction, ct);
         }
@@ -1040,11 +1040,11 @@ VALUES (
             {
                 v.JobOnVerificationOccurrenceId,
                 v.JobOnComponentId,
-                SourceRuleId = (object?)v.SourceRuleId ?? DBNull.Value,
+                SourceRuleId = (object?)v.SourceRuleId ,
                 RuleTextSnapshot = v.RuleTextSnapshot,
                 Status = v.Status,
-                CompletedBy = (object?)v.CompletedBy ?? DBNull.Value,
-                CompletedAtUtc = (object?)v.CompletedAtUtc ?? DBNull.Value,
+                CompletedBy = (object?)v.CompletedBy ,
+                CompletedAtUtc = (object?)v.CompletedAtUtc ,
                 CreatedAtUtc = v.CreatedAtUtc
             }, transaction, ct);
         }
@@ -1080,11 +1080,11 @@ RETURNING job_on_id;";
         var parameters = new DynamicParameters();
         parameters.Add("@ProductionCode", jobOn.ProductionCode);
         parameters.Add("@MachineCode", jobOn.MachineCode);
-        parameters.Add("@PlannedStartAt", (object?)jobOn.PlannedStartAt ?? DBNull.Value);
-        parameters.Add("@PlannedEndAt", (object?)jobOn.PlannedEndAt ?? DBNull.Value);
+        parameters.Add("@PlannedStartAt", (object?)jobOn.PlannedStartAt );
+        parameters.Add("@PlannedEndAt", (object?)jobOn.PlannedEndAt );
         parameters.Add("@LifecycleState", JobOnLifecycleStateCodec.ToStorage(jobOn.LifecycleState));
-        parameters.Add("@CopiedFromJobOnId", (object?)jobOn.CopiedFromJobOnId ?? DBNull.Value);
-        parameters.Add("@ArticleReferenceId", (object?)jobOn.ArticleReferenceId ?? DBNull.Value);
+        parameters.Add("@CopiedFromJobOnId", (object?)jobOn.CopiedFromJobOnId );
+        parameters.Add("@ArticleReferenceId", (object?)jobOn.ArticleReferenceId );
         parameters.Add("@CreatedAtUtc", DateTime.UtcNow);
 
         var id = await Db.ExecuteScalarAsync<Guid>(connection, sql, parameters, transaction, ct);
@@ -1399,9 +1399,9 @@ ORDER BY created_at_utc ASC;";
         return result;
     }
 
-    private static object SerializeWeight(decimal? weight) =>
+    private static object? SerializeWeight(decimal? weight) =>
         weight is null
-            ? DBNull.Value
+            ? null
             : JsonSerializer.Serialize(new { value = weight.Value });
 
     private static decimal? ParseWeight(object? raw)
