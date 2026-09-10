@@ -62,6 +62,13 @@ VALUES (@Id, @FieldName, @Unit, @PrecisionDigits, @DisplayOrder, @Active, @Creat
             }, cancellationToken: ct);
             return field.TampaoFieldDefId;
         }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            // uq_tampao_field_defs.field_name — an operator tried to create a
+            // field name that already exists (Opções duplicate guard).
+            throw new TampaoFieldDuplicateException(
+                $"Já existe um campo com o nome '{field.FieldName}'.");
+        }
         finally { await DisposeAsync(conn); }
     }
 
@@ -116,6 +123,13 @@ VALUES (@Id, @FieldDefId, @ValueNumeric, @ValueLabel, @DisplayOrder, @Active, @C
                 value.DisplayOrder, value.Active, value.CreatedAtUtc, value.UpdatedAtUtc
             }, cancellationToken: ct);
             return value.TampaoFieldValueId;
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            // uq_tampao_field_values (tampao_field_def_id, value_numeric) — the
+            // same normalized value already exists for this field (Opções duplicate guard).
+            throw new TampaoFieldDuplicateException(
+                $"Já existe o valor {value.ValueNumeric} para este campo.");
         }
         finally { await DisposeAsync(conn); }
     }

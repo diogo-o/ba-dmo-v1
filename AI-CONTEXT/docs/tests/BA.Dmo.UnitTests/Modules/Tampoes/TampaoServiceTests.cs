@@ -308,6 +308,34 @@ public class TampaoServiceTests
         Assert.Equal(configCount, repo.Configurations.Count);
     }
 
+    [Fact]
+    public async Task Opcoes_CreateFieldDef_DuplicateName_ReturnsFieldDuplicate()
+    {
+        var (service, repo) = Build();
+        repo.FailFieldDuplicate = true;
+
+        var result = await service.CreateFieldDefAsync(
+            new CreateFieldDefRequest("Diâmetro", "mm", 1, 10));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("TAMPAO_FIELD_DUPLICATE", result.Error.Code);
+        Assert.Empty(repo.FieldDefs);
+    }
+
+    [Fact]
+    public async Task Opcoes_CreateFieldValue_DuplicateValue_ReturnsFieldDuplicate()
+    {
+        var (service, repo) = Build();
+        repo.FailFieldDuplicate = true;
+
+        var result = await service.CreateFieldValueAsync(
+            new CreateFieldValueRequest(Guid.NewGuid(), 40m, "40 mm", 10));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("TAMPAO_FIELD_DUPLICATE", result.Error.Code);
+        Assert.Empty(repo.FieldValues);
+    }
+
     // ---- Authorization -------------------------------------------------------------
 
     [Fact]

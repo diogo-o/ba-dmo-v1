@@ -77,6 +77,9 @@ public sealed class FakeTampaoRepository : ITampaoRepository
     /// <summary>When true, CreateConfigurationAsync throws TampaoConfigurationDuplicateException (audit TP-06 mapping test).</summary>
     public bool FailConfigurationDuplicate { get; set; }
 
+    /// <summary>When true, CreateFieldDefAsync/CreateFieldValueAsync throw TampaoFieldDuplicateException (Opções duplicate guard mapping test).</summary>
+    public bool FailFieldDuplicate { get; set; }
+
     // ---- Fields & values ----------------------------------------------------
 
     public Task<IReadOnlyList<TampaoFieldDef>> ListFieldDefsAsync(bool onlyActive, CancellationToken ct = default)
@@ -86,6 +89,8 @@ public sealed class FakeTampaoRepository : ITampaoRepository
     public Task<Guid> CreateFieldDefAsync(TampaoFieldDef field, CancellationToken ct = default)
     {
         if (FailTransaction) throw new InvalidOperationException("simulated");
+        if (FailFieldDuplicate) throw new TampaoFieldDuplicateException(
+            $"Já existe um campo com o nome '{field.FieldName}'.");
         FieldDefs.Add(field);
         return Task.FromResult(field.TampaoFieldDefId);
     }
@@ -111,6 +116,8 @@ public sealed class FakeTampaoRepository : ITampaoRepository
     public Task<Guid> CreateFieldValueAsync(TampaoFieldValue value, CancellationToken ct = default)
     {
         if (FailTransaction) throw new InvalidOperationException("simulated");
+        if (FailFieldDuplicate) throw new TampaoFieldDuplicateException(
+            $"Já existe o valor {value.ValueNumeric} para este campo.");
         FieldValues.Add(value);
         return Task.FromResult(value.TampaoFieldValueId);
     }

@@ -92,7 +92,8 @@ public sealed class TampaoFieldDefPostgresTests
         });
 
         // uq_tampao_field_defs.field_name is the canonical duplicate guard; it must
-        // surface as a unique violation and never silently overwrite the first row.
+        // surface as TampaoFieldDuplicateException (never a raw 23505) and never
+        // silently overwrite the first row.
         var duplicate = await Record.ExceptionAsync(() => repository.CreateFieldDefAsync(new TampaoFieldDef
         {
             TampaoFieldDefId = Guid.NewGuid(),
@@ -102,10 +103,54 @@ public sealed class TampaoFieldDefPostgresTests
             UpdatedAtUtc = now
         }));
 
-        var pg = Assert.IsType<PostgresException>(duplicate);
-        Assert.Equal(PostgresErrorCodes.UniqueViolation, pg.SqlState);
+        var dup = Assert.IsType<TampaoFieldDuplicateException>(duplicate);
+        Assert.Contains(name, dup.Message);
         Assert.Single(await repository.ListFieldDefsAsync(onlyActive: false),
             f => f.FieldName == name);
+    }
+
+    [Fact]
+    public async Task CreateFieldValue_DuplicateNormalizedValue_SurfacesFieldDuplicate()
+    {
+        if (SkipIfNoDatabase()) return;
+
+        var suffix = Guid.NewGuid().ToString("N")[..12];
+        var repository = new DapperTampaoRepository(CreateFactory("tampoes-" + suffix));
+        var now = DateTimeOffset.UtcNow;
+        var fieldId = await repository.CreateFieldDefAsync(new TampaoFieldDef
+        {
+            TampaoFieldDefId = Guid.NewGuid(),
+            FieldName = "SMOKE-VAL " + suffix,
+            Unit = "mm",
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now
+        });
+
+        await repository.CreateFieldValueAsync(new TampaoFieldValue
+        {
+            TampaoFieldValueId = Guid.NewGuid(),
+            TampaoFieldDefId = fieldId,
+            ValueNumeric = 40m,
+            ValueLabel = "40 mm",
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now
+        });
+
+        // uq_tampao_field_values (tampao_field_def_id, value_numeric): the same
+        // normalized value for the same field must surface as the domain
+        // duplicate exception, never a raw 23505.
+        var duplicate = await Record.ExceptionAsync(() => repository.CreateFieldValueAsync(new TampaoFieldValue
+        {
+            TampaoFieldValueId = Guid.NewGuid(),
+            TampaoFieldDefId = fieldId,
+            ValueNumeric = 40m,
+            ValueLabel = "40 mm again",
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now
+        }));
+
+        Assert.IsType<TampaoFieldDuplicateException>(duplicate);
+        Assert.Single(await repository.ListFieldValuesAsync(fieldId, onlyActive: false));
     }
 
     private static bool SkipIfNoDatabase()

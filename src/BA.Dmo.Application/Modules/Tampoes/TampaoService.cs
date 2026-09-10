@@ -608,8 +608,17 @@ public sealed class TampaoService
             DisplayOrder = request.DisplayOrder ?? 0,
             Active = true
         };
-        var id = await _repository.CreateFieldDefAsync(field, ct);
-        return Result<Guid, DomainError>.Success(id);
+        try
+        {
+            var id = await _repository.CreateFieldDefAsync(field, ct);
+            return Result<Guid, DomainError>.Success(id);
+        }
+        catch (TampaoFieldDuplicateException ex)
+        {
+            // uq_tampao_field_defs.field_name (Opções duplicate guard).
+            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+                "TAMPAO_FIELD_DUPLICATE", ex.Message));
+        }
     }
 
     public async Task<Result<bool, DomainError>> UpdateFieldDefAsync(
@@ -654,8 +663,18 @@ public sealed class TampaoService
             DisplayOrder = request.DisplayOrder ?? 0,
             Active = true
         };
-        var id = await _repository.CreateFieldValueAsync(value, ct);
-        return Result<Guid, DomainError>.Success(id);
+        try
+        {
+            var id = await _repository.CreateFieldValueAsync(value, ct);
+            return Result<Guid, DomainError>.Success(id);
+        }
+        catch (TampaoFieldDuplicateException ex)
+        {
+            // uq_tampao_field_values (tampao_field_def_id, value_numeric) — the
+            // same normalized value already exists for this field (Opções duplicate guard).
+            return Result<Guid, DomainError>.Failure(DomainError.Validation(
+                "TAMPAO_FIELD_DUPLICATE", ex.Message));
+        }
     }
 
     public async Task<Result<bool, DomainError>> UpdateFieldValueAsync(
