@@ -97,6 +97,15 @@ public sealed class PegamentoControlo
                 "PEGAMENTO_MF_SNAPSHOT_INVALID",
                 "O snapshot MF do contexto é inválido."));
 
+        // The tolerance corridor must be non-negative (DB CHECK
+        // ck_pegamento_controlos_tolerance); reject at the domain so a negative
+        // value surfaces as a validation error, never a raw 23514/500.
+        var tolerance = toleranceOverride ?? PegamentoModuleCatalog.DefaultTolerance;
+        if (tolerance < 0)
+            return Result<PegamentoControlo, DomainError>.Failure(DomainError.Validation(
+                "PEGAMENTO_TOLERANCE_INVALID",
+                "A tolerância não pode ser negativa."));
+
         var control = new PegamentoControlo
         {
             PegamentoControloId = Guid.NewGuid(),
@@ -111,7 +120,7 @@ public sealed class PegamentoControlo
             CmNominal = context.CmNominal,
             BqNominal = context.BqNominal,
             MfNominal = context.MfNominal,
-            Tolerance = toleranceOverride ?? PegamentoModuleCatalog.DefaultTolerance,
+            Tolerance = tolerance,
             Notas = notas,
             Status = PegamentoControloStatus.Aberto,
             CreatedAtUtc = nowUtc,
@@ -251,7 +260,13 @@ public sealed class PegamentoControlo
                 "Apenas controlos abertos podem ser editados."));
 
         if (tolerance.HasValue)
+        {
+            if (tolerance.Value < 0)
+                return Result<bool, DomainError>.Failure(DomainError.Validation(
+                    "PEGAMENTO_TOLERANCE_INVALID",
+                    "A tolerância não pode ser negativa."));
             Tolerance = tolerance.Value;
+        }
         if (notas is not null)
             Notas = notas;
         UpdatedAtUtc = nowUtc;

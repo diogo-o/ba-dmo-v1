@@ -46,6 +46,22 @@ public class PegamentoServiceTests
         Assert.Equal(PegamentoControloStatus.Aberto, control.Status);
     }
 
+    [Fact]
+    public async Task Create_WithNegativeTolerance_IsRejected_NotRawDbCheck()
+    {
+        // Regression (PROD cross-module smoke): the DB CHECK
+        // ck_pegamento_controlos_tolerance used to surface a negative tolerance
+        // as an unhandled 23514/500; the domain must reject it first.
+        var revisionId = Guid.NewGuid();
+        _lookup.ContextByRevision[revisionId] = PegamentoContextBuilder.Complete(Guid.NewGuid(), revisionId);
+
+        var result = await _service.CreateControlAsync(new CreatePegamentoRequest(revisionId, -1m, null));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("PEGAMENTO_TOLERANCE_INVALID", result.Error.Code);
+        Assert.Empty(_repository.Controls);
+    }
+
     // ---- Blocked incomplete context ----
 
     [Fact]
