@@ -1451,6 +1451,18 @@ app.MapPost("/api/reparacao-interna/{recordId:guid}/corrigir", async (
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(ModulePolicies.ReparacaoInterna);
 
+// Annul an internal repair record (Manual 60 §8 «Anulação») — auditable logical
+// annulment: the record leaves the active operational view; the historical fact is
+// never hard-deleted. Own records only; 2-step confirmation is a UI concern; the
+// capability gate is the same corrigir capability (corrigir/anular próprios registos).
+app.MapPost("/api/reparacao-interna/{recordId:guid}/anular", async (
+    Guid recordId, ReparacaoInternaService service, CancellationToken ct) =>
+{
+    var result = await service.AnularReparacaoAsync(recordId, ct);
+    return result.IsSuccess ? Results.Ok(new { ok = true })
+        : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+}).RequireAuthorization(ModulePolicies.ReparacaoInterna);
+
 // ============================================================================
 // Folha de Controlo (R010) API endpoints.
 // Production-level control summary sheet INSIDE the Controlo area. The surface

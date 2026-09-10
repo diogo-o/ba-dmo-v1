@@ -311,6 +311,11 @@ public sealed class ReparacaoInternaService
                 "REPINT_CORRECTION_CHAIN",
                 "Não é possível corrigir uma correção existente; corrija o registo original."));
 
+        if (original.IsAnnulled)
+            return Result<Guid, DomainError>.Failure(DomainError.DomainConflict(
+                "REPINT_ANNULLED",
+                "O registo está anulado e não pode ser corrigido."));
+
         var correctionAtUtc = _clock.UtcNow;
         var beforeSnapshot = Serialize(original);
 
@@ -382,6 +387,83 @@ public sealed class ReparacaoInternaService
         }
     }
 
+    // ---- Annulment ---------------------------------------------------------------
+
+    /// <summary>
+    /// Manual 60 §8 «Anulação» — <c>Apagar registo</c> is an auditable annulation: the
+    /// record leaves the ACTIVE operational view, the historical fact is NEVER
+    /// hard-deleted. Backend rules (never UI-only): same mutation capability as
+    /// corrections (reparacao_interna.corrigir, «corrigir/anular os próprios registos»);
+    /// ONLY the operator's OWN records; no mandatory reason; repeated annulment of an
+    /// already-annulled chain is rejected. The chain ROOT is marked (annulled_at_utc +
+    /// annulled_by), a cancelled repair_event and a global audit_events row are written
+    /// in the SAME unit of work; production/Job On context is preserved untouched.
+    /// </summary>
+    public async Task<Result<bool, DomainError>> AnularReparacaoAsync(
+        Guid recordId, CancellationToken ct = default)
+    {
+        var gate = _gate.Require();
+        if (gate.IsFailure)
+            return Result<bool, DomainError>.Failure(gate.Error);
+
+        var anular = _gate.RequireCorrigir(gate.Value.ActorId);
+        if (anular.IsFailure)
+            return Result<bool, DomainError>.Failure(anular.Error);
+
+        var record = await _repository.GetByIdAsync(recordId, ct);
+        if (record is null)
+            return Result<bool, DomainError>.Failure(DomainError.NotFound(
+                "REPINT_NOT_FOUND", "Registo de Reparação Interna não encontrado."));
+
+        // Annulment acts on the WHOLE chain: the root row carries the annulled marker so
+        // the chain leaves the active view as one unit (a correction node shares the
+        // original operator, so the own-records rule is stable across the chain).
+        var rootId = record.CorrectionOfId ?? record.InternalRepairRecordId;
+        var root = rootId == record.InternalRepairRecordId
+            ? record
+            : await _repository.GetByIdAsync(rootId, ct);
+        if (root is null)
+            return Result<bool, DomainError>.Failure(DomainError.NotFound(
+                "REPINT_NOT_FOUND", "Registo de Reparação Interna não encontrado."));
+
+        var annulledAtUtc = _clock.UtcNow;
+        var beforeSnapshot = Serialize(root);
+        var annulment = root.Annull(anular.Value.ActorId, annulledAtUtc);
+        if (annulment.IsFailure)
+            return Result<bool, DomainError>.Failure(annulment.Error);
+
+        await using var uow = await _unitOfWorkFactory.BeginAsync(ct);
+        try
+        {
+            await _repository.AnnullAsync(uow, root.InternalRepairRecordId, anular.Value.ActorId, annulledAtUtc, ct);
+            // Cancelled repair event: the designed «cancelled events do not count»
+            // mechanism (N08 repair_events.canceled) — never an UPDATE of the append-only log.
+            await _repository.InsertRepairEventAsync(
+                uow, record.InternalRepairRecordId, null, anular.Value.ActorId, annulledAtUtc,
+                canceled: true, cancelReason: "anulacao", ct);
+            await _repository.InsertAuditEventAsync(
+                uow,
+                "reparacao_interna.anular",
+                "reparacao_interna",
+                root.InternalRepairRecordId.ToString(),
+                root.JobOnId,
+                "annulled",
+                beforeSnapshot,
+                Serialize(root),
+                anular.Value.ActorId,
+                annulledAtUtc,
+                ct);
+
+            await uow.CommitAsync(ct);
+            return Result<bool, DomainError>.Success(true);
+        }
+        catch (Exception)
+        {
+            return Result<bool, DomainError>.Failure(DomainError.Unexpected(
+                "REPINT_SAVE_FAILED", "Falha ao anular o registo; os dados foram preservados."));
+        }
+    }
+
     // ---- Private helpers -----------------------------------------------------------
 
     /// <summary>
@@ -419,6 +501,9 @@ public sealed class ReparacaoInternaService
             record.CorrectionReason,
             record.IsCorrection ? record.CreatedAtUtc : (DateTimeOffset?)null,
             record.IsCorrection ? record.CreatedBy : null,
+            record.AnnulledAtUtc is not null,
+            record.AnnulledAtUtc,
+            record.AnnulledBy,
             chain ?? Array.Empty<InternalRepairDetailDto>());
 
     private static bool TryMapToFerramentas(InternalRepairToolType type, out FerramentasToolType? ferramentasType)
@@ -449,6 +534,8 @@ public sealed class ReparacaoInternaService
             tool_type = InternalRepairToolTypeCodec.ToStorage(record.ToolType),
             record.IndividualNumber,
             record.OperatorId,
-            record.OccurredAtUtc
+            record.OccurredAtUtc,
+            record.AnnulledAtUtc,
+            record.AnnulledBy
         });
 }

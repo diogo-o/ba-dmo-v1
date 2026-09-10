@@ -69,6 +69,7 @@ SELECT r.internal_repair_record_id, r.line, r.job_on_id, r.job_on_revision_id, r
        r.reference, r.lot_id, r.tool_type, r.individual_number,
        r.operator_id, r.occurred_at_utc, r.correction_of_id, r.before_snapshot,
        r.correction_reason, r.created_at_utc, r.created_by,
+       r.annulled_at_utc, r.annulled_by,
        tl.lote AS lot_code
 FROM internal_repair_records r
 LEFT JOIN tool_lotes tl ON tl.tool_lote_id = r.lot_id
@@ -89,6 +90,7 @@ SELECT r.internal_repair_record_id, r.line, r.job_on_id, r.job_on_revision_id, r
        r.reference, r.lot_id, r.tool_type, r.individual_number,
        r.operator_id, r.occurred_at_utc, r.correction_of_id, r.before_snapshot,
        r.correction_reason, r.created_at_utc, r.created_by,
+       r.annulled_at_utc, r.annulled_by,
        tl.lote AS lot_code
 FROM internal_repair_records r
 LEFT JOIN tool_lotes tl ON tl.tool_lote_id = r.lot_id
@@ -109,9 +111,11 @@ ORDER BY r.created_at_utc ASC;";
         bool onlyCorrected, CancellationToken ct = default)
     {
         // Each correction chain root shows its latest valid version (brief §10).
-        // The actual lot code is resolved read-side from the persisted lot_id
-        // (LEFT JOIN tool_lotes); rows without a resolvable lot keep a null lot
-        // (displayed as '—'), never the reference (DIV-07 fix).
+        // Manual 60 §8 — annulled chains (root annulled_at_utc set) leave the ACTIVE
+        // operational view: they are excluded here, never deleted. The actual lot code
+        // is resolved read-side from the persisted lot_id (LEFT JOIN tool_lotes); rows
+        // without a resolvable lot keep a null lot (displayed as '—'), never the
+        // reference (DIV-07 fix).
         var sql = @"
 SELECT DISTINCT ON (s.root_id) s.*, tl.lote AS lot_code
 FROM (
@@ -119,6 +123,7 @@ FROM (
            r.reference, r.lot_id, r.tool_type, r.individual_number,
            r.operator_id, r.occurred_at_utc, r.correction_of_id, r.before_snapshot,
            r.correction_reason, r.created_at_utc, r.created_by,
+           r.annulled_at_utc, r.annulled_by,
            COALESCE(r.correction_of_id, r.internal_repair_record_id) AS root_id
     FROM internal_repair_records r
     WHERE (@From IS NULL OR r.occurred_at_utc >= @From)
@@ -130,7 +135,9 @@ FROM (
       AND (@OperatorId IS NULL OR r.operator_id = @OperatorId)
       AND (@OnlyCorrected = FALSE OR r.correction_of_id IS NOT NULL)
 ) s
+JOIN internal_repair_records root ON root.internal_repair_record_id = s.root_id
 LEFT JOIN tool_lotes tl ON tl.tool_lote_id = s.lot_id
+WHERE root.annulled_at_utc IS NULL
 ORDER BY s.root_id, s.created_at_utc DESC;";
         var conn = await _connectionFactory.OpenConnectionAsync(ct);
         try
@@ -167,6 +174,44 @@ VALUES ('interna', @InternalRecordId, FALSE, @Notes, @ActorId, @OccurredAtUtc);"
             ActorId = (object?)actorId,
             OccurredAtUtc = occurredAtUtc
         }, uow.Transaction, ct);
+    }
+
+    public Task InsertRepairEventAsync(
+        IDbUnitOfWork uow, Guid? internalRepairRecordId, string? notes,
+        string actorId, DateTimeOffset occurredAtUtc, bool canceled, string? cancelReason,
+        CancellationToken ct = default)
+    {
+        const string sql = @"
+INSERT INTO repair_events (repair_scope, internal_repair_record_id, canceled, cancel_reason, notes, actor_id, occurred_at_utc)
+VALUES ('interna', @InternalRecordId, @Canceled, @CancelReason, @Notes, @ActorId, @OccurredAtUtc);";
+        return Db.ExecuteAsync(uow.Connection, sql, new
+        {
+            InternalRecordId = (object?)internalRepairRecordId,
+            Canceled = canceled,
+            CancelReason = (object?)cancelReason,
+            Notes = (object?)notes,
+            ActorId = (object?)actorId,
+            OccurredAtUtc = occurredAtUtc
+        }, uow.Transaction, ct);
+    }
+
+    public async Task AnnullAsync(
+        IDbUnitOfWork uow, Guid rootRecordId, string actorId,
+        DateTimeOffset annulledAtUtc, CancellationToken ct = default)
+    {
+        const string sql = @"
+UPDATE internal_repair_records
+SET annulled_at_utc = @AnnulledAtUtc, annulled_by = @AnnulledBy
+WHERE internal_repair_record_id = @RootId
+  AND correction_of_id IS NULL
+  AND annulled_at_utc IS NULL;";
+        var affected = await Db.ExecuteAsync(uow.Connection, sql, new
+        {
+            RootId = rootRecordId,
+            AnnulledAtUtc = annulledAtUtc,
+            AnnulledBy = (object?)actorId
+        }, uow.Transaction, ct);
+        ConcurrencyGuard.EnsureSingleRowUpdated(affected, "internal_repair_records (anulação)");
     }
 
     public Task InsertAuditEventAsync(
@@ -213,7 +258,9 @@ VALUES (@OccurredAtUtc, EXTRACT(YEAR FROM @OccurredAtUtc), @Actor, 'reparacao_in
         BeforeSnapshot = row.before_snapshot as string,
         CorrectionReason = row.correction_reason as string,
         CreatedAtUtc = (DateTimeOffset)row.created_at_utc,
-        CreatedBy = row.created_by as string
+        CreatedBy = row.created_by as string,
+        AnnulledAtUtc = row.annulled_at_utc as DateTimeOffset?,
+        AnnulledBy = row.annulled_by as string
     };
 
     private static async Task DisposeAsync(IDbConnection connection)

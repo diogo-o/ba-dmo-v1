@@ -178,6 +178,7 @@
                 @if (Model.CanCorrigir)
                 {
                     <button type="button" class="dmo-button" data-corrigir>Corrigir registo</button>
+                    <button type="button" class="dmo-button" data-anular>Anular registo</button>
                 }
                 <span class="reparacao-interna-pagination">
                     <button type="button" class="dmo-button" data-page-prev aria-label="Anterior">&lt;</button>
@@ -222,6 +223,20 @@
             <div class="dmo-row-actions">
                 <button type="button" class="dmo-button success" data-confirm-correction>Guardar correção</button>
                 <button type="button" class="dmo-button" data-cancel-correction>Cancelar</button>
+            </div>
+        </div>
+
+        <!-- Inline annulment card (Manual 60 §8 «Anulação» — 2-step confirmation). -->
+        <div class="dmo-card reparacao-interna-correction" id="annulCard" hidden>
+            <h3>Anular registo</h3>
+            <p class="reparacao-interna-original-note">
+                A anulação remove o registo da vista operacional ativa sem apagar o facto histórico
+                (não existe eliminação física). Só pode anular os próprios registos.
+            </p>
+            <p id="annulSummary"></p>
+            <div class="dmo-row-actions">
+                <button type="button" class="dmo-button success" data-confirm-annul>Confirmar anulação</button>
+                <button type="button" class="dmo-button" data-cancel-annul>Cancelar</button>
             </div>
         </div>
 

@@ -264,6 +264,8 @@ public class ReparacaoInternaWebApiTests : IClassFixture<ReparacaoInternaWebApiT
             public Task<IReadOnlyList<InternalRepairRecord>> GetChainAsync(Guid id, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<InternalRepairRecord>>(Array.Empty<InternalRepairRecord>());
             public Task<IReadOnlyList<InternalRepairRecord>> ListAsync(DateTimeOffset? a, DateTimeOffset? b, string? c, Guid? d, InternalRepairToolType? e, string? f, string? g, bool h, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<InternalRepairRecord>>(Array.Empty<InternalRepairRecord>());
             public Task InsertRepairEventAsync(IDbUnitOfWork uow, Guid? id, string? notes, string actor, DateTimeOffset when, CancellationToken ct = default) => Task.CompletedTask;
+            public Task InsertRepairEventAsync(IDbUnitOfWork uow, Guid? id, string? notes, string actor, DateTimeOffset when, bool canceled, string? cancelReason, CancellationToken ct = default) => Task.CompletedTask;
+            public Task AnnullAsync(IDbUnitOfWork uow, Guid rootRecordId, string actorId, DateTimeOffset annulledAtUtc, CancellationToken ct = default) => Task.CompletedTask;
             public Task InsertAuditEventAsync(IDbUnitOfWork uow, string action, string type, string id, Guid? jobOn, string result, string? b, string? a, string actor, DateTimeOffset when, CancellationToken ct = default) => Task.CompletedTask;
         }
 

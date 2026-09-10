@@ -290,6 +290,7 @@
   async function openDetail(recordId) {
     try {
       const d = await api(`/api/reparacao-interna/${recordId}`);
+      const state = d.isAnnulled ? 'Anulado' : (d.isCorrected ? 'Corrigido' : 'Atual');
       $('#detailBody').innerHTML =
         `<tr><th>Linha</th><td>${esc(d.line)}</td></tr>` +
         `<tr><th>Produção</th><td>${esc(d.productionCode ?? '—')}</td></tr>` +
@@ -299,17 +300,52 @@
         `<tr><th>N.º individual</th><td>${esc(d.individualNumber)}</td></tr>` +
         `<tr><th>Operador</th><td>${esc(d.operatorId ?? '—')}</td></tr>` +
         `<tr><th>Data/hora original</th><td>${formatDT(d.occurredAtUtc)}</td></tr>` +
-        `<tr><th>Estado</th><td>${d.isCorrected ? 'Corrigido' : 'Atual'}</td></tr>` +
-        (d.correctionReason ? `<tr><th>Motivo da correção</th><td>${esc(d.correctionReason)}</td></tr>` : '');
+        `<tr><th>Estado</th><td>${state}</td></tr>` +
+        (d.correctionReason ? `<tr><th>Motivo da correção</th><td>${esc(d.correctionReason)}</td></tr>` : '') +
+        (d.isAnnulled ? `<tr><th>Anulado em</th><td>${formatDT(d.annulledAtUtc)}</td></tr><tr><th>Anulado por</th><td>${esc(d.annulledBy ?? '—')}</td></tr>` : '');
       const chainBody = $('#detailChain tbody');
       const seq = (d.correctionChain && d.correctionChain.length ? d.correctionChain : [d]);
       chainBody.innerHTML = seq.map((n) =>
-        `<tr><td>${esc(n.line)}</td><td>${esc(n.toolType)}</td><td>${esc(n.individualNumber)}</td><td>${esc(n.operatorId ?? '—')}</td><td>${formatDT(n.occurredAtUtc)}</td><td>${n.isCorrected ? 'Corrigido' : 'Atual'}</td></tr>`).join('');
+        `<tr><td>${esc(n.line)}</td><td>${esc(n.toolType)}</td><td>${esc(n.individualNumber)}</td><td>${esc(n.operatorId ?? '—')}</td><td>${formatDT(n.occurredAtUtc)}</td><td>${n.isAnnulled ? 'Anulado' : (n.isCorrected ? 'Corrigido' : 'Atual')}</td></tr>`).join('');
       $('#detailCard').hidden = false;
     } catch (err) { showToast(err.message, true); }
   }
 
   $('[data-close-detail]').addEventListener('click', () => { $('#detailCard').hidden = true; });
+
+  // ---- Annulment (Manual 60 §8 — 2-step confirmation) ---------------------------
+  const annulTrigger = $('[data-anular]');
+  if (annulTrigger) {
+    annulTrigger.addEventListener('click', () => {
+      const recordId = selectedRecordId;
+      if (!recordId) return showToast('Selecione uma linha para anular.', true);
+      openAnnulment(recordId);
+    });
+  }
+
+  async function openAnnulment(recordId) {
+    try {
+      const d = await api(`/api/reparacao-interna/${recordId}`);
+      selectedRecordId = recordId;
+      $('#annulSummary').textContent =
+        `Linha ${d.line} · ${d.toolType} · N.º ${d.individualNumber}` +
+        (d.reference ? ` · Referência ${d.reference}` : '') +
+        (d.lote ? ` · Lote ${d.lote}` : '');
+      $('#annulCard').hidden = false;
+    } catch (err) { showToast(err.message, true); }
+  }
+
+  $('[data-cancel-annul]').addEventListener('click', () => { $('#annulCard').hidden = true; });
+
+  $('[data-confirm-annul]').addEventListener('click', async () => {
+    if (!selectedRecordId) return showToast('Selecione um registo para anular.', true);
+    try {
+      await jsonPost(`/api/reparacao-interna/${selectedRecordId}/anular`, {});
+      showToast('Registo anulado. O facto histórico foi preservado.');
+      $('#annulCard').hidden = true;
+      await applyFilter();
+    } catch (err) { showToast(err.message, true); }
+  });
 
   // ---- Correction ----------------------------------------------------------------
   const correctionTrigger = $('[data-corrigir]');

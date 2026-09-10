@@ -109,4 +109,7 @@ public sealed record InternalRepairDetailDto(
     string? CorrectionReason,
     DateTimeOffset? CorrectedAtUtc,
     string? CorrectedBy,
+    bool IsAnnulled,
+    DateTimeOffset? AnnulledAtUtc,
+    string? AnnulledBy,
     IReadOnlyList<InternalRepairDetailDto> CorrectionChain);

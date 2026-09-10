@@ -75,7 +75,9 @@ public sealed class FakeReparacaoInternaRepository : IReparacaoInternaRepository
 {
     public List<InternalRepairRecord> Records { get; } = new();
     public List<(Guid? recordId, string? notes, string actor)> RepairEvents { get; } = new();
+    public List<(Guid? recordId, bool canceled, string? cancelReason, string actor)> CanceledRepairEvents { get; } = new();
     public List<(string action, string entityId, string result, string actor)> AuditEvents { get; } = new();
+    public List<Guid> AnnulledRoots { get; } = new();
 
     /// <summary>Maps tool lot id → actual lot code, mirroring the read path's LEFT JOIN on tool_lotes.</summary>
     public Dictionary<Guid, string> LotCodes { get; } = new();
@@ -108,13 +110,15 @@ public sealed class FakeReparacaoInternaRepository : IReparacaoInternaRepository
         bool onlyCorrected, CancellationToken ct = default)
     {
         // Latest valid version per chain root = the most recently inserted record
-        // of each chain (correction supersedes its original).
+        // of each chain (correction supersedes its original). Annulled chains
+        // (root marked, Manual 60 §8) leave the active view.
         var seen = new HashSet<Guid>();
         var result = new List<InternalRepairRecord>();
         foreach (var record in Records.AsEnumerable().Reverse())
         {
             var rootId = record.CorrectionOfId ?? record.InternalRepairRecordId;
             if (!seen.Add(rootId)) continue;
+            if (AnnulledRoots.Contains(rootId)) continue;
             if (!Matches(record, from, to, line, jobOnId, type, number, operatorId, onlyCorrected))
                 continue;
             result.Add(EnrichLot(record));
@@ -129,6 +133,21 @@ public sealed class FakeReparacaoInternaRepository : IReparacaoInternaRepository
             ? code
             : null;
         return record;
+    }
+
+    public Task AnnullAsync(IDbUnitOfWork uow, Guid rootRecordId, string actorId, DateTimeOffset annulledAtUtc, CancellationToken ct = default)
+    {
+        // Mirrors the repository UPDATE guard (root + annulled_at_utc IS NULL): the
+        // check runs against the PERSISTED state (AnnulledRoots), not the in-memory
+        // instance the domain already mutated before the write.
+        var root = Records.FirstOrDefault(r =>
+            r.InternalRepairRecordId == rootRecordId && r.CorrectionOfId is null);
+        if (root is null || AnnulledRoots.Contains(rootRecordId))
+            throw new InvalidOperationException("internal_repair_records (anulação) was changed concurrently.");
+        root.AnnulledAtUtc = annulledAtUtc;
+        root.AnnulledBy = actorId;
+        AnnulledRoots.Add(rootRecordId);
+        return Task.CompletedTask;
     }
 
     private static bool Matches(InternalRepairRecord record,
@@ -148,6 +167,15 @@ public sealed class FakeReparacaoInternaRepository : IReparacaoInternaRepository
         string actorId, DateTimeOffset occurredAtUtc, CancellationToken ct = default)
     {
         RepairEvents.Add((internalRepairRecordId, notes, actorId));
+        return Task.CompletedTask;
+    }
+
+    public Task InsertRepairEventAsync(
+        IDbUnitOfWork uow, Guid? internalRepairRecordId, string? notes,
+        string actorId, DateTimeOffset occurredAtUtc, bool canceled, string? cancelReason,
+        CancellationToken ct = default)
+    {
+        CanceledRepairEvents.Add((internalRepairRecordId, canceled, cancelReason, actorId));
         return Task.CompletedTask;
     }
 

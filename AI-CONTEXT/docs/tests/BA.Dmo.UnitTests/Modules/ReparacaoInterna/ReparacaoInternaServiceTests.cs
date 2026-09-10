@@ -484,4 +484,129 @@ public class ReparacaoInternaServiceTests
         var detail = (await service.GetDetailAsync(recordId)).Value;
         Assert.Null(detail.Lote);
     }
+
+    // ---- Annulment (Manual 60 §8 «Anulação») ---------------------------------
+
+    [Fact]
+    public async Task Anular_WithCapability_RemovesFromActiveView_AndPreservesFact()
+    {
+        var (service, repo, ctx, pieces) = Build(grantCorrigir: true);
+        SeedSingleContext(ctx, "B1");
+        pieces.Seed("REF-1", "1234", Guid.NewGuid(), FerramentasToolType.CM);
+        var recordId = (await service.RegistrarReparacoesAsync(
+            Req("B1", InternalRepairToolType.CM, "1234"))).Value[0];
+
+        var result = await service.AnularReparacaoAsync(recordId);
+
+        Assert.True(result.IsSuccess);
+        // Active operational view no longer shows the annulled record…
+        var rows = (await service.ListHistoryAsync(new InternalRepairFilter(null, null, null, null, null, null, null, false), default)).Value;
+        Assert.Empty(rows);
+        // …but the historical fact remains fully readable with actor attribution.
+        var detail = (await service.GetDetailAsync(recordId)).Value;
+        Assert.True(detail.IsAnnulled);
+        Assert.Equal(Now, detail.AnnulledAtUtc);
+        Assert.Equal("repan-actor", detail.AnnulledBy);
+        Assert.Equal("1234", detail.IndividualNumber); // original fact intact
+        Assert.Contains(repo.AuditEvents, a => a.action == "reparacao_interna.anular" && a.result == "annulled" && a.actor == "repan-actor");
+        Assert.Contains(repo.CanceledRepairEvents, e => e.canceled && e.actor == "repan-actor"); // designed canceled-event mechanism
+        Assert.Contains(repo.AnnulledRoots, r => r == recordId);
+    }
+
+    [Fact]
+    public async Task Anular_WithoutCapability_IsForbidden()
+    {
+        var (service, repo, ctx, pieces) = Build(grantCorrigir: false);
+        SeedSingleContext(ctx, "B1");
+        pieces.Seed("REF-1", "1234", Guid.NewGuid(), FerramentasToolType.CM);
+        var recordId = (await service.RegistrarReparacoesAsync(
+            Req("B1", InternalRepairToolType.CM, "1234"))).Value[0];
+
+        var result = await service.AnularReparacaoAsync(recordId);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("REPINT_CORRIGIR_FORBIDDEN", result.Error.Code);
+        Assert.Empty(repo.AnnulledRoots); // nothing annulled
+    }
+
+    [Fact]
+    public async Task Anular_OtherUsersRecord_IsRejected_OwnRecordsOnly()
+    {
+        // Manual 60 §8: apenas os próprios registos — backend rule, not UI-only.
+        var (service, repo, ctx, pieces) = Build(grantCorrigir: true);
+        var other = InternalRepairRecord.Create(
+            "B1", null, null, null, null, null, InternalRepairToolType.CM, "999",
+            "another-operator", Now, Now).Value;
+        repo.Records.Add(other);
+
+        var result = await service.AnularReparacaoAsync(other.InternalRepairRecordId);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("REPINT_ANNULLED_UNAUTHORIZED", result.Error.Code);
+        Assert.Null(other.AnnulledAtUtc);
+        Assert.Empty(repo.AuditEvents);
+    }
+
+    [Fact]
+    public async Task Anular_AlreadyAnnulled_IsRejected()
+    {
+        var (service, repo, ctx, pieces) = Build(grantCorrigir: true);
+        SeedSingleContext(ctx, "B1");
+        pieces.Seed("REF-1", "1234", Guid.NewGuid(), FerramentasToolType.CM);
+        var recordId = (await service.RegistrarReparacoesAsync(
+            Req("B1", InternalRepairToolType.CM, "1234"))).Value[0];
+        Assert.True((await service.AnularReparacaoAsync(recordId)).IsSuccess);
+
+        var repeat = await service.AnularReparacaoAsync(recordId);
+
+        Assert.True(repeat.IsFailure);
+        Assert.Equal("REPINT_ALREADY_ANNULLED", repeat.Error.Code);
+        Assert.Single(repo.AuditEvents, a => a.action == "reparacao_interna.anular"); // no second annulment event
+    }
+
+    [Fact]
+    public async Task Corrigir_AnnulledRecord_IsRejected()
+    {
+        var (service, repo, ctx, pieces) = Build(grantCorrigir: true);
+        SeedSingleContext(ctx, "B1");
+        pieces.Seed("REF-1", "1234", Guid.NewGuid(), FerramentasToolType.CM);
+        var recordId = (await service.RegistrarReparacoesAsync(
+            Req("B1", InternalRepairToolType.CM, "1234"))).Value[0];
+        Assert.True((await service.AnularReparacaoAsync(recordId)).IsSuccess);
+
+        var correction = await service.CorrigirReparacaoAsync(
+            new CorrigirReparacaoRequest(recordId, "B1", InternalRepairToolType.CM, "5678",
+                null, null, null, null, null, null));
+
+        Assert.True(correction.IsFailure);
+        Assert.Equal("REPINT_ANNULLED", correction.Error.Code);
+        Assert.Single(repo.Records); // no correction row resurrects the annulled chain
+    }
+
+    [Fact]
+    public async Task Anular_WholeChain_LeavesActiveView_AnnullingTargetsRoot()
+    {
+        var (service, repo, ctx, pieces) = Build(grantCorrigir: true);
+        SeedSingleContext(ctx, "B1");
+        pieces.Seed("REF-1", "1234", Guid.NewGuid(), FerramentasToolType.CM);
+        pieces.Seed("REF-1", "5678", Guid.NewGuid(), FerramentasToolType.CM);
+        var originalId = (await service.RegistrarReparacoesAsync(
+            Req("B1", InternalRepairToolType.CM, "1234"))).Value[0];
+        var correctionId = (await service.CorrigirReparacaoAsync(
+            new CorrigirReparacaoRequest(originalId, "B1", InternalRepairToolType.CM, "5678",
+                null, null, null, null, null, null))).Value;
+
+        // Annulling a correction node annuls the WHOLE chain (root marked).
+        var result = await service.AnularReparacaoAsync(correctionId);
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty((await service.ListHistoryAsync(new InternalRepairFilter(null, null, null, null, null, null, null, false), default)).Value);
+        var root = repo.Records.Single(r => r.InternalRepairRecordId == originalId);
+        Assert.NotNull(root.AnnulledAtUtc);
+        Assert.Equal("repan-actor", root.AnnulledBy);
+        // Both nodes remain readable as historical facts.
+        var detail = (await service.GetDetailAsync(originalId)).Value;
+        Assert.True(detail.IsAnnulled);
+        Assert.Equal(2, detail.CorrectionChain.Count);
+    }
 }

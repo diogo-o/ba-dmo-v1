@@ -78,6 +78,20 @@ public sealed class InternalRepairRecord
     public bool IsCorrection => CorrectionOfId is not null;
 
     /// <summary>
+    /// When the CHAIN was annulled (Manual 60 §8 «Anulação» — <c>Apagar registo</c> is an
+    /// auditable annulation: the record leaves the active operational view, the historical
+    /// fact is never hard-deleted). Written on the chain ROOT, server-side, with the actor.
+    /// Null = active.
+    /// </summary>
+    public DateTimeOffset? AnnulledAtUtc { get; set; }
+
+    /// <summary>Actor who annulled the chain (canonical internal_users.actor_id, server-side).</summary>
+    public string? AnnulledBy { get; set; }
+
+    /// <summary>True when this chain has been annulled (removed from the active operational view).</summary>
+    public bool IsAnnulled => AnnulledAtUtc is not null;
+
+    /// <summary>
     /// Read-side enrichment ONLY (never persisted): the actual lot code
     /// (<c>tool_lotes.lote</c>) resolved from <see cref="LotId"/> by the read path.
     /// This is the real tool lot, never the reference; null when <see cref="LotId"/>
@@ -225,4 +239,35 @@ public sealed class InternalRepairRecord
 
     private static bool IsValidForCorrection(InternalRepairRecord record) =>
         record.CorrectionOfId is null;
+
+    /// <summary>
+    /// Manual 60 §8 «Anulação» — logical annulment of the chain (called on the chain ROOT):
+    /// the record leaves the active operational view; the historical fact is NEVER
+    /// hard-deleted. Rules (backend, not UI-only): only the operator's OWN records;
+    /// repeated annulment of an already annulled chain is rejected. No reason is
+    /// required (Manual: «sem motivo obrigatório»). Actor + timestamp are server-side.
+    /// </summary>
+    public Result<InternalRepairRecord, DomainError> Annull(string actorId, DateTimeOffset annulledAtUtc)
+    {
+        if (string.IsNullOrWhiteSpace(actorId))
+            return Result<InternalRepairRecord, DomainError>.Failure(DomainError.Forbidden(
+                "REPINT_ANNULLED_ACTOR_REQUIRED",
+                "Não foi possível resolver o utilizador autorizado a anular."));
+
+        if (IsAnnulled)
+            return Result<InternalRepairRecord, DomainError>.Failure(DomainError.DomainConflict(
+                "REPINT_ALREADY_ANNULLED",
+                "O registo já foi anulado."));
+
+        // Manual 60: «apenas os próprios registos» — corrections inherit the ORIGINAL
+        // operator, so this check is stable across the whole chain.
+        if (!string.Equals(OperatorId, actorId, StringComparison.Ordinal))
+            return Result<InternalRepairRecord, DomainError>.Failure(DomainError.Forbidden(
+                "REPINT_ANNULLED_UNAUTHORIZED",
+                "Só pode anular os próprios registos."));
+
+        AnnulledAtUtc = annulledAtUtc;
+        AnnulledBy = actorId;
+        return Result<InternalRepairRecord, DomainError>.Success(this);
+    }
 }

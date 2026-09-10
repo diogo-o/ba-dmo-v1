@@ -35,6 +35,21 @@ public interface IReparacaoInternaRepository
     /// <summary>Inserts a <c>repair_events</c> row with scope 'interna' (append-only).</summary>
     Task InsertRepairEventAsync(IDbUnitOfWork uow, Guid? internalRepairRecordId, string? notes, string actorId, DateTimeOffset occurredAtUtc, CancellationToken ct = default);
 
+    /// <summary>
+    /// Inserts a <c>repair_events</c> row with scope 'interna' marking a CANCELLED event
+    /// (annulment; <c>canceled = TRUE</c> with an optional reason — the designed
+    /// «cancelled events do not count» mechanism, never an UPDATE of the append-only log).
+    /// </summary>
+    Task InsertRepairEventAsync(IDbUnitOfWork uow, Guid? internalRepairRecordId, string? notes, string actorId, DateTimeOffset occurredAtUtc, bool canceled, string? cancelReason, CancellationToken ct = default);
+
+    /// <summary>
+    /// Logical annulment write (Manual 60 §8): marks the chain ROOT
+    /// (<c>annulled_at_utc</c>/<c>annulled_by</c>) so the whole chain leaves the active
+    /// operational view. Never deletes rows. No-op protected: an already-annulled root
+    /// is detected by the domain before this write.
+    /// </summary>
+    Task AnnullAsync(IDbUnitOfWork uow, Guid rootRecordId, string actorId, DateTimeOffset annulledAtUtc, CancellationToken ct = default);
+
     /// <summary>Inserts a global <c>audit_events</c> row for module reparacao_interna.</summary>
     Task InsertAuditEventAsync(IDbUnitOfWork uow, string actionCode, string entityType, string entityId,
         Guid? jobOnId, string result, string? beforeSummary, string? afterSummary,
