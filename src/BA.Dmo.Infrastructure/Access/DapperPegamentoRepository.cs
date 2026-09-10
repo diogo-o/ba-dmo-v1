@@ -349,9 +349,15 @@ FROM pegamento_documentos WHERE pegamento_controlo_id = @ControloId;";
     private static PegamentoControlo HydrateControl(dynamic row, IReadOnlyList<PegamentoMedicao> measurements)
     {
         var tolerance = row.tolerance;
-        var cmNominal = row.cm_nominal;
-        var bqNominal = row.bq_nominal;
-        var mfNominal = row.mf_nominal;
+        // Npgsql surfaces non-null numeric columns as decimal on dynamic rows;
+        // 'as decimal?' / HasValue never apply the conversion, so convert
+        // explicitly — nominal columns are NULLABLE (legacy N16 rows) and a
+        // non-null nominal must not throw RuntimeBinderException on HasValue.
+        // The dynamic value is unwrapped to object first so the helper call is
+        // statically bound (a dynamic argument would re-enter the DLR binder).
+        var cmNominal = ToNullableDecimal((object)row.cm_nominal);
+        var bqNominal = ToNullableDecimal((object)row.bq_nominal);
+        var mfNominal = ToNullableDecimal((object)row.mf_nominal);
 
         foreach (var m in measurements)
         {
@@ -483,4 +489,18 @@ FROM pegamento_documentos WHERE pegamento_controlo_id = @ControloId;";
         using var doc = JsonDocument.Parse(json);
         return doc.RootElement.GetString();
     }
+
+    /// <summary>
+    /// Converts a dynamic row value to a nullable decimal: Npgsql dynamic rows
+    /// surface non-null numerics as <see cref="decimal"/> and null as
+    /// <see cref="DBNull"/>; neither responds to <c>HasValue</c>, so nominal
+    /// columns (nullable since N16/N39) are normalized here.
+    /// </summary>
+    private static decimal? ToNullableDecimal(object? value) => value switch
+    {
+        null => null,
+        DBNull => null,
+        decimal d => d,
+        _ => null
+    };
 }
