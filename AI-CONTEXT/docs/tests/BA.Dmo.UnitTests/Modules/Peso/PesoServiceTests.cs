@@ -38,7 +38,7 @@ public class PesoServiceTests
 
     // ---- Job On seed with a revision + MP_CM component -------------------
 
-    private Guid SeedJobOn(string? referenceText = "5447T173", string production = "202601", string machine = "B3", string? snapshot = null)
+    private Guid SeedJobOn(string? referenceText = "5447T173", string production = "202601", string machine = "B3", string? snapshot = null, string cmLote = "4")
     {
         var jobOnId = _jobOns.CreateAsync(new JobOnEntity(production, machine, Now, Now.AddHours(8), [])).Result;
         var revision = new JobOnRevision
@@ -50,7 +50,7 @@ public class PesoServiceTests
             ProcessSnapshot = "NNPB",
             Components = referenceText is null
                 ? []
-                : [new JobOnComponent { Family = ComponentFamily.MP_CM, ReferenceSnapshot = referenceText, LotSnapshot = "4" }]
+                : [new JobOnComponent { Family = ComponentFamily.MP_CM, ReferenceSnapshot = referenceText, LotSnapshot = cmLote }]
         };
         _jobOns.Revisions.Add(revision);
         _jobOns.Components.AddRange(revision.Components.Select(component =>
@@ -557,6 +557,90 @@ public class PesoServiceTests
         Assert.DoesNotContain("capacidade", comparison.ComparisonDecisionsJson!, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(row.CurrentGlassWeight.ToString(System.Globalization.CultureInfo.InvariantCulture),
             comparison.ComparisonDecisionsJson!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CreateComparison_CrossMachine_IsAllowed()
+    {
+        // Owner rule (task Correction 1): the user explicitly chooses the historical
+        // production/control for comparison — regardless of current machine, historical
+        // machine, previous machine, latest production, latest lot or chronology.
+        // Current production on B2, historical approved base on C1: VALID by explicit choice.
+        SeedReference();
+        var previousJobOnId = SeedJobOn(production: "202512", machine: "C1");
+        var previous = await _service.CreateControlAsync(new CreateControlRequest(
+            previousJobOnId, new DateTime(2025, 12, 10), 20m, "Novo", null,
+            [new PesoLeituraInput("12", 152.43m)]));
+        await _service.SubmitControlAsync(new SubmitControlRequest(previous.Value));
+        _identity.GrantResponsavel();
+        await _service.ApproveControlAsync(new ApproveControlRequest(previous.Value));
+
+        _identity.GrantOperador();
+        var currentJobOnId = SeedJobOn(production: "202601", machine: "B2");
+        var current = await _service.CreateControlAsync(new CreateControlRequest(
+            currentJobOnId, new DateTime(2026, 1, 10), 20m, "Novo", null,
+            [new PesoLeituraInput("34", 142m)]));
+
+        var comp = await _service.CreateComparisonAsync(new CreateComparisonRequest(
+            current.Value, previous.Value, null, [new PesoComparisonPairRequest("34", "12")]));
+
+        // Cross-machine comparison is NOT blocked: B2 (current) vs C1 (historical).
+        Assert.True(comp.IsSuccess);
+        var comparison = _repository.Controls[comp.Value];
+        var snapshot = System.Text.Json.JsonSerializer.Deserialize<PesoComparisonSnapshot>(
+            comparison.PreviousControlJson!, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        Assert.NotNull(snapshot);
+        Assert.Equal("B2", snapshot.CurrentLine);
+        Assert.Equal("C1", snapshot.PreviousLine);
+    }
+
+    [Fact]
+    public async Task CreateComparison_OlderLot_IsAllowed_AndExplicitSelectionPersists()
+    {
+        // Owner rule (task Correction 1): recent productions used Lote 4; the current
+        // production intentionally returns to older Lote 2; the user may choose a
+        // historical Lote 2 comparison. The LATEST production is NEVER auto-chosen —
+        // the explicitly selected historical control is authoritative and persists.
+        SeedReference();
+        // Older production (202512) used Lote 2 — the explicitly selected base.
+        var olderJobOnId = SeedJobOn(production: "202512", machine: "C1", cmLote: "2");
+        var older = await _service.CreateControlAsync(new CreateControlRequest(
+            olderJobOnId, new DateTime(2025, 12, 10), 20m, "Novo", null,
+            [new PesoLeituraInput("12", 152.43m)]));
+        await _service.SubmitControlAsync(new SubmitControlRequest(older.Value));
+        _identity.GrantResponsavel();
+        await _service.ApproveControlAsync(new ApproveControlRequest(older.Value));
+
+        // A MORE RECENT production (202602) used Lote 4 — must NOT be auto-selected.
+        var newerJobOnId = SeedJobOn(production: "202602", machine: "C1", cmLote: "4");
+        var newer = await _service.CreateControlAsync(new CreateControlRequest(
+            newerJobOnId, new DateTime(2026, 2, 10), 20m, "Novo", null,
+            [new PesoLeituraInput("13", 151m)]));
+        await _service.SubmitControlAsync(new SubmitControlRequest(newer.Value));
+        _identity.GrantResponsavel();
+        await _service.ApproveControlAsync(new ApproveControlRequest(newer.Value));
+
+        // Current production (202601) returns to older Lote 2.
+        _identity.GrantOperador();
+        var currentJobOnId = SeedJobOn(production: "202601", machine: "B2", cmLote: "2");
+        var current = await _service.CreateControlAsync(new CreateControlRequest(
+            currentJobOnId, new DateTime(2026, 1, 10), 20m, "Novo", null,
+            [new PesoLeituraInput("34", 142m)]));
+
+        var comp = await _service.CreateComparisonAsync(new CreateComparisonRequest(
+            current.Value, older.Value, null, [new PesoComparisonPairRequest("34", "12")]));
+
+        // Older-lot comparison allowed; the EXPLICIT selection (older Lote 2 base)
+        // persists in the snapshot even though a newer Lote 4 production exists.
+        Assert.True(comp.IsSuccess);
+        var comparison = _repository.Controls[comp.Value];
+        var snapshot = System.Text.Json.JsonSerializer.Deserialize<PesoComparisonSnapshot>(
+            comparison.PreviousControlJson!, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        Assert.NotNull(snapshot);
+        Assert.Equal(older.Value, snapshot.PreviousControlId);
+        Assert.NotEqual(newer.Value, snapshot.PreviousControlId); // latest is never auto-chosen
+        Assert.Equal("2", snapshot.PreviousLote);
+        Assert.Equal("2", snapshot.CurrentLote);
     }
 
     [Fact]
