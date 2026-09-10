@@ -228,6 +228,7 @@ public class ReparacaoExternaWebApiTests : IClassFixture<ReparacaoExternaWebApiT
             public Task<Guid> CreateExitAsync(IDbUnitOfWork uow, RepairExit exit, RepairerSnapshot? snap, string? json, CancellationToken ct = default) => CreateExitAsync(exit, snap, json, ct);
             public Task<RepairExit?> GetExitByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult<RepairExit?>(null);
             public Task<IReadOnlyList<RepairExitItem>> GetExitItemsAsync(Guid id, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<RepairExitItem>>(Array.Empty<RepairExitItem>());
+            public Task<IReadOnlyList<RepairExitItem>> GetExitItemsAsync(IDbUnitOfWork uow, Guid id, CancellationToken ct = default) => GetExitItemsAsync(id, ct);
             public Task<IReadOnlyList<RepairExit>> ListExitsAsync(RepairType? t, RepairExitStatus? s, DateOnly? f, DateOnly? to, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<RepairExit>>(Array.Empty<RepairExit>());
             public Task<bool> ExistsItemInOpenExitAsync(Guid piece, CancellationToken ct = default) => Task.FromResult(false);
             public Task<Guid> AddItemAsync(RepairExitItem item, CancellationToken ct = default) => Task.FromResult(Guid.NewGuid());

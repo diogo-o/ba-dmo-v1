@@ -93,17 +93,29 @@ FROM repair_exits WHERE repair_exit_id = @Id;";
 
     public async Task<IReadOnlyList<RepairExitItem>> GetExitItemsAsync(Guid repairExitId, CancellationToken ct = default)
     {
-        const string sql = @"
-SELECT repair_exit_item_id, repair_exit_id, bq_lote_id, physical_piece_id, qty,
-       individual_number, picked, out_at_utc, out_operator_id, in_at_utc, in_operator_id, status
-FROM repair_exit_items WHERE repair_exit_id = @Id ORDER BY repair_exit_item_id;";
         var conn = await Open(_connectionFactory, ct);
         try
         {
-            var rows = await Db.QueryAsync<dynamic>(conn, sql, new { Id = repairExitId }, cancellationToken: ct);
+            var rows = await Db.QueryAsync<dynamic>(conn, ExitItemsSql, new { Id = repairExitId }, cancellationToken: ct);
             return rows.Select<dynamic, RepairExitItem>(MapItem).ToList().AsReadOnly();
         }
         finally { await DisposeAsync(conn); }
+    }
+
+    public Task<IReadOnlyList<RepairExitItem>> GetExitItemsAsync(
+        IDbUnitOfWork uow, Guid repairExitId, CancellationToken ct = default) =>
+        GetExitItemsCoreAsync(uow.Connection, uow.Transaction, repairExitId, ct);
+
+    private const string ExitItemsSql = @"
+SELECT repair_exit_item_id, repair_exit_id, bq_lote_id, physical_piece_id, qty,
+       individual_number, picked, out_at_utc, out_operator_id, in_at_utc, in_operator_id, status
+FROM repair_exit_items WHERE repair_exit_id = @Id ORDER BY repair_exit_item_id;";
+
+    private static async Task<IReadOnlyList<RepairExitItem>> GetExitItemsCoreAsync(
+        IDbConnection connection, IDbTransaction? transaction, Guid repairExitId, CancellationToken ct)
+    {
+        var rows = await Db.QueryAsync<dynamic>(connection, ExitItemsSql, new { Id = repairExitId }, transaction, ct);
+        return rows.Select<dynamic, RepairExitItem>(MapItem).ToList().AsReadOnly();
     }
 
     public async Task<IReadOnlyList<RepairExit>> ListExitsAsync(

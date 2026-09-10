@@ -334,7 +334,7 @@ public sealed class ReparacaoExternaService
 
         await _repository.ConfirmItemReturnedAsync(uow, item, ct);
 
-        var itemsAfter = await _repository.GetExitItemsAsync(item.RepairExitId, ct);
+        var itemsAfter = await _repository.GetExitItemsAsync(uow, item.RepairExitId, ct);
         var machineResult = RepairExitStatusMachine.ConfirmReturn(exit.Status, itemsAfter);
         if (machineResult.IsFailure) return Result<bool, DomainError>.Failure(machineResult.Error);
         await _repository.UpdateExitStatusAsync(uow, item.RepairExitId, RepairExitStatusCodec.ToStorage(machineResult.Value), ct);

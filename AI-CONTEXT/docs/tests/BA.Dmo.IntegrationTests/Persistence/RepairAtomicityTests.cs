@@ -314,6 +314,7 @@ public sealed class RepairAtomicityTests
         public Task<Guid> CreateExitAsync(RepairExit exit, RepairerSnapshot? snapshot, string? json, CancellationToken ct = default) => inner.CreateExitAsync(exit, snapshot, json, ct);
         public Task<RepairExit?> GetExitByIdAsync(Guid id, CancellationToken ct = default) => inner.GetExitByIdAsync(id, ct);
         public Task<IReadOnlyList<RepairExitItem>> GetExitItemsAsync(Guid id, CancellationToken ct = default) => inner.GetExitItemsAsync(id, ct);
+        public Task<IReadOnlyList<RepairExitItem>> GetExitItemsAsync(IDbUnitOfWork uow, Guid id, CancellationToken ct = default) => inner.GetExitItemsAsync(uow, id, ct);
         public Task<IReadOnlyList<RepairExit>> ListExitsAsync(RepairType? type, RepairExitStatus? status, DateOnly? from, DateOnly? to, CancellationToken ct = default) => inner.ListExitsAsync(type, status, from, to, ct);
         public Task<bool> ExistsItemInOpenExitAsync(Guid pieceId, CancellationToken ct = default) => inner.ExistsItemInOpenExitAsync(pieceId, ct);
         public Task<Guid> AddItemAsync(RepairExitItem item, CancellationToken ct = default) => inner.AddItemAsync(item, ct);

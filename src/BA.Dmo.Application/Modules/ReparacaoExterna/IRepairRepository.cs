@@ -18,6 +18,16 @@ public interface IRepairRepository
     Task<Guid> CreateExitAsync(IDbUnitOfWork uow, RepairExit exit, RepairerSnapshot? repairerSnapshot, string? snapshotJson, CancellationToken ct = default);
     Task<RepairExit?> GetExitByIdAsync(Guid repairExitId, CancellationToken ct = default);
     Task<IReadOnlyList<RepairExitItem>> GetExitItemsAsync(Guid repairExitId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Reads the items INSIDE the caller's unit of work. The coordinated
+    /// return flow must re-read the items after updating the returned item so
+    /// the status machine observes the just-persisted in/out facts — a read on
+    /// a separate connection would only see the last committed state
+    /// (READ COMMITTED) and the transfer to Retorno parcial/Concluído would
+    /// never fire.
+    /// </summary>
+    Task<IReadOnlyList<RepairExitItem>> GetExitItemsAsync(IDbUnitOfWork uow, Guid repairExitId, CancellationToken ct = default);
     Task<IReadOnlyList<RepairExit>> ListExitsAsync(
         RepairType? type, RepairExitStatus? status, DateOnly? from, DateOnly? to,
         CancellationToken ct = default);

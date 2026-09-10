@@ -45,6 +45,9 @@ public sealed class FakeRepairRepository : IRepairRepository
     public Task<IReadOnlyList<RepairExitItem>> GetExitItemsAsync(Guid repairExitId, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<RepairExitItem>>(Items.Where(i => i.RepairExitId == repairExitId).Select(Clone).ToList());
 
+    public Task<IReadOnlyList<RepairExitItem>> GetExitItemsAsync(IDbUnitOfWork uow, Guid repairExitId, CancellationToken ct = default)
+        => GetExitItemsAsync(repairExitId, ct);
+
     public Task<IReadOnlyList<RepairExit>> ListExitsAsync(
         RepairType? type, RepairExitStatus? status, DateOnly? from, DateOnly? to, CancellationToken ct = default)
     {
