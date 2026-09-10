@@ -852,7 +852,8 @@ CREATE TABLE IF NOT EXISTS repair_exit_items (
 CREATE INDEX IF NOT EXISTS ix_repair_exit_items_exit ON repair_exit_items (repair_exit_id);
 
 -- internal_repair_records: N08 base + N22 additive context columns + N28
--- CM/MF-only convergence. BQ remains production/reference context only.
+-- CM/MF-only convergence + N43 annulment markers (Manual 60 §8). BQ remains
+-- production/reference context only.
 CREATE TABLE IF NOT EXISTS internal_repair_records (
     internal_repair_record_id uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     line                      text        NOT NULL,
@@ -870,6 +871,8 @@ CREATE TABLE IF NOT EXISTS internal_repair_records (
     production_code           text        NULL,                                     -- N22
     reference                 text        NULL,                                     -- N22
     lot_id                    uuid        NULL,                                     -- N22
+    annulled_at_utc           timestamptz NULL,                                     -- N43
+    annulled_by               text        NULL REFERENCES internal_users (actor_id), -- N43
     CONSTRAINT ck_internal_repair_records_type CHECK (tool_type IN ('CM', 'MF')),
     CONSTRAINT ck_internal_repair_records_correction CHECK (
         (correction_of_id IS NULL) = (before_snapshot IS NULL))
@@ -877,6 +880,11 @@ CREATE TABLE IF NOT EXISTS internal_repair_records (
 
 CREATE INDEX IF NOT EXISTS ix_internal_repair_records_line ON internal_repair_records (line);
 CREATE INDEX IF NOT EXISTS ix_internal_repair_records_job_on ON internal_repair_records (job_on_id);
+
+-- N43 annulment filter index (partial: only annulled rows)
+CREATE INDEX IF NOT EXISTS ix_internal_repair_records_annulled
+    ON internal_repair_records (annulled_at_utc)
+    WHERE annulled_at_utc IS NOT NULL;
 
 -- N22 additive index + FK anchor to immutable revision
 CREATE INDEX IF NOT EXISTS ix_internal_repair_records_revision
@@ -955,6 +963,7 @@ CREATE TABLE IF NOT EXISTS warehouse_movements (
     qty                   numeric(12,2) NULL,
     destination           text        NULL,
     repair_exit_id        uuid        NULL REFERENCES repair_exits (repair_exit_id),
+    repairer_id           uuid        NULL REFERENCES repairers (repairer_id),    -- N43
     actor_id              text        NULL REFERENCES internal_users (actor_id),
     occurred_at_utc       timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT ck_warehouse_movements_direction CHECK (direction IN ('in', 'out'))
@@ -962,6 +971,10 @@ CREATE TABLE IF NOT EXISTS warehouse_movements (
 
 CREATE INDEX IF NOT EXISTS ix_warehouse_movements_stock ON warehouse_movements (warehouse_stock_id);
 CREATE INDEX IF NOT EXISTS ix_warehouse_movements_occurred ON warehouse_movements (occurred_at_utc);
+
+-- N43: repairer traceability index (Saída → Reparação, Manual 40 §10.2)
+CREATE INDEX IF NOT EXISTS ix_warehouse_movements_repairer
+    ON warehouse_movements (repairer_id);
 
 DROP TRIGGER IF EXISTS trg_warehouse_movements_append_only ON warehouse_movements;
 CREATE TRIGGER trg_warehouse_movements_append_only
