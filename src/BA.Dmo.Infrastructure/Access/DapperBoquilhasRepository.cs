@@ -585,9 +585,22 @@ VALUES (@OccurredAtUtc, EXTRACT(YEAR FROM @OccurredAtUtc), @Actor, 'boquilhas', 
         Status = BqDiscrepancyStatusCodec.FromStorage(row.status as string),
         ResolutionNote = row.resolution_note as string,
         ResolvedBy = row.resolved_by as string,
-        ResolvedAtUtc = row.resolved_at_utc as DateTimeOffset?,
+        ResolvedAtUtc = ToDateTimeOffset(row.resolved_at_utc),
         CreatedBy = row.created_by as string,
         CreatedAtUtc = (DateTimeOffset)row.created_at_utc
+    };
+
+    /// <summary>
+    /// Npgsql surfaces timestamptz as <see cref="DateTime"/> on dynamic rows; the
+    /// <c>as DateTimeOffset?</c> cast would silently yield null because `as` never
+    /// applies the DateTime→DateTimeOffset implicit conversion. Convert explicitly.
+    /// </summary>
+    private static DateTimeOffset? ToDateTimeOffset(object? value) => value switch
+    {
+        null or DBNull => null,
+        DateTimeOffset offset => offset,
+        DateTime dateTime => new DateTimeOffset(dateTime),
+        _ => null
     };
 
     private static BqRepairer MapRepairerWithTypes(dynamic row, Dictionary<Guid, HashSet<string>> typesMap)

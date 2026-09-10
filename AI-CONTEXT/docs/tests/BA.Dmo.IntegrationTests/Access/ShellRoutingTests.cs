@@ -652,6 +652,10 @@ public class ShellRoutingTests : IClassFixture<ShellRoutingTests.ShellFixture>
                 Guid? referenceId, string? search, string? status, Domain.Modules.Peso.PesoRecordType? type,
                 DateTime? from, DateTime? to, CancellationToken cancellationToken = default) =>
                 Task.FromResult<IReadOnlyList<Domain.Modules.Peso.PesoControl>>(Array.Empty<Domain.Modules.Peso.PesoControl>());
+            public Task<bool> ExistsByIdentityAsync(
+                string moldNumber, string neckringNumber, string productionCode, string line,
+                string lote, DateTime controlDate, CancellationToken cancellationToken = default) =>
+                Task.FromResult(false);
             public Task UpdateControlAsync(Domain.Modules.Peso.PesoControl control, CancellationToken cancellationToken = default) =>
                 Task.CompletedTask;
             public Task UpdateControlHeaderAsync(Domain.Modules.Peso.PesoControl control, CancellationToken cancellationToken = default) =>

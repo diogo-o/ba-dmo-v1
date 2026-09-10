@@ -433,8 +433,21 @@ VALUES
         ToolId = row.tool_lote_id,
         OccupiedSinceUtc = row.occupied_since_utc,
         OccupiedBy = row.occupied_by as string,
-        ReleasedAtUtc = row.released_at_utc as DateTimeOffset?,
+        ReleasedAtUtc = ToDateTimeOffset(row.released_at_utc),
         ReleasedBy = row.released_by as string
+    };
+
+    /// <summary>
+    /// Npgsql surfaces timestamptz as <see cref="DateTime"/> on dynamic rows; the
+    /// <c>as DateTimeOffset?</c> cast would silently yield null because `as` never
+    /// applies the DateTime→DateTimeOffset implicit conversion. Convert explicitly.
+    /// </summary>
+    private static DateTimeOffset? ToDateTimeOffset(object? value) => value switch
+    {
+        null or DBNull => null,
+        DateTimeOffset offset => offset,
+        DateTime dateTime => new DateTimeOffset(dateTime),
+        _ => null
     };
 
     private static WarehouseMovement MapMovement(dynamic row) => new()

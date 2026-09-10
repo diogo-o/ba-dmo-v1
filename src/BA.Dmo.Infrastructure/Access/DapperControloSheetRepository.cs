@@ -295,15 +295,28 @@ FROM controlo_sheet_events WHERE controlo_sheet_id = @SheetId ORDER BY occurred_
         CreatedBy = row.created_by as string,
         CreatedAtUtc = (DateTimeOffset)row.created_at_utc,
         SubmittedBy = row.submitted_by as string,
-        SubmittedAtUtc = row.submitted_at_utc as DateTimeOffset?,
+        SubmittedAtUtc = ToDateTimeOffset(row.submitted_at_utc),
         SubmittedNote = row.submitted_note as string,
         DecidedBy = row.decided_by as string,
-        DecidedAtUtc = row.decided_at_utc as DateTimeOffset?,
+        DecidedAtUtc = ToDateTimeOffset(row.decided_at_utc),
         Decision = row.decision is null || row.decision is DBNull
             ? null
             : ControloFolhaStateCodec.FromStorageDecision(row.decision as string),
         DecisionNote = row.decision_note as string,
         UpdatedAtUtc = (DateTimeOffset)row.updated_at_utc
+    };
+
+    /// <summary>
+    /// Npgsql surfaces timestamptz as <see cref="DateTime"/> on dynamic rows; the
+    /// <c>as DateTimeOffset?</c> cast would silently yield null because `as` never
+    /// applies the DateTime→DateTimeOffset implicit conversion. Convert explicitly.
+    /// </summary>
+    private static DateTimeOffset? ToDateTimeOffset(object? value) => value switch
+    {
+        null or DBNull => null,
+        DateTimeOffset offset => offset,
+        DateTime dateTime => new DateTimeOffset(dateTime),
+        _ => null
     };
 
     private static async Task DisposeAsync(IDbConnection connection)
