@@ -1,3 +1,4 @@
+using BA.Dmo.UnitTests.Shared.Persistence;
 using BA.Dmo.Application.Modules.JobOn;
 using BA.Dmo.Application.Modules.Pegamentos;
 using BA.Dmo.Application.Modules.Peso;
@@ -43,10 +44,10 @@ public class JobOnRevisionImmutabilityIntegrationTests
 
     public JobOnRevisionImmutabilityIntegrationTests()
     {
-        var jobOnGate = new JobOnAuthorizationGate(new JobOnActor());
+        var jobOnGate = new JobOnAuthorizationGate(new JobOnActor(), new CanonicalActorFakeAuthorship("jobon-canonical-actor"));
         _jobOnService = new JobOnService(jobOnGate, _jobOns, new FakeJobOnUserContextRepository(), new TestClock(Now), new FakeFerramentasToolLookup());
 
-        var pesoGate = new PesoAuthorizationGate(new PesoOperador());
+        var pesoGate = new PesoAuthorizationGate(new PesoOperador(), new CanonicalActorFakeAuthorship("peso-canonical-actor"));
         _pesoService = new PesoService(pesoGate, _peso, _jobOns, new TestClock(Now));
 
         var pegGate = new PegamentoAuthorizationGate(PegFakeAuthorship.Authorized());

@@ -1,3 +1,4 @@
+using BA.Dmo.UnitTests.Shared.Persistence;
 using BA.Dmo.Application.Modules.JobOn;
 using BA.Dmo.Application.Shared.Access;
 using BA.Dmo.Domain.Modules.Ferramentas;
@@ -55,7 +56,7 @@ public class JobOnToolSelectionTests
         _tools.Register(Bq5447Ref, Bq5447Lote9, FerramentasToolType.BQ, "5447", "9", "Boquilha 5447", "C3");
         _tools.Register(Bq100Ref, Bq100Lote7, FerramentasToolType.BQ, "BQ-100", "7", "Boquilha BQ-100", "B2", "C3");
 
-        var gate = new JobOnAuthorizationGate(_identity);
+        var gate = new JobOnAuthorizationGate(_identity, new CanonicalActorFakeAuthorship("jobon-canonical-actor"));
         _service = new JobOnService(
             gate, _repository, _userContext,
             new SelectionTestClock(new DateTimeOffset(2026, 8, 18, 9, 0, 0, TimeSpan.Zero)),

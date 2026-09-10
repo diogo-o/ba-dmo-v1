@@ -1,3 +1,4 @@
+using BA.Dmo.UnitTests.Shared.Persistence;
 using BA.Dmo.Application.Modules.JobOn;
 using BA.Dmo.Application.Shared.Access;
 using BA.Dmo.Domain.Modules.JobOn;
@@ -26,7 +27,7 @@ public class JobOnPdfTests
 
     public JobOnPdfTests()
     {
-        var gate = new JobOnAuthorizationGate(_identity);
+        var gate = new JobOnAuthorizationGate(_identity, new CanonicalActorFakeAuthorship("jobon-canonical-actor"));
         _jobOnService = new JobOnService(
             gate,
             _repository,
@@ -427,7 +428,7 @@ public class JobOnPdfTests
         var imageBytes = new byte[] { 0xFF, 0xD8, 0xFF, 0xD9 };
         var service = new JobOnPdfService(
             _repository,
-            new JobOnAuthorizationGate(_identity),
+            new JobOnAuthorizationGate(_identity, new CanonicalActorFakeAuthorship("jobon-canonical-actor")),
             new StubJobOnImageProvider(imageBytes, "image/jpeg"));
         var renderer = new TestPdfRenderer();
 

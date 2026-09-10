@@ -1,3 +1,4 @@
+using BA.Dmo.UnitTests.Shared.Persistence;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using BA.Dmo.Application.Modules.Ferramentas;
@@ -71,7 +72,7 @@ public class JobOnNewToolComponentSaveTests
             FerramentasToolType.CM, "CM-5447", "Lote-3",
             "Contra-molde 5447", OtherLine);
 
-        var gate = new JobOnAuthorizationGate(_identity);
+        var gate = new JobOnAuthorizationGate(_identity, new CanonicalActorFakeAuthorship("jobon-canonical-actor"));
         _service = new JobOnService(
             gate, _repository, new FakeJobOnUserContextRepository(),
             new FixedClock(new DateTimeOffset(2026, 8, 18, 9, 0, 0, TimeSpan.Zero)),

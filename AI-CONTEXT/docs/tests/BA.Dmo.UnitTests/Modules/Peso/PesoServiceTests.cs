@@ -1,5 +1,7 @@
+using BA.Dmo.UnitTests.Shared.Persistence;
 using BA.Dmo.Application.Modules.JobOn;
 using BA.Dmo.Application.Modules.Peso;
+using BA.Dmo.Application.Shared.Persistence;
 using BA.Dmo.Domain.Modules.JobOn;
 using BA.Dmo.Domain.Modules.Peso;
 using BA.Dmo.Domain.Shared.Access;
@@ -24,11 +26,12 @@ public class PesoServiceTests
     private readonly FakePesoRepository _repository = new();
     private readonly FakeJobOnRepository _jobOns = new();
     private readonly FakeCurrentUserAccessor _identity = new();
+    private readonly PesoFakeAuthorship _authorship = new();
     private readonly PesoService _service;
 
     public PesoServiceTests()
     {
-        var gate = new PesoAuthorizationGate(_identity);
+        var gate = new PesoAuthorizationGate(_identity, _authorship);
         _service = new PesoService(gate, _repository, _jobOns, new FixedClock(Now));
         _identity.GrantOperador();
     }
@@ -164,6 +167,27 @@ public class PesoServiceTests
         Assert.Equal("B3", control.Line);
         Assert.Equal(PesoControlState.Rascunho, control.Status);
         Assert.Single(control.Leituras);
+    }
+
+    [Fact]
+    public async Task CreateControl_AttributedToCanonicalActor_NotAuthUserGuid()
+    {
+        // Regression (PROD smoke 2026-09-10): the executor actor must be the
+        // canonical internal_users.actor_id (authorship), never the auth-user
+        // Guid — peso_controlos.created_by / approved_by are FKs to
+        // internal_users(actor_id) and 23503'd for readable actor ids.
+        var jobOnId = SeedJobOn("5447T173", "202601", "B3");
+        SeedReference();
+
+        var result = await _service.CreateControlAsync(new CreateControlRequest(
+            jobOnId, new DateTime(2026, 8, 17), 20m, "Novo", "obs", [new PesoLeituraInput("12", 152.43m)]));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("peso-canonical-actor", _repository.Controls[result.Value].CreatedBy);
+        Assert.Contains(_repository.AuditEvents,
+            a => a.EventType == "peso.controlo.criar" && a.Actor == "peso-canonical-actor");
+        Assert.DoesNotContain(_repository.AuditEvents,
+            a => a.Actor == "aaaaaaaa-0000-0000-0000-000000000001");
     }
 
     [Fact]
@@ -368,6 +392,7 @@ public class PesoServiceTests
         _identity.User = new CurrentUser(
             Guid.Parse("aaaaaaaa-0000-0000-0000-000000000009"),
             "Outro Operador", ["peso"], []);
+        _authorship.Current = new PersistenceAuthorship("outro-operador", Now);
 
         var del = await _service.DeleteControlAsync(new DeleteControlRequest(create.Value));
         Assert.True(del.IsFailure);
@@ -716,5 +741,16 @@ public class PesoServiceTests
     private sealed class FixedClock(DateTimeOffset fixedUtcNow) : IClock
     {
         public DateTimeOffset UtcNow => fixedUtcNow;
+    }
+
+    /// <summary>
+    /// Mutable canonical authorship for this test class: the executor actor is
+    /// deliberately a readable actor_id (never the auth-user Guid), and tests
+    /// that need a different operator swap <see cref="Current"/>.
+    /// </summary>
+    private sealed class PesoFakeAuthorship : IPersistenceAuthorshipAccessor
+    {
+        public PersistenceAuthorship Current { get; set; } =
+            new("peso-canonical-actor", new DateTimeOffset(2026, 8, 17, 18, 0, 0, TimeSpan.Zero));
     }
 }

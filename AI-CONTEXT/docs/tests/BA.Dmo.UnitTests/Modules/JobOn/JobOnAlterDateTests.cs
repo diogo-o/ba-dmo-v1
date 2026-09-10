@@ -1,3 +1,4 @@
+using BA.Dmo.UnitTests.Shared.Persistence;
 using System.Text.Json;
 using BA.Dmo.Application.Modules.JobOn;
 using BA.Dmo.Domain.Modules.JobOn;
@@ -29,7 +30,7 @@ public class JobOnAlterDateTests
 
     public JobOnAlterDateTests()
     {
-        var gate = new JobOnAuthorizationGate(_identity);
+        var gate = new JobOnAuthorizationGate(_identity, new CanonicalActorFakeAuthorship("jobon-canonical-actor"));
         _service = new JobOnService(
             gate, _repository, _userContext, new AlterDateTestClock(
                 new DateTimeOffset(2026, 8, 18, 9, 0, 0, TimeSpan.Zero)),
@@ -237,7 +238,7 @@ public class JobOnAlterDateTests
             _repository.AuditEvents, a => a.EventType == "jobon.alterar.data");
         Assert.Equal(jobOnId, audit.JobId);
         Assert.Equal(result.Value, audit.RevisionId);
-        Assert.Equal("aaaaaaaa-0000-0000-0000-000000000001", audit.ActorId);
+        Assert.Equal("jobon-canonical-actor", audit.ActorId);
 
         using var before = JsonDocument.Parse(audit.Before!);
         Assert.Equal(oldRevisionId, before.RootElement.GetProperty("revision_id").GetGuid());

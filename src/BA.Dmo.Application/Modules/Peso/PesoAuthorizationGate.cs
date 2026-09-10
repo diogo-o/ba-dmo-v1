@@ -1,3 +1,5 @@
+using BA.Dmo.Application.Shared.Access;
+using BA.Dmo.Application.Shared.Persistence;
 using BA.Dmo.Domain.Modules.Peso;
 using BA.Dmo.Domain.Shared.Access;
 using BA.Dmo.Domain.Shared.Kernel;
@@ -11,15 +13,24 @@ namespace BA.Dmo.Application.Modules.Peso;
 /// validation. Entrada no módulo Peso é concedida pelo grant do módulo; as
 /// operações de aprovação/decisão exigem <c>peso.aprovar</c>. Fails closed: no
 /// resolved identity = Forbidden.
+/// The executor actor is the canonical internal_users.actor_id (via
+/// <see cref="IPersistenceAuthorshipAccessor"/>, the same source every other
+/// module gate uses) — never the auth-user Guid, which does not satisfy the
+/// actor FKs (peso_controlos.created_by, peso_controlos.approved_by, ...).
 /// </summary>
 public sealed class PesoAuthorizationGate
 {
     private readonly ICurrentUserAccessor _currentUserAccessor;
+    private readonly IPersistenceAuthorshipAccessor _authorship;
 
-    public PesoAuthorizationGate(ICurrentUserAccessor currentUserAccessor)
+    public PesoAuthorizationGate(
+        ICurrentUserAccessor currentUserAccessor,
+        IPersistenceAuthorshipAccessor authorship)
     {
         _currentUserAccessor = currentUserAccessor
             ?? throw new ArgumentNullException(nameof(currentUserAccessor));
+        _authorship = authorship
+            ?? throw new ArgumentNullException(nameof(authorship));
     }
 
     /// <summary>
@@ -27,7 +38,7 @@ public sealed class PesoAuthorizationGate
     /// entry is enough for core (create/edit/submit) use cases; <see
     /// cref="PesoAprovarCapabilityId"/> is required for approval/decision/
     /// reopen/delete-as-Responsável. On success returns the actor identity
-    /// (actor id + display name) for audit attribution.
+    /// (canonical actor id + display name) for audit attribution.
     /// </summary>
     public Result<PesoExecutor, DomainError> Require(params string[] anyOfCapabilityIds)
     {
@@ -42,16 +53,22 @@ public sealed class PesoAuthorizationGate
                 "PESO_FORBIDDEN",
                 "O módulo Peso não está autorizado para esta identidade."));
 
+        var actorId = _authorship.Current.ActorId;
+        if (string.IsNullOrWhiteSpace(actorId))
+            return Result<PesoExecutor, DomainError>.Failure(DomainError.Forbidden(
+                "PESO_FORBIDDEN",
+                "No canonical actor resolved for this request."));
+
         if (anyOfCapabilityIds is null || anyOfCapabilityIds.Length == 0)
             return Result<PesoExecutor, DomainError>.Success(new PesoExecutor(
-                user.InternalUserId.ToString(), user.DisplayName)
+                actorId, user.DisplayName)
             {
                 HasAprovarRole = user.HasCapability(PesoModuleCatalog.PesoAprovarCapabilityId)
             });
 
         if (anyOfCapabilityIds.Any(user.HasCapability))
             return Result<PesoExecutor, DomainError>.Success(new PesoExecutor(
-                user.InternalUserId.ToString(), user.DisplayName)
+                actorId, user.DisplayName)
             {
                 HasAprovarRole = user.HasCapability(PesoModuleCatalog.PesoAprovarCapabilityId)
             });

@@ -1,3 +1,4 @@
+using BA.Dmo.UnitTests.Shared.Persistence;
 using System.Text.Json;
 using BA.Dmo.Application.Modules.JobOn;
 using BA.Dmo.Application.Shared.Access;
@@ -29,7 +30,7 @@ public class JobOnServiceTests
 
     public JobOnServiceTests()
     {
-        var gate = new JobOnAuthorizationGate(_identity);
+        var gate = new JobOnAuthorizationGate(_identity, new CanonicalActorFakeAuthorship("jobon-canonical-actor"));
         _service = new JobOnService(
             gate, _repository, _userContext, new FixedClock(
                 new DateTimeOffset(2026, 8, 17, 18, 0, 0, TimeSpan.Zero)),
@@ -80,6 +81,24 @@ public class JobOnServiceTests
         Assert.Equal("202608", jobOn.ProductionCode);
         Assert.Equal("LINHA-1", jobOn.MachineCode);
         Assert.Contains(_repository.AuditEvents, a => a.EventType == "jobon.criar");
+    }
+
+    [Fact]
+    public async Task Create_AttributedToCanonicalActor_NotAuthUserGuid()
+    {
+        // Regression (PROD smoke 2026-09-10): the executor actor must be the
+        // canonical internal_users.actor_id (authorship), never the auth-user
+        // Guid — job_on_revision.saved_by and job_on_audit_event.actor_id are
+        // FKs to internal_users(actor_id) and 23503'd for readable actor ids.
+        var result = await _service.CreateAsync(new CreateJobOnRequest("202609", "LINHA-1", Start, null, "9262T288"));
+
+        Assert.True(result.IsSuccess);
+        var revision = Assert.Single(_repository.Revisions);
+        Assert.Equal("jobon-canonical-actor", revision.SavedBy);
+        Assert.Contains(_repository.AuditEvents,
+            a => a.EventType == "jobon.criar" && a.ActorId == "jobon-canonical-actor");
+        Assert.DoesNotContain(_repository.AuditEvents,
+            a => a.ActorId == "aaaaaaaa-0000-0000-0000-000000000001");
     }
 
     [Theory]
@@ -153,7 +172,7 @@ public class JobOnServiceTests
         Assert.Null(revision.WeightSnapshot);
         Assert.Null(revision.ProcessSnapshot);
         Assert.Empty(revision.Components ?? Array.Empty<JobOnComponent>());
-        Assert.Equal("aaaaaaaa-0000-0000-0000-000000000001", revision.SavedBy);
+        Assert.Equal("jobon-canonical-actor", revision.SavedBy);
 
         var audit = Assert.Single(_repository.AuditEvents, a => a.EventType == "jobon.criar");
         Assert.Equal(revision.JobOnRevisionId, audit.RevisionId);
@@ -562,7 +581,7 @@ public class JobOnServiceTests
         Assert.Equal(JobOnLifecycleState.Cancelado, stored.LifecycleState);
         Assert.Null(stored.ClosedAtUtc);
         Assert.Equal(new DateTime(2026, 8, 17, 18, 0, 0, DateTimeKind.Utc), stored.CancelledAtUtc);
-        Assert.Equal("aaaaaaaa-0000-0000-0000-000000000001", stored.CancelledBy);
+        Assert.Equal("jobon-canonical-actor", stored.CancelledBy);
         Assert.Equal("Ordem anulada", stored.CancelReason);
         Assert.Single(_repository.AuditEvents, a => a.EventType == "jobon.transicao");
     }
@@ -620,7 +639,7 @@ public class JobOnServiceTests
         var update = Assert.Single(_repository.VerificationUpdates);
         Assert.Equal(occurrenceId, update.OccurrenceId);
         Assert.Equal("confirmada", update.Status);
-        Assert.Equal("aaaaaaaa-0000-0000-0000-000000000001", update.CompletedBy);
+        Assert.Equal("jobon-canonical-actor", update.CompletedBy);
         Assert.Equal(new DateTime(2026, 8, 17, 18, 0, 0, DateTimeKind.Utc), update.CompletedAt);
     }
 

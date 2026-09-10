@@ -1,7 +1,9 @@
+using BA.Dmo.UnitTests.Shared.Persistence;
 using System.Globalization;
 using System.Text.Json;
 using BA.Dmo.Application.Modules.Ferramentas;
 using BA.Dmo.Application.Modules.JobOn;
+using BA.Dmo.Application.Shared.Persistence;
 using BA.Dmo.Domain.Modules.Ferramentas;
 using BA.Dmo.Domain.Modules.JobOn;
 using BA.Dmo.Domain.Shared.Access;
@@ -54,7 +56,7 @@ public class JobOnVerificationConfirmationTests
 
     public JobOnVerificationConfirmationTests()
     {
-        var gate = new JobOnAuthorizationGate(_identity);
+        var gate = new JobOnAuthorizationGate(_identity, new IdentityDrivenAuthorship(_identity));
         _service = new JobOnService(
             gate, _repository, _userContext, new FixedClock(new DateTimeOffset(FixedClockUtc)),
             _toolLookup);
@@ -142,7 +144,7 @@ public class JobOnVerificationConfirmationTests
         var audit = Assert.Single(_repository.AuditEvents, a => a.EventType == "jobon.verificacao.confirmar");
         Assert.Equal(jobOnId, audit.JobId);                       // correct JobOnId
         Assert.Equal(revisionId, audit.RevisionId);               // correct revision ownership
-        Assert.Equal(OperatorActorId, audit.ActorId);             // the confirming actor
+        Assert.Equal("jobon-canonical-actor", audit.ActorId);             // the confirming actor
         Assert.NotNull(audit.Before);
         Assert.NotNull(audit.After);
 
@@ -153,7 +155,7 @@ public class JobOnVerificationConfirmationTests
         var after = JsonSerializer.Deserialize<JsonElement>(audit.After!);
         Assert.Equal(occurrenceId, after.GetProperty("occurrence_id").GetGuid());
         Assert.Equal("confirmada", after.GetProperty("status").GetString());
-        Assert.Equal(OperatorActorId, after.GetProperty("completed_by").GetString());
+        Assert.Equal("jobon-canonical-actor", after.GetProperty("completed_by").GetString());
         Assert.Equal(
             FixedClockUtc,
             DateTime.Parse(after.GetProperty("completed_at_utc").GetString()!, CultureInfo.InvariantCulture)
@@ -172,7 +174,7 @@ public class JobOnVerificationConfirmationTests
 
         Assert.True(result.IsSuccess);
         var stored = await _repository.GetByIdAsync(jobOnId);
-        Assert.Equal(OperatorActorId, FindOccurrence(stored!, occurrenceId)!.CompletedBy);
+        Assert.Equal("jobon-canonical-actor", FindOccurrence(stored!, occurrenceId)!.CompletedBy);
     }
 
     [Fact]
@@ -206,7 +208,7 @@ public class JobOnVerificationConfirmationTests
         var flattened = reloaded!.CurrentRevision!.Verifications!
             .Single(v => v.JobOnVerificationOccurrenceId == occurrenceId);
         Assert.Equal("confirmada", flattened.Status);
-        Assert.Equal(OperatorActorId, flattened.CompletedBy);
+        Assert.Equal("jobon-canonical-actor", flattened.CompletedBy);
         Assert.Equal(FixedClockUtc, flattened.CompletedAtUtc);
         var perComponent = reloaded.CurrentRevision.Components
             .SelectMany(c => c.Verifications ?? Array.Empty<JobOnVerificationOccurrence>())
@@ -237,7 +239,7 @@ public class JobOnVerificationConfirmationTests
         var oldOccurrence = _repository.Verifications
             .Single(v => v.JobOnVerificationOccurrenceId == occurrenceA);
         Assert.Equal("confirmada", oldOccurrence.Status);
-        Assert.Equal(OperatorActorId, oldOccurrence.CompletedBy);
+        Assert.Equal("jobon-canonical-actor", oldOccurrence.CompletedBy);
         Assert.Equal(FixedClockUtc, oldOccurrence.CompletedAtUtc);
 
         var stored = await _repository.GetByIdAsync(jobOnId);
@@ -279,7 +281,7 @@ public class JobOnVerificationConfirmationTests
         Assert.True(repeat.IsSuccess);
         var stored = await _repository.GetByIdAsync(jobOnId);
         var occurrence = FindOccurrence(stored!, occurrenceId)!;
-        Assert.Equal(OperatorActorId, occurrence.CompletedBy); // the FIRST actor wins
+        Assert.Equal("jobon-canonical-actor", occurrence.CompletedBy); // the FIRST actor wins
         Assert.Equal(FixedClockUtc, occurrence.CompletedAtUtc);
         Assert.Single(_repository.VerificationUpdates);
         Assert.Single(_repository.AuditEvents, a => a.EventType == "jobon.verificacao.confirmar");
@@ -428,7 +430,7 @@ public class JobOnVerificationConfirmationTests
             .Single();
         Assert.NotEqual(occurrenceA, newOccurrence.JobOnVerificationOccurrenceId);
         Assert.Equal("confirmada", newOccurrence.Status);
-        Assert.Equal(OperatorActorId, newOccurrence.CompletedBy);
+        Assert.Equal("jobon-canonical-actor", newOccurrence.CompletedBy);
         Assert.Equal(FixedClockUtc, newOccurrence.CompletedAtUtc);
         // The repository-level row of the previous revision's occurrence is unchanged.
         Assert.Equal("confirmada", _repository.Verifications
@@ -473,7 +475,7 @@ public class JobOnVerificationConfirmationTests
         var stored = await _repository.GetByIdAsync(jobOnId);
         var newOccurrence = FindOccurrence(stored!, newOccurrenceId)!;
         Assert.Equal("confirmada", newOccurrence.Status); // state preserved, not reset
-        Assert.Equal(OperatorActorId, newOccurrence.CompletedBy);
+        Assert.Equal("jobon-canonical-actor", newOccurrence.CompletedBy);
         Assert.Equal(FixedClockUtc, newOccurrence.CompletedAtUtc);
     }
 
@@ -584,6 +586,31 @@ public class JobOnVerificationConfirmationTests
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(kind));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Canonical authorship mirroring the current test identity: maps each
+    /// auth-user Guid used by <see cref="FakeCurrentUserAccessor"/> to its
+    /// canonical internal_users.actor_id so per-actor semantics (first actor
+    /// wins, another actor cannot overwrite) keep meaning under the gate rule
+    /// that executors are canonical actor_ids, never auth Guids.
+    /// </summary>
+    private sealed class IdentityDrivenAuthorship(FakeCurrentUserAccessor identity)
+        : IPersistenceAuthorshipAccessor
+    {
+        public PersistenceAuthorship Current
+        {
+            get
+            {
+                var actor = identity.Current?.InternalUserId switch
+                {
+                    var g when g == Guid.Parse(OperatorBActorId) => "jobon-canonical-actor-b",
+                    var g when g == Guid.Parse(ResponsibleActorId) => "jobon-canonical-actor-resp",
+                    _ => "jobon-canonical-actor"
+                };
+                return new PersistenceAuthorship(actor, Start);
             }
         }
     }

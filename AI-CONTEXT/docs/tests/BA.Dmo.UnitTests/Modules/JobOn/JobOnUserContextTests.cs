@@ -1,3 +1,4 @@
+using BA.Dmo.UnitTests.Shared.Persistence;
 using BA.Dmo.Application.Modules.JobOn;
 using BA.Dmo.Application.Shared.Access;
 using BA.Dmo.Domain.Modules.JobOn;
@@ -26,7 +27,7 @@ public class JobOnUserContextTests
 
     public JobOnUserContextTests()
     {
-        var gate = new JobOnAuthorizationGate(_identity);
+        var gate = new JobOnAuthorizationGate(_identity, new CanonicalActorFakeAuthorship("jobon-canonical-actor"));
         _service = new JobOnService(
             gate, _repository, _userContext, new LocalFixedClock(
                 new DateTimeOffset(2026, 8, 17, 18, 0, 0, TimeSpan.Zero)),
@@ -50,7 +51,7 @@ public class JobOnUserContextTests
 
         var set = await _service.SetCurrentOpenAsync(jobOn.Id);
         Assert.True(set.IsSuccess);
-        Assert.Equal(LocalFakeCurrentUserAccessor.ExecutorId.ToString(), _userContext.LastActorId);
+        Assert.Equal("jobon-canonical-actor", _userContext.LastActorId);
         Assert.Equal(jobOn.Id, _userContext.Current!.JobOnId);
         Assert.Equal("202601", _userContext.Current.ProductionCode);
         Assert.Equal("B1", _userContext.Current.MachineCode);
