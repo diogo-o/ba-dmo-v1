@@ -486,11 +486,24 @@ VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'reparacao_externa', @Action,
         Qty = row.qty as decimal?,
         IndividualNumber = row.individual_number as string,
         Picked = row.picked,
-        OutAtUtc = row.out_at_utc as DateTimeOffset?,
+        OutAtUtc = ToDateTimeOffset(row.out_at_utc),
         OutOperatorId = row.out_operator_id as string,
-        InAtUtc = row.in_at_utc as DateTimeOffset?,
+        InAtUtc = ToDateTimeOffset(row.in_at_utc),
         InOperatorId = row.in_operator_id as string,
         Status = row.status as string ?? "pendente"
+    };
+
+    /// <summary>
+    /// Npgsql surfaces timestamptz as <see cref="DateTime"/> on dynamic rows; the
+    /// <c>as DateTimeOffset?</c> cast would silently yield null because `as` never
+    /// applies the DateTime→DateTimeOffset implicit conversion. Convert explicitly.
+    /// </summary>
+    private static DateTimeOffset? ToDateTimeOffset(object? value) => value switch
+    {
+        null or DBNull => null,
+        DateTimeOffset offset => offset,
+        DateTime dateTime => new DateTimeOffset(dateTime),
+        _ => null
     };
 
     private static Repairer MapRepairer(dynamic row) => new()

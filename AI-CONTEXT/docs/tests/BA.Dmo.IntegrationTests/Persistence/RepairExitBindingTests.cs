@@ -86,6 +86,89 @@ public sealed class RepairExitBindingTests
         }
     }
 
+    [Fact]
+    public async Task PickupAndReturn_Facts_RoundTripOutAndInTimestamps()
+    {
+        if (SkipIfNoDatabase()) return;
+        var (actorId, templateId, repairerId) = await SeedActorAndRepairerAsync();
+        var pieceId = Guid.NewGuid();
+        var lotId = Guid.NewGuid();
+        var referenceId = Guid.NewGuid();
+        var reference = "CM-BIND-" + Guid.NewGuid().ToString("N")[..8];
+        await ExecuteAsync(
+            """
+            INSERT INTO tool_references (tool_reference_id, tool_type, ref_code)
+            VALUES (@ReferenceId, 'CM', @Reference);
+            INSERT INTO tool_lotes (tool_lote_id, tool_reference_id, lote)
+            VALUES (@LotId, @ReferenceId, 'BIND-LOT');
+            INSERT INTO physical_pieces (physical_piece_id, tool_lote_id, sequence, number)
+            VALUES (@PieceId, @LotId, 1, 'BIND-N');
+            """,
+            new NpgsqlParameter("ReferenceId", referenceId),
+            new NpgsqlParameter("Reference", reference),
+            new NpgsqlParameter("LotId", lotId),
+            new NpgsqlParameter("PieceId", pieceId));
+
+        try
+        {
+            var factory = new DbConnectionFactory(ConnectionString!);
+            var repository = new DapperRepairRepository(factory);
+
+            var exit = RepairExit.Create(RepairType.CM, null, null, new DateTimeOffset(2026, 9, 10, 8, 0, 0, TimeSpan.Zero), actorId);
+            Assert.True(exit.IsSuccess);
+
+            Guid exitId;
+            Guid itemId = Guid.Empty;
+            await using (var uow = await new DapperRepairUnitOfWorkFactory(factory).BeginAsync())
+            {
+                exitId = await repository.CreateExitAsync(uow, exit.Value, null, null);
+                var itemResult = RepairExitItem.CreateCmMf(exitId, pieceId, "BIND-N", RepairType.CM);
+                Assert.True(itemResult.IsSuccess);
+                itemId = itemResult.Value.RepairExitItemId;
+                var created = await repository.AddItemAsync(uow, itemResult.Value);
+                // Confirm pickup + return in the same unit of work, mirroring the service.
+                itemResult.Value.ConfirmPickedOut(new DateTimeOffset(2026, 9, 10, 9, 0, 0, TimeSpan.Zero), actorId);
+                await repository.ConfirmItemPickedAsync(uow, itemResult.Value, default);
+                itemResult.Value.ConfirmReturned(new DateTimeOffset(2026, 9, 10, 10, 0, 0, TimeSpan.Zero), actorId);
+                await repository.ConfirmItemReturnedAsync(uow, itemResult.Value, default);
+                await uow.CommitAsync();
+            }
+
+            var items = await repository.GetExitItemsAsync(exitId);
+            var item = Assert.Single(items, i => i.RepairExitItemId == itemId);
+            // The timestamptz readback regression: `as DateTimeOffset?` returned
+            // null for Npgsql's DateTime values; the facts must surface verbatim.
+            Assert.NotNull(item.OutAtUtc);
+            Assert.NotNull(item.InAtUtc);
+            Assert.Equal(new DateTimeOffset(2026, 9, 10, 9, 0, 0, TimeSpan.Zero), item.OutAtUtc!.Value.ToUniversalTime());
+            Assert.Equal(new DateTimeOffset(2026, 9, 10, 10, 0, 0, TimeSpan.Zero), item.InAtUtc!.Value.ToUniversalTime());
+            Assert.Equal(actorId, item.OutOperatorId);
+            Assert.Equal(actorId, item.InOperatorId);
+            Assert.Equal("devolvido", item.Status);
+        }
+        finally
+        {
+            await ExecuteAsync(
+                """
+                DELETE FROM repair_exit_items
+                WHERE repair_exit_id IN (SELECT repair_exit_id FROM repair_exits WHERE created_by = @ActorId);
+                DELETE FROM repair_exits WHERE created_by = @ActorId;
+                DELETE FROM physical_pieces WHERE physical_piece_id = @PieceId;
+                DELETE FROM tool_lotes WHERE tool_lote_id = @LotId;
+                DELETE FROM tool_references WHERE tool_reference_id = @ReferenceId;
+                DELETE FROM repairers WHERE repairer_id = @RepairerId;
+                DELETE FROM internal_users WHERE actor_id = @ActorId;
+                DELETE FROM access_templates WHERE template_id = @TemplateId;
+                """,
+                new NpgsqlParameter("ActorId", actorId),
+                new NpgsqlParameter("TemplateId", templateId),
+                new NpgsqlParameter("RepairerId", repairerId),
+                new NpgsqlParameter("PieceId", pieceId),
+                new NpgsqlParameter("LotId", lotId),
+                new NpgsqlParameter("ReferenceId", referenceId));
+        }
+    }
+
     private static bool SkipIfNoDatabase()
     {
         if (!string.IsNullOrWhiteSpace(ConnectionString)) return false;
