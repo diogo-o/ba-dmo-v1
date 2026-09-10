@@ -106,12 +106,48 @@ public sealed class ArmazemService
                 "ARMZ_TOOL_NOT_IN_WAREHOUSE",
                 "A ferramenta não está registada como presente no Armazém."));
 
+        // Manual 40 §10.2 — Saída → Reparação REQUIRES the canonical repairer directory
+        // selection, associated with the physical movement and historically traceable.
+        // Only the canonical identity (repairers.repairer_id, TD-15) is accepted; no
+        // fallback mappings, no free text. Other destinations remain unaffected.
+        Guid? repairerId = null;
+        string? repairerName = null;
+        var destination = request.Destination?.Trim();
+        if (string.Equals(destination, "reparacao", StringComparison.OrdinalIgnoreCase))
+        {
+            if (request.RepairerId is null || request.RepairerId == Guid.Empty)
+                return Result<bool, DomainError>.Failure(DomainError.Validation(
+                    "ARMZ_REPAIRER_REQUIRED",
+                    "A Saída para Reparação requer a seleção de um reparador do diretório canónico."));
+
+            var repairer = await _repository.GetRepairerByIdAsync(request.RepairerId.Value, ct);
+            if (repairer is null)
+                return Result<bool, DomainError>.Failure(DomainError.NotFound(
+                    "ARMZ_REPAIRER_NOT_FOUND",
+                    "O reparador selecionado não está registado no diretório canónico."));
+            if (!repairer.Active)
+                return Result<bool, DomainError>.Failure(DomainError.Validation(
+                    "ARMZ_REPAIRER_INACTIVE",
+                    "O reparador selecionado está desativado."));
+
+            repairerId = repairer.RepairerId;
+            repairerName = repairer.Name;
+        }
+        else if (request.RepairerId is not null)
+        {
+            return Result<bool, DomainError>.Failure(DomainError.Validation(
+                "ARMZ_REPAIRER_DESTINATION",
+                "O reparador só é associado a Saídas com destino Reparação."));
+        }
+
         var now = _clock.UtcNow;
         var movement = new WarehouseMovement
         {
             WarehouseStockId = stock.WarehouseStockId,
             Direction = WarehouseMovementDirection.Out,
-            Destination = request.Destination,
+            Destination = destination,
+            RepairerId = repairerId,
+            RepairerName = repairerName,
             ActorId = gate.Value.ActorId,
             OccurredAtUtc = now
         };
@@ -120,7 +156,9 @@ public sealed class ArmazemService
             stock.WarehouseStockId, gate.Value.ActorId, now, movement, ct);
         await _repository.InsertAuditEventAsync(
             stock.WarehouseStockId, "armazem.saida", null,
-            $"{tool.Value.Reference}|{tool.Value.Lot}", gate.Value.ActorId, ct);
+            $"{tool.Value.Reference}|{tool.Value.Lot}" +
+            (repairerId is not null ? $"|repairer={repairerName}" : string.Empty),
+            gate.Value.ActorId, ct);
         return Result<bool, DomainError>.Success(true);
     }
 
@@ -339,7 +377,9 @@ public sealed class ArmazemService
                 fact.PositionCode,
                 movement.Destination,
                 movement.ActorId,
-                movement.OccurredAtUtc));
+                movement.OccurredAtUtc,
+                movement.RepairerId,
+                movement.RepairerName));
         }
 
         return Result<IReadOnlyList<ArmazemMovementRow>, DomainError>.Success(rows.AsReadOnly());
@@ -358,8 +398,23 @@ public sealed class ArmazemService
         var movements = await _repository.GetMovementHistoryAsync(tool.Value.ToolId, ct);
         var entries = movements.Select(m => new ArmazemHistoryEntry(
             WarehouseMovementDirectionCodec.ToStorage(m.Direction), null, m.Destination,
-            null, m.ActorId, m.OccurredAtUtc)).ToList();
+            null, m.ActorId, m.OccurredAtUtc, m.RepairerId, m.RepairerName)).ToList();
         return Result<IReadOnlyList<ArmazemHistoryEntry>, DomainError>.Success(entries.AsReadOnly());
+    }
+
+    /// <summary>
+    /// Read-only listing of the shared canonical repairer directory
+    /// (repairers, TD-15) for the Saída → Reparação selection (Manual 40 §10.2).
+    /// Armazém never edits the directory; it consumes it as the canonical source.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<ArmazemRepairerOption>, DomainError>> ListRepairersAsync(
+        bool onlyActive, CancellationToken ct = default)
+    {
+        var gate = _gate.Require();
+        if (gate.IsFailure) return Result<IReadOnlyList<ArmazemRepairerOption>, DomainError>.Failure(gate.Error);
+
+        var repairers = await _repository.ListRepairersAsync(onlyActive, ct);
+        return Result<IReadOnlyList<ArmazemRepairerOption>, DomainError>.Success(repairers);
     }
 
     // ---- helpers -----------------------------------------------------------

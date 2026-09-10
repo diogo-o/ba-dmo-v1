@@ -97,6 +97,12 @@
                         <option value="reparacao">Reparação</option>
                     </select>
                 </div>
+                <div class="dmo-field" id="saidaRepairerField" hidden>
+                    <label for="saidaRepairer">Reparador (diretório canónico)</label>
+                    <select id="saidaRepairer">
+                        <option value="">Selecionar reparador…</option>
+                    </select>
+                </div>
                 <div class="dmo-field">
                     <label for="saidaObs">Observações</label>
                     <input id="saidaObs" type="text" autocomplete="off" />
@@ -187,10 +193,11 @@
                             <th>Posição</th>
                             <th>Destino</th>
                             <th>Operador</th>
+                            <th>Reparador</th>
                         </tr>
                     </thead>
                     <tbody id="recentBody">
-                        <tr><td colspan="8" class="empty">A carregar movimentos…</td></tr>
+                        <tr><td colspan="9" class="empty">A carregar movimentos…</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -378,8 +385,8 @@
                 </div>
                 <div class="dmo-table-wrap armazem-history-table">
                     <table class="dmo-table">
-                        <thead><tr><th>Data/hora</th><th>Tipo</th><th>Referência</th><th>Lote / N.º</th><th>Movimento</th><th>Posição</th><th>Destino</th><th>Operador</th></tr></thead>
-                        <tbody id="historicoBody"><tr><td colspan="8" class="empty">A carregar movimentos…</td></tr></tbody>
+                        <thead><tr><th>Data/hora</th><th>Tipo</th><th>Referência</th><th>Lote / N.º</th><th>Movimento</th><th>Posição</th><th>Destino</th><th>Operador</th><th>Reparador</th></tr></thead>
+                        <tbody id="historicoBody"><tr><td colspan="9" class="empty">A carregar movimentos…</td></tr></tbody>
                     </table>
                 </div>
                 <div class="armazem-list-footer">

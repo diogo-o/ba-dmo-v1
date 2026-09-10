@@ -11,13 +11,18 @@ public sealed record RegistrarEntradaRequest(
     string? Destination,
     string? Observations);
 
-/// <summary>Register an immediate withdrawal (Retirar / Saída) — destination optional.</summary>
+/// <summary>
+/// Register an immediate withdrawal (Retirar / Saída). Destination optional; when the
+/// destination is Reparação, <see cref="RepairerId"/> is REQUIRED and must reference the
+/// canonical repairer directory (<c>repairers</c> — TD-15, Manual 40 §10.2).
+/// </summary>
 public sealed record RegistrarSaidaRequest(
     string ToolType,
     string? Reference,
     string? Lot,
     string? Destination,
-    string? Observations);
+    string? Observations,
+    Guid? RepairerId = null);
 
 /// <summary>Search tools or positions (Consulta).</summary>
 public sealed record ConsultarRequest(
@@ -67,7 +72,9 @@ public sealed record ArmazemHistoryEntry(
     string? Destination,
     string? Observations,
     string? ActorId,
-    DateTimeOffset OccurredAtUtc);
+    DateTimeOffset OccurredAtUtc,
+    Guid? RepairerId = null,
+    string? RepairerName = null);
 
 /// <summary>
 /// Read-only movement projection used by the Armazém recent/history surfaces.
@@ -84,4 +91,17 @@ public sealed record ArmazemMovementRow(
     string? PositionCode,
     string? Destination,
     string? ActorId,
-    DateTimeOffset OccurredAtUtc);
+    DateTimeOffset OccurredAtUtc,
+    Guid? RepairerId = null,
+    string? RepairerName = null);
+
+/// <summary>
+/// Read-only option from the SHARED canonical repairer directory
+/// (<c>repairers</c>, TD-15). Armazém consumes it in read-only; the directory is
+/// maintained at its canonical source (Reparação/Boquilhas surfaces). Selected on
+/// Saída → Reparação and associated with the physical movement (Manual 40 §10.2).
+/// </summary>
+public sealed record ArmazemRepairerOption(
+    Guid RepairerId,
+    string Name,
+    bool Active);

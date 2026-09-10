@@ -15,9 +15,29 @@ public sealed class FakeArmazemRepository : IArmazemRepository
     public List<WarehouseMovement> Movements { get; } = new();
     public List<(Guid? entityId, string eventType, string? before, string? after, string actor)> AuditEvents { get; } = new();
 
+    /// <summary>Canonical repairer directory (repairers, TD-15) mirroring the read-only lookup.</summary>
+    public Dictionary<Guid, ArmazemRepairerOption> Repairers { get; } = new();
+
     public int NextLocationSeq = 1;
 
     public bool FailAtomicWrite { get; set; }
+
+    public ArmazemRepairerOption SeedRepairer(string name, bool active = true)
+    {
+        var option = new ArmazemRepairerOption(Guid.NewGuid(), name, active);
+        Repairers[option.RepairerId] = option;
+        return option;
+    }
+
+    public Task<IReadOnlyList<ArmazemRepairerOption>> ListRepairersAsync(bool onlyActive, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<ArmazemRepairerOption>>(
+            Repairers.Values
+                .Where(r => !onlyActive || r.Active)
+                .OrderBy(r => r.Name, StringComparer.Ordinal)
+                .ToList());
+
+    public Task<ArmazemRepairerOption?> GetRepairerByIdAsync(Guid repairerId, CancellationToken ct = default)
+        => Task.FromResult(Repairers.GetValueOrDefault(repairerId));
 
     public Task<Guid> GetOrCreateLocationAsync(string code, string? kind, CancellationToken ct = default)
     {
@@ -74,7 +94,11 @@ public sealed class FakeArmazemRepository : IArmazemRepository
             stock.ReleasedAtUtc = releasedAtUtc;
             stock.ReleasedBy = releasedBy;
         }
-        Movements.Add(ToMovementWithStock(movement, stockId));
+        var stored = ToMovementWithStock(movement, stockId);
+        // Mirror the read path's LEFT JOIN on repairers: resolve the current name.
+        if (stored.RepairerId is not null && Repairers.TryGetValue(stored.RepairerId.Value, out var repairer))
+            stored.RepairerName = repairer.Name;
+        Movements.Add(stored);
         return Task.CompletedTask;
     }
 
@@ -160,6 +184,8 @@ public sealed class FakeArmazemRepository : IArmazemRepository
         Direction = m.Direction,
         Qty = m.Qty,
         Destination = m.Destination,
+        RepairerId = m.RepairerId,
+        RepairerName = m.RepairerName,
         ActorId = m.ActorId,
         OccurredAtUtc = m.OccurredAtUtc
     };

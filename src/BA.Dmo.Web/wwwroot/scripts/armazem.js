@@ -60,6 +60,7 @@
       if (empty) empty.hidden = true;
       const form = el(btn.dataset.open + "Form");
       if (form) form.hidden = false;
+      if (form && form.id === "saidaForm") loadSaidaRepairers();
     });
   });
   document.querySelectorAll("[data-close]").forEach((btn) => {
@@ -70,6 +71,37 @@
       if (empty) empty.hidden = false;
     });
   });
+
+  // ---- Saída → Reparação: canonical repairer directory (Manual 40 §10.2) ----
+  let saidaRepairersLoaded = false;
+
+  async function loadSaidaRepairers() {
+    const select = el("saidaRepairer");
+    if (!select || saidaRepairersLoaded) return;
+    try {
+      const repairers = await api("/api/armazem/repairers?onlyActive=true") || [];
+      select.querySelectorAll("option:not(:first-child)").forEach((option) => option.remove());
+      repairers.forEach((repairer) => {
+        const option = document.createElement("option");
+        option.value = repairer.repairerId;
+        option.textContent = repairer.name;
+        select.appendChild(option);
+      });
+      saidaRepairersLoaded = true;
+    } catch (_) { /* the saída remains possible for other destinations */ }
+  }
+
+  function updateSaidaRepairerField() {
+    const field = el("saidaRepairerField");
+    if (!field) return;
+    const show = el("saidaDest") && el("saidaDest").value === "reparacao";
+    field.hidden = !show;
+    if (show) loadSaidaRepairers();
+  }
+
+  const saidaDest = el("saidaDest");
+  if (saidaDest) saidaDest.addEventListener("change", updateSaidaRepairerField);
+  updateSaidaRepairerField();
 
   function readForm(formId) {
     const form = el(formId);
@@ -102,11 +134,13 @@
     try {
       await api("/api/armazem/saida", json("POST", {
         toolType: v.saidaType, reference: v.saidaRef, lot: v.saidaLot,
-        destination: v.saidaDest || null, observations: v.saidaObs
+        destination: v.saidaDest || null, observations: v.saidaObs,
+        repairerId: v.saidaRepairer || null
       }));
       say("Saída registada.");
       el("saidaForm").hidden = true;
       clearForm("saidaForm");
+      updateSaidaRepairerField();
       el("registo").querySelector(".armazem-empty").hidden = false;
       await loadRecent();
     } catch (e) { say(e.message, false); }
@@ -211,7 +245,7 @@
     const visible = recentRows.filter((row) => {
       const kind = movementKind(row);
       const searchable = [row.type, row.reference, row.lot, row.positionCode,
-        row.destination, row.actorId, movementLabel(kind)].filter(Boolean).join(" ").toLocaleLowerCase("pt-PT");
+        row.destination, row.repairerName, row.actorId, movementLabel(kind)].filter(Boolean).join(" ").toLocaleLowerCase("pt-PT");
       return (!movement || movement === kind) && (!query || searchable.includes(query));
     }).slice(0, limit);
 
@@ -219,7 +253,7 @@
     if (!visible.length) {
       const row = document.createElement("tr");
       const cell = document.createElement("td");
-      cell.colSpan = 8;
+      cell.colSpan = 9;
       cell.className = "empty";
       cell.textContent = recentRows.length ? "Sem movimentos com estes filtros." : "Sem movimentos registados.";
       row.appendChild(cell);
@@ -243,6 +277,7 @@
         appendRecentCell(row, item.positionCode);
         appendRecentCell(row, item.destination === "correcao_localizacao" ? "Correção de localização" : item.destination);
         appendRecentCell(row, item.actorId);
+        appendRecentCell(row, item.repairerName);
         body.appendChild(row);
       });
     }
@@ -259,7 +294,7 @@
       renderRecent();
     } catch (error) {
       recentRows = [];
-      body.innerHTML = '<tr><td colspan="8" class="empty"></td></tr>';
+      body.innerHTML = '<tr><td colspan="9" class="empty"></td></tr>';
       body.querySelector("td").textContent = error.message;
       el("recentCount").textContent = "0 registos · Página 1 de 1";
     }
@@ -357,7 +392,7 @@
       const occurred = new Date(row.occurredAtUtc);
       const kind = movementKind(row);
       const searchable = [row.reference, row.lot, row.positionCode, row.destination,
-        row.actorId, row.type, movementLabel(kind)].filter(Boolean).join(" ").toLocaleLowerCase("pt-PT");
+        row.repairerName, row.actorId, row.type, movementLabel(kind)].filter(Boolean).join(" ").toLocaleLowerCase("pt-PT");
       return occurred.getFullYear() === year && occurred.getMonth() === month &&
         (!selectedHistoryDate || localDateKey(occurred) === selectedHistoryDate) &&
         (!query || searchable.includes(query)) && (!type || row.type === type) &&
@@ -368,7 +403,7 @@
     if (!rows.length) {
       const row = document.createElement("tr");
       const cell = document.createElement("td");
-      cell.colSpan = 8;
+      cell.colSpan = 9;
       cell.className = "empty";
       cell.textContent = "Sem movimentos no período.";
       row.appendChild(cell);
@@ -391,6 +426,7 @@
         appendRecentCell(row, item.positionCode);
         appendRecentCell(row, item.destination === "correcao_localizacao" ? "Correção de localização" : item.destination);
         appendRecentCell(row, item.actorId);
+        appendRecentCell(row, item.repairerName);
         body.appendChild(row);
       });
     }
@@ -407,7 +443,7 @@
     } catch (error) {
       historyRows = [];
       const body = el("historicoBody");
-      body.innerHTML = '<tr><td colspan="8" class="empty"></td></tr>';
+      body.innerHTML = '<tr><td colspan="9" class="empty"></td></tr>';
       body.querySelector("td").textContent = error.message;
       renderHistoryCalendar();
     }

@@ -41,6 +41,14 @@ public interface IArmazemRepository
         int limit,
         CancellationToken ct = default);
 
+    // ---- Canonical repairer directory (read-only, shared repairers registry) ---
+    /// <summary>Lists the shared canonical repairer directory (<c>repairers</c>, TD-15),
+    /// optionally active-only, ordered by name (Manual 40 §10.2 Saída → Reparação).</summary>
+    Task<IReadOnlyList<ArmazemRepairerOption>> ListRepairersAsync(bool onlyActive, CancellationToken ct = default);
+
+    /// <summary>Resolves one canonical repairer by id (<c>repairers</c>, TD-15).</summary>
+    Task<ArmazemRepairerOption?> GetRepairerByIdAsync(Guid repairerId, CancellationToken ct = default);
+
     // ---- Audit -------------------------------------------------------------
     Task InsertAuditEventAsync(
         Guid? entityId, string eventType, string? beforeSnapshot, string? afterSnapshot,

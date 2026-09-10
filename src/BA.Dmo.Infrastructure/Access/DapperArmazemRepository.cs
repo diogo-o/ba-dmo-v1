@@ -315,9 +315,10 @@ VALUES
     {
         const string sql = @"
 SELECT m.warehouse_movement_id, m.warehouse_stock_id, m.direction, m.qty,
-       m.destination, m.actor_id, m.occurred_at_utc
+       m.destination, m.repairer_id, r.name AS repairer_name, m.actor_id, m.occurred_at_utc
 FROM warehouse_movements m
 JOIN warehouse_stock s ON s.warehouse_stock_id = m.warehouse_stock_id
+LEFT JOIN repairers r ON r.repairer_id = m.repairer_id
 WHERE s.tool_lote_id = @ToolId
 ORDER BY m.occurred_at_utc ASC;";
         var conn = await Open(_connectionFactory, ct);
@@ -338,10 +339,11 @@ ORDER BY m.occurred_at_utc ASC;";
         const string sql = @"
 SELECT s.tool_lote_id, l.code AS position_code,
        m.warehouse_movement_id, m.warehouse_stock_id, m.direction, m.qty,
-       m.destination, m.actor_id, m.occurred_at_utc
+       m.destination, m.repairer_id, r.name AS repairer_name, m.actor_id, m.occurred_at_utc
 FROM warehouse_movements m
 JOIN warehouse_stock s ON s.warehouse_stock_id = m.warehouse_stock_id
 LEFT JOIN warehouse_locations l ON l.warehouse_location_id = s.warehouse_location_id
+LEFT JOIN repairers r ON r.repairer_id = m.repairer_id
 WHERE (@FromUtc IS NULL OR m.occurred_at_utc >= @FromUtc)
   AND (@ToUtc IS NULL OR m.occurred_at_utc < @ToUtc)
 ORDER BY m.occurred_at_utc DESC, m.warehouse_movement_id DESC
@@ -393,9 +395,11 @@ VALUES (now(), EXTRACT(YEAR FROM now()), @Actor, 'armazem', @Action,
     {
         const string sql = @"
 INSERT INTO warehouse_movements
-    (warehouse_movement_id, warehouse_stock_id, direction, qty, destination, actor_id, occurred_at_utc)
+    (warehouse_movement_id, warehouse_stock_id, direction, qty, destination,
+     repairer_id, actor_id, occurred_at_utc)
 VALUES
-    (@Id, @StockId, @Direction, @Qty, @Destination, @ActorId, @OccurredAtUtc);";
+    (@Id, @StockId, @Direction, @Qty, @Destination,
+     @RepairerId, @ActorId, @OccurredAtUtc);";
         await Db.ExecuteAsync(conn, sql, new
         {
             Id = movement.WarehouseMovementId,
@@ -403,6 +407,7 @@ VALUES
             Direction = WarehouseMovementDirectionCodec.ToStorage(movement.Direction),
             Qty = (object?)movement.Qty,
             Destination = (object?)movement.Destination,
+            RepairerId = (object?)movement.RepairerId,
             ActorId = (object?)movement.ActorId,
             OccurredAtUtc = movement.OccurredAtUtc
         }, tx, ct);
@@ -415,6 +420,8 @@ VALUES
         Direction = m.Direction,
         Qty = m.Qty,
         Destination = m.Destination,
+        RepairerId = m.RepairerId,
+        RepairerName = m.RepairerName,
         ActorId = m.ActorId,
         OccurredAtUtc = m.OccurredAtUtc
     };
@@ -457,6 +464,8 @@ VALUES
         Direction = WarehouseMovementDirectionCodec.FromStorage(row.direction),
         Qty = row.qty as decimal?,
         Destination = row.destination as string,
+        RepairerId = row.repairer_id as Guid?,
+        RepairerName = row.repairer_name as string,
         ActorId = row.actor_id is null ? null : row.actor_id.ToString(),
         OccurredAtUtc = row.occurred_at_utc
     };
@@ -465,4 +474,34 @@ VALUES
         ToolId: row.tool_lote_id,
         PositionCode: row.position_code as string,
         Movement: MapMovement(row));
+
+    // ---- Canonical repairer directory (read-only) ----------------------------
+
+    public async Task<IReadOnlyList<ArmazemRepairerOption>> ListRepairersAsync(
+        bool onlyActive, CancellationToken ct = default)
+    {
+        const string sql = "SELECT repairer_id, name, active FROM repairers WHERE (@OnlyActive = FALSE OR active = TRUE) ORDER BY name;";
+        var conn = await Open(_connectionFactory, ct);
+        try
+        {
+            var rows = await Db.QueryAsync<dynamic>(conn, sql, new { OnlyActive = onlyActive }, cancellationToken: ct);
+            return rows.Select<dynamic, ArmazemRepairerOption>(r =>
+                new ArmazemRepairerOption((Guid)r.repairer_id, (string)r.name, (bool)r.active)).ToList().AsReadOnly();
+        }
+        finally { await DisposeAsync(conn); }
+    }
+
+    public async Task<ArmazemRepairerOption?> GetRepairerByIdAsync(Guid repairerId, CancellationToken ct = default)
+    {
+        const string sql = "SELECT repairer_id, name, active FROM repairers WHERE repairer_id = @Id;";
+        var conn = await Open(_connectionFactory, ct);
+        try
+        {
+            dynamic? row = await Db.QuerySingleOrDefaultAsync<dynamic>(conn, sql, new { Id = repairerId }, cancellationToken: ct);
+            return row is null
+                ? null
+                : new ArmazemRepairerOption((Guid)row.repairer_id, (string)row.name, (bool)row.active);
+        }
+        finally { await DisposeAsync(conn); }
+    }
 }

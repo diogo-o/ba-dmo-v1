@@ -1150,6 +1150,16 @@ app.MapPost("/api/armazem/saida", async (
         : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(ModulePolicies.Armazem);
 
+// Canonical repairer directory (read-only; TD-15) for the Saída → Reparação selection
+// (Manual 40 §10.2). The directory itself is maintained at its canonical source.
+app.MapGet("/api/armazem/repairers", async (
+    bool? onlyActive, ArmazemService service, CancellationToken ct) =>
+{
+    var result = await service.ListRepairersAsync(onlyActive ?? true, ct);
+    return result.IsSuccess ? Results.Ok(result.Value)
+        : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+}).RequireAuthorization(ModulePolicies.Armazem);
+
 app.MapPost("/api/armazem/corrigir-localizacao", async (
     CorrigirLocalizacaoRequest request, ArmazemService service, CancellationToken ct) =>
 {

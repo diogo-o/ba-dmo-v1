@@ -17,6 +17,19 @@ public sealed class WarehouseMovement
 
     public string? Destination { get; set; }
 
+    /// <summary>
+    /// Canonical repairer (<c>repairers.repairer_id</c>, shared directory — TD-15)
+    /// selected on a Saída → Reparação (Manual 40 §10.2). NULL for every other
+    /// destination. Persisted with the movement (append-only), historically traceable.
+    /// </summary>
+    public Guid? RepairerId { get; set; }
+
+    /// <summary>
+    /// Read-side enrichment ONLY (never persisted): the canonical repairer's current
+    /// name, resolved by the read path via LEFT JOIN on <see cref="RepairerId"/>.
+    /// </summary>
+    public string? RepairerName { get; set; }
+
     public string? ActorId { get; set; }
 
     public DateTimeOffset OccurredAtUtc { get; set; }

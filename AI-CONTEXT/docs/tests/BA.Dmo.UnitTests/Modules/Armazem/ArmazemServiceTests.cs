@@ -164,10 +164,96 @@ public class ArmazemServiceTests
     public async Task Saida_ReleasesOnlyAfterPersistence()
     {
         var toolId = SeedToolAt("2421", "CM-100", "1");
-        var result = await _service.RegistrarSaidaAsync(new RegistrarSaidaRequest("CM", "CM-100", "1", "reparacao", null));
+        var repairer = _repository.SeedRepairer("Oficina Norte");
+        var result = await _service.RegistrarSaidaAsync(new RegistrarSaidaRequest("CM", "CM-100", "1", "reparacao", null, repairer.RepairerId));
         Assert.True(result.IsSuccess);
         Assert.All(_repository.Stocks, s => Assert.False(s.IsActive));
         Assert.Contains(_repository.Movements, m => m.Direction == WarehouseMovementDirection.Out && m.Destination == "reparacao");
+        Assert.Contains(_repository.Movements, m => m.RepairerId == repairer.RepairerId);
+    }
+
+    // ---- Saída → Reparação: canonical repairer (Manual 40 §10.2) -------------
+
+    [Fact]
+    public async Task Saida_Reparacao_WithoutRepairer_IsRejected()
+    {
+        SeedToolAt("2421", "CM-100", "1");
+        var result = await _service.RegistrarSaidaAsync(new RegistrarSaidaRequest("CM", "CM-100", "1", "reparacao", null));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("ARMZ_REPAIRER_REQUIRED", result.Error.Code);
+        Assert.Empty(_repository.Movements);
+        Assert.All(_repository.Stocks, s => Assert.True(s.IsActive)); // nothing released
+    }
+
+    [Fact]
+    public async Task Saida_Reparacao_WithUnknownRepairer_IsRejected()
+    {
+        SeedToolAt("2421", "CM-100", "1");
+        var result = await _service.RegistrarSaidaAsync(new RegistrarSaidaRequest("CM", "CM-100", "1", "reparacao", null, Guid.NewGuid()));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("ARMZ_REPAIRER_NOT_FOUND", result.Error.Code);
+        Assert.Empty(_repository.Movements);
+    }
+
+    [Fact]
+    public async Task Saida_Reparacao_WithInactiveRepairer_IsRejected()
+    {
+        SeedToolAt("2421", "CM-100", "1");
+        var repairer = _repository.SeedRepairer("Oficina Sul", active: false);
+        var result = await _service.RegistrarSaidaAsync(new RegistrarSaidaRequest("CM", "CM-100", "1", "reparacao", null, repairer.RepairerId));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("ARMZ_REPAIRER_INACTIVE", result.Error.Code);
+        Assert.Empty(_repository.Movements);
+    }
+
+    [Fact]
+    public async Task Saida_Reparacao_PersistsRepairer_AndReadbackReturnsIt()
+    {
+        SeedToolAt("2421", "CM-100", "1");
+        var repairer = _repository.SeedRepairer("Oficina Norte");
+
+        var result = await _service.RegistrarSaidaAsync(new RegistrarSaidaRequest("CM", "CM-100", "1", "reparacao", null, repairer.RepairerId));
+
+        Assert.True(result.IsSuccess);
+        var movement = Assert.Single(_repository.Movements, m => m.Direction == WarehouseMovementDirection.Out);
+        Assert.Equal(repairer.RepairerId, movement.RepairerId); // canonical identity persisted on the movement
+
+        var rows = (await _service.ListMovimentosAsync(null, null, 20)).Value;
+        var row = Assert.Single(rows);
+        Assert.Equal(repairer.RepairerId, row.RepairerId);
+        Assert.Equal("Oficina Norte", row.RepairerName); // readback returns the canonical repairer
+
+        var history = (await _service.HistoricoAsync("CM", "CM-100", "1")).Value;
+        var entry = Assert.Single(history);
+        Assert.Equal(repairer.RepairerId, entry.RepairerId);
+        Assert.Equal("Oficina Norte", entry.RepairerName);
+    }
+
+    [Fact]
+    public async Task Saida_WithRepairer_ButNonReparacaoDestination_IsRejected()
+    {
+        SeedToolAt("2421", "CM-100", "1");
+        var repairer = _repository.SeedRepairer("Oficina Norte");
+        var result = await _service.RegistrarSaidaAsync(new RegistrarSaidaRequest("CM", "CM-100", "1", "producao", null, repairer.RepairerId));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("ARMZ_REPAIRER_DESTINATION", result.Error.Code);
+        Assert.Empty(_repository.Movements);
+    }
+
+    [Fact]
+    public async Task Saida_NonReparacaoDestination_IsUnaffected_NoRepairer()
+    {
+        SeedToolAt("2421", "CM-100", "1");
+        var result = await _service.RegistrarSaidaAsync(new RegistrarSaidaRequest("CM", "CM-100", "1", "producao", null));
+
+        Assert.True(result.IsSuccess);
+        var movement = Assert.Single(_repository.Movements, m => m.Direction == WarehouseMovementDirection.Out);
+        Assert.Equal("producao", movement.Destination);
+        Assert.Null(movement.RepairerId); // non-Reparação destinations never carry a repairer
     }
 
     [Fact]

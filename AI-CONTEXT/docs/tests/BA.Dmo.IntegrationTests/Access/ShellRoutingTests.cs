@@ -874,6 +874,14 @@ public class ShellRoutingTests : IClassFixture<ShellRoutingTests.ShellFixture>
                 string? afterSnapshot,
                 string actorId,
                 CancellationToken ct = default) => Task.CompletedTask;
+
+            public Task<IReadOnlyList<ArmazemRepairerOption>> ListRepairersAsync(
+                bool onlyActive, CancellationToken ct = default) =>
+                Task.FromResult<IReadOnlyList<ArmazemRepairerOption>>(Array.Empty<ArmazemRepairerOption>());
+
+            public Task<ArmazemRepairerOption?> GetRepairerByIdAsync(
+                Guid repairerId, CancellationToken ct = default) =>
+                Task.FromResult<ArmazemRepairerOption?>(null);
         }
 
         private sealed class FakeArmazemToolIdentityResolver : IToolIdentityResolver
