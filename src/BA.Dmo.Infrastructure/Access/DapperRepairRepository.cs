@@ -59,7 +59,7 @@ INSERT INTO repair_exits
     (repair_exit_id, repair_type, repairer_id, repairer_snapshot, planned_date,
      status, created_at_utc, created_by, updated_at_utc)
 VALUES
-    (@Id, @RepairType, @RepairerId, @Snapshot, @PlannedDate,
+    (@Id, @RepairType, @RepairerId, @Snapshot::jsonb, @PlannedDate,
      @Status, @CreatedAtUtc, @CreatedBy, @UpdatedAtUtc);";
         await Db.ExecuteAsync(connection, sql, new
         {
@@ -125,8 +125,10 @@ ORDER BY created_at_utc DESC;";
             {
                 Type = type is null ? null : RepairTypeCodec.ToStorage(type.Value),
                 Status = status is null ? null : RepairExitStatusCodec.ToStorage(status.Value),
-                From = from,
-                To = to
+                // Dapper cannot bind System.DateOnly members; convert to DateTime
+                // for the parameter (planned_date comparisons coerce date↔timestamp).
+                From = from is null ? null : (DateTime?)from.Value.ToDateTime(TimeOnly.MinValue),
+                To = to is null ? null : (DateTime?)to.Value.ToDateTime(TimeOnly.MinValue)
             }, cancellationToken: ct);
             return rows.Select<dynamic, RepairExit>(MapExit).ToList().AsReadOnly();
         }

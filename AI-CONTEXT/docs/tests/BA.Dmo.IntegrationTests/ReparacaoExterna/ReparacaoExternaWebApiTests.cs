@@ -61,6 +61,55 @@ public class ReparacaoExternaWebApiTests : IClassFixture<ReparacaoExternaWebApiT
     }
 
     [Fact]
+    public async Task AuthorizedRepExtUser_SearchTools_ReturnsToolHits()
+    {
+        _fixture.Repository.User = _fixture.ValidRepExtUser();
+        _fixture.ToolResolver.Hits = new[]
+        {
+            new RepairToolIdentity(
+                PhysicalPieceId: Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                ToolLoteId: Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                ToolReferenceId: Guid.Parse("33333333-3333-3333-3333-333333333333"),
+                Type: RepairType.CM,
+                Reference: "SMOKE-CM",
+                Lot: "1",
+                Number: "1",
+                TechnicalName: "Smoke CM")
+        };
+        var client = _fixture.CreateTestClient();
+
+        var login = await PostFormAsync(client, "/login", new() { ["email"] = "repx@ba-dmo.example", ["password"] = "correct" });
+        Assert.Equal(HttpStatusCode.Redirect, login.StatusCode);
+
+        // Regression: the endpoint used to return the Result wrapper itself,
+        // which throws during JSON serialization ("Cannot read Error of a
+        // successful Result") -> HTTP 500 on every search.
+        var response = await client.GetAsync("/api/reparacao-externa/tools?type=CM&reference=SMOKE");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("SMOKE-CM", body);
+        Assert.Contains("11111111-1111-1111-1111-111111111111", body);
+    }
+
+    [Fact]
+    public async Task AuthorizedRepExtUser_SearchTools_BqScope_ReturnsTypeScopeNot500()
+    {
+        _fixture.Repository.User = _fixture.ValidRepExtUser();
+        var client = _fixture.CreateTestClient();
+
+        var login = await PostFormAsync(client, "/login", new() { ["email"] = "repx@ba-dmo.example", ["password"] = "correct" });
+        Assert.Equal(HttpStatusCode.Redirect, login.StatusCode);
+
+        // BQ is out of the V1 module scope: the endpoint must answer the
+        // application-level REPEXT_TYPE_SCOPE error (400), never serialize the
+        // Result wrapper (which throws -> 500).
+        var response = await client.GetAsync("/api/reparacao-externa/tools?type=BQ");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("REPEXT_TYPE_SCOPE", body);
+    }
+
+    [Fact]
     public async Task UserWithoutRepExtModule_IsDenied()
     {
         _fixture.Repository.User = _fixture.UserWithoutRepExt();
@@ -100,6 +149,8 @@ public class ReparacaoExternaWebApiTests : IClassFixture<ReparacaoExternaWebApiT
     {
         public FakeIdentityRepository Repository { get; } = new();
 
+        public FakeToolResolver ToolResolver { get; } = new();
+
         public InternalUserRecord ValidRepExtUser() => new(
             ActorId: "repx-actor",
             AuthUserId: AuthUserId,
@@ -138,7 +189,7 @@ public class ReparacaoExternaWebApiTests : IClassFixture<ReparacaoExternaWebApiT
                 ReplaceSingleton<ISupabaseAuthAdapter>(services, new FakeAuthAdapter());
                 ReplaceSingleton<IInternalUserRepository>(services, Repository);
                 Replace<IRepairRepository>(services, new FakeRepairRepo());
-                Replace<IToolPieceResolver>(services, new FakeToolResolver());
+                Replace<IToolPieceResolver>(services, ToolResolver);
                 Replace<IArmazemRepairMovementPort>(services, new FakeArmazemRepair());
                 Replace<IRepairUnitOfWorkFactory>(services, new FakeUowFactory());
                 services.Configure<Microsoft.AspNetCore.Mvc.RazorPages.RazorPagesOptions>(
@@ -200,9 +251,11 @@ public class ReparacaoExternaWebApiTests : IClassFixture<ReparacaoExternaWebApiT
             public Task InsertAuditEventAsync(IDbUnitOfWork uow, Guid? id, string type, string? b, string? a, string actor, CancellationToken ct = default) => InsertAuditEventAsync(id, type, b, a, actor, ct);
         }
 
-        private sealed class FakeToolResolver : IToolPieceResolver
+        public sealed class FakeToolResolver : IToolPieceResolver
         {
-            public Task<IReadOnlyList<RepairToolIdentity>> SearchAsync(RepairType t, string? r, string? l, string? n, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<RepairToolIdentity>>(Array.Empty<RepairToolIdentity>());
+            public IReadOnlyList<RepairToolIdentity> Hits { get; set; } = Array.Empty<RepairToolIdentity>();
+
+            public Task<IReadOnlyList<RepairToolIdentity>> SearchAsync(RepairType t, string? r, string? l, string? n, CancellationToken ct = default) => Task.FromResult(Hits);
             public Task<RepairToolIdentity?> ResolveAsync(Guid pieceId, CancellationToken ct = default) => Task.FromResult<RepairToolIdentity?>(null);
         }
 

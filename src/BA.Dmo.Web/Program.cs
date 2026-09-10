@@ -1204,7 +1204,9 @@ app.MapGet("/api/reparacao-externa/tools", async (
     var repairType = ParseRepairType(type);
     if (repairType is null)
         return Results.BadRequest(new { code = "REPEXT_TYPE", message = "Tipo inválido (CM/MF)." });
-    return Results.Ok(await service.SearchToolsAsync(repairType.Value, reference, lot, number, ct));
+    var result = await service.SearchToolsAsync(repairType.Value, reference, lot, number, ct);
+    return result.IsSuccess ? Results.Ok(result.Value)
+        : Results.BadRequest(new { code = result.Error.Code, message = result.Error.Message });
 }).RequireAuthorization(ModulePolicies.ReparacaoExterna);
 
 // Create a new CM/MF external repair exit list.
