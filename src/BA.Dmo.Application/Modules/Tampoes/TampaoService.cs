@@ -227,6 +227,11 @@ public sealed class TampaoService
     {
         var gate = _gate.Require();
         if (gate.IsFailure) return Result<Guid, DomainError>.Failure(gate.Error);
+        // The requested quantity must be a positive integer BEFORE any sign handling:
+        // a negative qty must never be silently abs()ed into the opposite movement
+        // (GLM-TP-08 TAMPAO_INVALID_QUANTITY).
+        var qtyResult = TampaoRules.ValidateQuantity(request.Qty);
+        if (qtyResult.IsFailure) return Result<Guid, DomainError>.Failure(qtyResult.Error);
         return await ApplySingleBalanceAsync(request.ConfigurationId, request.Balance, +request.Qty,
             TampaoMovementType.Adicionar, gate.Value.ActorId, "tampoes.quantidade.adicionar", ct);
     }
@@ -236,6 +241,10 @@ public sealed class TampaoService
     {
         var gate = _gate.Require();
         if (gate.IsFailure) return Result<Guid, DomainError>.Failure(gate.Error);
+        // Same positive-integer guard as adicionar: a negative qty must not be
+        // abs()ed into an addition.
+        var qtyResult = TampaoRules.ValidateQuantity(request.Qty);
+        if (qtyResult.IsFailure) return Result<Guid, DomainError>.Failure(qtyResult.Error);
         return await ApplySingleBalanceAsync(request.ConfigurationId, request.Balance, -request.Qty,
             TampaoMovementType.Remover, gate.Value.ActorId, "tampoes.quantidade.remover", ct);
     }

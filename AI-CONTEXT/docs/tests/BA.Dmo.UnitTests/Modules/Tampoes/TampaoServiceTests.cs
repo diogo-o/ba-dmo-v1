@@ -80,6 +80,47 @@ public class TampaoServiceTests
         Assert.Empty(repo.Movements);
     }
 
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(0)]
+    public async Task Adicionar_NonPositiveQuantity_IsRejectedWithoutStateChange(int qty)
+    {
+        var (service, repo) = Build();
+        var cfg = repo.SeedConfiguration("28,95", "4", enchidos: 10, porEncher: 5);
+
+        var result = await service.AdicionarQuantidadeAsync(
+            new AdicionarQuantidadeRequest(cfg.TampaoConfigurationId, TampaoBalanceKind.Enchidos, qty));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(TampaoRules.InvalidQuantityCode, result.Error.Code);
+        // A negative qty must never be abs()ed into the opposite movement.
+        var saldo = repo.Saldos.Single(s => s.TampaoConfigurationId == cfg.TampaoConfigurationId);
+        Assert.Equal(10, saldo.Enchidos);
+        Assert.Equal(5, saldo.PorEncher);
+        Assert.Empty(repo.Movements);
+        Assert.Empty(repo.AuditEvents);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(0)]
+    public async Task Remover_NonPositiveQuantity_IsRejectedWithoutStateChange(int qty)
+    {
+        var (service, repo) = Build();
+        var cfg = repo.SeedConfiguration("28,95", "4", enchidos: 10, porEncher: 5);
+
+        var result = await service.RemoverQuantidadeAsync(
+            new RemoverQuantidadeRequest(cfg.TampaoConfigurationId, TampaoBalanceKind.Enchidos, qty));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(TampaoRules.InvalidQuantityCode, result.Error.Code);
+        var saldo = repo.Saldos.Single(s => s.TampaoConfigurationId == cfg.TampaoConfigurationId);
+        Assert.Equal(10, saldo.Enchidos);
+        Assert.Equal(5, saldo.PorEncher);
+        Assert.Empty(repo.Movements);
+        Assert.Empty(repo.AuditEvents);
+    }
+
     // ---- Alterar estado (atomic single movement) --------------------------------
 
     [Fact]

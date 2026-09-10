@@ -57,7 +57,7 @@ VALUES (@Id, @FieldName, @Unit, @PrecisionDigits, @DisplayOrder, @Active, @Creat
         {
             await Db.ExecuteAsync(conn, sql, new
             {
-                field.TampaoFieldDefId, field.FieldName, field.Unit, field.PrecisionDigits,
+                Id = field.TampaoFieldDefId, field.FieldName, field.Unit, field.PrecisionDigits,
                 field.DisplayOrder, field.Active, field.CreatedAtUtc, field.UpdatedAtUtc
             }, cancellationToken: ct);
             return field.TampaoFieldDefId;
@@ -112,7 +112,7 @@ VALUES (@Id, @FieldDefId, @ValueNumeric, @ValueLabel, @DisplayOrder, @Active, @C
         {
             await Db.ExecuteAsync(conn, sql, new
             {
-                value.TampaoFieldValueId, value.TampaoFieldDefId, value.ValueNumeric, value.ValueLabel,
+                Id = value.TampaoFieldValueId, FieldDefId = value.TampaoFieldDefId, value.ValueNumeric, value.ValueLabel,
                 value.DisplayOrder, value.Active, value.CreatedAtUtc, value.UpdatedAtUtc
             }, cancellationToken: ct);
             return value.TampaoFieldValueId;
