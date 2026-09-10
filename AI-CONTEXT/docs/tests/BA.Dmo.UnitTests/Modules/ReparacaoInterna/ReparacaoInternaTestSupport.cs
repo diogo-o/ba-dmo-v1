@@ -77,6 +77,9 @@ public sealed class FakeReparacaoInternaRepository : IReparacaoInternaRepository
     public List<(Guid? recordId, string? notes, string actor)> RepairEvents { get; } = new();
     public List<(string action, string entityId, string result, string actor)> AuditEvents { get; } = new();
 
+    /// <summary>Maps tool lot id → actual lot code, mirroring the read path's LEFT JOIN on tool_lotes.</summary>
+    public Dictionary<Guid, string> LotCodes { get; } = new();
+
     public bool FailInsert { get; set; }
 
     public Task<Guid> InsertAsync(IDbUnitOfWork uow, InternalRepairRecord record, CancellationToken ct = default)
@@ -87,13 +90,16 @@ public sealed class FakeReparacaoInternaRepository : IReparacaoInternaRepository
     }
 
     public Task<InternalRepairRecord?> GetByIdAsync(Guid recordId, CancellationToken ct = default)
-        => Task.FromResult(Records.FirstOrDefault(r => r.InternalRepairRecordId == recordId));
+        => Task.FromResult(Records.FirstOrDefault(r => r.InternalRepairRecordId == recordId) is { } record
+            ? EnrichLot(record)
+            : null);
 
     public Task<IReadOnlyList<InternalRepairRecord>> GetChainAsync(Guid rootRecordId, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<InternalRepairRecord>>(
             Records
                 .Where(r => r.InternalRepairRecordId == rootRecordId || r.CorrectionOfId == rootRecordId)
                 .OrderBy(r => r.CreatedAtUtc)
+                .Select(EnrichLot)
                 .ToList());
 
     public Task<IReadOnlyList<InternalRepairRecord>> ListAsync(
@@ -111,9 +117,18 @@ public sealed class FakeReparacaoInternaRepository : IReparacaoInternaRepository
             if (!seen.Add(rootId)) continue;
             if (!Matches(record, from, to, line, jobOnId, type, number, operatorId, onlyCorrected))
                 continue;
-            result.Add(record);
+            result.Add(EnrichLot(record));
         }
         return Task.FromResult<IReadOnlyList<InternalRepairRecord>>(result);
+    }
+
+    /// <summary>Resolves the actual lot code for display (mirrors the repository SQL join).</summary>
+    public InternalRepairRecord EnrichLot(InternalRepairRecord record)
+    {
+        record.LotCode ??= record.LotId is not null && LotCodes.TryGetValue(record.LotId.Value, out var code)
+            ? code
+            : null;
+        return record;
     }
 
     private static bool Matches(InternalRepairRecord record,

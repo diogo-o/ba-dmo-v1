@@ -65,12 +65,14 @@ VALUES
     public async Task<InternalRepairRecord?> GetByIdAsync(Guid recordId, CancellationToken ct = default)
     {
         const string sql = @"
-SELECT internal_repair_record_id, line, job_on_id, job_on_revision_id, production_code,
-       reference, lot_id, tool_type, individual_number,
-       operator_id, occurred_at_utc, correction_of_id, before_snapshot,
-       correction_reason, created_at_utc, created_by
-FROM internal_repair_records
-WHERE internal_repair_record_id = @Id;";
+SELECT r.internal_repair_record_id, r.line, r.job_on_id, r.job_on_revision_id, r.production_code,
+       r.reference, r.lot_id, r.tool_type, r.individual_number,
+       r.operator_id, r.occurred_at_utc, r.correction_of_id, r.before_snapshot,
+       r.correction_reason, r.created_at_utc, r.created_by,
+       tl.lote AS lot_code
+FROM internal_repair_records r
+LEFT JOIN tool_lotes tl ON tl.tool_lote_id = r.lot_id
+WHERE r.internal_repair_record_id = @Id;";
         var conn = await _connectionFactory.OpenConnectionAsync(ct);
         try
         {
@@ -83,13 +85,15 @@ WHERE internal_repair_record_id = @Id;";
     public async Task<IReadOnlyList<InternalRepairRecord>> GetChainAsync(Guid rootRecordId, CancellationToken ct = default)
     {
         const string sql = @"
-SELECT internal_repair_record_id, line, job_on_id, job_on_revision_id, production_code,
-       reference, lot_id, tool_type, individual_number,
-       operator_id, occurred_at_utc, correction_of_id, before_snapshot,
-       correction_reason, created_at_utc, created_by
-FROM internal_repair_records
-WHERE internal_repair_record_id = @RootId OR correction_of_id = @RootId
-ORDER BY created_at_utc ASC;";
+SELECT r.internal_repair_record_id, r.line, r.job_on_id, r.job_on_revision_id, r.production_code,
+       r.reference, r.lot_id, r.tool_type, r.individual_number,
+       r.operator_id, r.occurred_at_utc, r.correction_of_id, r.before_snapshot,
+       r.correction_reason, r.created_at_utc, r.created_by,
+       tl.lote AS lot_code
+FROM internal_repair_records r
+LEFT JOIN tool_lotes tl ON tl.tool_lote_id = r.lot_id
+WHERE r.internal_repair_record_id = @RootId OR r.correction_of_id = @RootId
+ORDER BY r.created_at_utc ASC;";
         var conn = await _connectionFactory.OpenConnectionAsync(ct);
         try
         {
@@ -105,8 +109,11 @@ ORDER BY created_at_utc ASC;";
         bool onlyCorrected, CancellationToken ct = default)
     {
         // Each correction chain root shows its latest valid version (brief §10).
+        // The actual lot code is resolved read-side from the persisted lot_id
+        // (LEFT JOIN tool_lotes); rows without a resolvable lot keep a null lot
+        // (displayed as '—'), never the reference (DIV-07 fix).
         var sql = @"
-SELECT DISTINCT ON (root_id) *
+SELECT DISTINCT ON (s.root_id) s.*, tl.lote AS lot_code
 FROM (
     SELECT r.internal_repair_record_id, r.line, r.job_on_id, r.job_on_revision_id, r.production_code,
            r.reference, r.lot_id, r.tool_type, r.individual_number,
@@ -123,7 +130,8 @@ FROM (
       AND (@OperatorId IS NULL OR r.operator_id = @OperatorId)
       AND (@OnlyCorrected = FALSE OR r.correction_of_id IS NOT NULL)
 ) s
-ORDER BY root_id, created_at_utc DESC;";
+LEFT JOIN tool_lotes tl ON tl.tool_lote_id = s.lot_id
+ORDER BY s.root_id, s.created_at_utc DESC;";
         var conn = await _connectionFactory.OpenConnectionAsync(ct);
         try
         {
@@ -196,6 +204,7 @@ VALUES (@OccurredAtUtc, EXTRACT(YEAR FROM @OccurredAtUtc), @Actor, 'reparacao_in
         ProductionCode = row.production_code as string,
         Reference = row.reference as string,
         LotId = row.lot_id as Guid?,
+        LotCode = row.lot_code as string,
         ToolType = InternalRepairToolTypeCodec.FromStorage(row.tool_type as string),
         IndividualNumber = (string)row.individual_number,
         OperatorId = row.operator_id as string,

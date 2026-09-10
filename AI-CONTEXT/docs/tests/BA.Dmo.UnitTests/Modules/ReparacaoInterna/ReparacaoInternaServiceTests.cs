@@ -429,4 +429,59 @@ public class ReparacaoInternaServiceTests
         var detail = (await service.GetDetailAsync(originalId)).Value;
         Assert.Equal(2, detail.CorrectionChain.Count);
     }
+
+    // ---- Lote display: the ACTUAL tool lot, never the reference (DIV-07 fix) ----
+
+    [Fact]
+    public async Task HistoryAndDetail_ShowActualLot_NotReference()
+    {
+        var (service, repo, ctx, pieces) = Build();
+        var cmLot = SeedSingleContext(ctx, "B1");
+        pieces.Seed("REF-1", "1234", cmLot, FerramentasToolType.CM);
+        repo.LotCodes[cmLot] = "L-2"; // the actual tool_lotes.lote for the persisted lot
+
+        var recordId = (await service.RegistrarReparacoesAsync(
+            Req("B1", InternalRepairToolType.CM, "1234"))).Value[0];
+
+        // Readback surfaces the REAL associated lot ("L-2"), never the reference ("REF-1").
+        var rows = (await service.ListHistoryAsync(new InternalRepairFilter(null, null, null, null, null, null, null, false), default)).Value;
+        var row = Assert.Single(rows);
+        Assert.Equal("L-2", row.Lote);
+        Assert.Equal("REF-1", row.Reference); // reference stays in its own position
+
+        var detail = (await service.GetDetailAsync(recordId)).Value;
+        Assert.Equal("L-2", detail.Lote);
+        Assert.Equal("REF-1", detail.Reference);
+
+        // The persisted relationship is the source: the displayed lot derives from
+        // the record's LotId, not from any other field.
+        var record = repo.Records.Single(r => r.InternalRepairRecordId == recordId);
+        Assert.Equal(cmLot, record.LotId);
+    }
+
+    [Fact]
+    public async Task History_WithoutResolvableLot_ShowsUnknown_NeverTheReference()
+    {
+        var (service, repo, ctx, pieces) = Build();
+        var cmLot = SeedSingleContext(ctx, "B1");
+        pieces.Seed("REF-1", "1234", cmLot, FerramentasToolType.CM);
+        // No lot code resolvable (legacy/missing row): the lot stays null — never
+        // fabricated, never echoed from the reference.
+        var recordId = (await service.RegistrarReparacoesAsync(
+            Req("B1", InternalRepairToolType.CM, "1234"))).Value[0];
+        var cmLot2 = Guid.NewGuid();
+        pieces.Seed("REF-1", "7777", cmLot2, FerramentasToolType.CM);
+        await service.RegistrarReparacoesAsync(Req("B1", InternalRepairToolType.CM, "7777"));
+
+        var rows = (await service.ListHistoryAsync(new InternalRepairFilter(null, null, null, null, null, null, null, false), default)).Value;
+        Assert.Equal(2, rows.Count);
+        var unresolved = rows.Single(r => r.IndividualNumber == "7777");
+        Assert.Null(unresolved.Lote);
+        Assert.Equal("REF-1", unresolved.Reference);
+        var resolved = rows.Single(r => r.IndividualNumber == "1234");
+        Assert.Null(resolved.Lote); // no code seeded for cmLot either → unknown, not the reference
+
+        var detail = (await service.GetDetailAsync(recordId)).Value;
+        Assert.Null(detail.Lote);
+    }
 }

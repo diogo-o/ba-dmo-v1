@@ -78,6 +78,15 @@ public sealed class InternalRepairRecord
     public bool IsCorrection => CorrectionOfId is not null;
 
     /// <summary>
+    /// Read-side enrichment ONLY (never persisted): the actual lot code
+    /// (<c>tool_lotes.lote</c>) resolved from <see cref="LotId"/> by the read path.
+    /// This is the real tool lot, never the reference; null when <see cref="LotId"/>
+    /// is null or the lot row is missing. Legacy rows without a resolvable lot keep
+    /// null (displayed as '—'), never fabricated.
+    /// </summary>
+    public string? LotCode { get; set; }
+
+    /// <summary>
     /// Creates a primary internal-repair record (R009 — NO hard blocks). Validates only the
     /// structurally-minimal facts (known line, one non-empty individual number, a type, the
     /// operator and the occurred-at). The production context is nullable assistance: if the

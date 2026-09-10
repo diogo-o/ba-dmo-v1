@@ -239,6 +239,8 @@ public sealed class ReparacaoInternaService
         // record and never re-resolves against current Job On data, so a later Job On revision
         // cannot reinterpret an old repair record. Legacy rows (no snapshot) show the persisted
         // core facts; the context columns are null (displayed as '—'), never fabricated.
+        // DIV-07 fix: the Lote column is the ACTUAL associated tool lot resolved read-side from
+        // the persisted LotId (tool_lotes.lote) — never the reference.
         var rows = records
             .Select(r => new InternalRepairHistoryRow(
                 r.InternalRepairRecordId,
@@ -246,7 +248,7 @@ public sealed class ReparacaoInternaService
                 r.Line,
                 r.ProductionCode,
                 r.Reference,
-                r.Reference,
+                r.LotCode,
                 InternalRepairToolTypeCodec.ToStorage(r.ToolType),
                 r.IndividualNumber,
                 r.OperatorId,
@@ -408,7 +410,7 @@ public sealed class ReparacaoInternaService
             record.JobOnRevisionId,
             record.ProductionCode,
             record.Reference,
-            record.Reference,
+            record.LotCode,
             InternalRepairToolTypeCodec.ToStorage(record.ToolType),
             record.IndividualNumber,
             record.OperatorId,
