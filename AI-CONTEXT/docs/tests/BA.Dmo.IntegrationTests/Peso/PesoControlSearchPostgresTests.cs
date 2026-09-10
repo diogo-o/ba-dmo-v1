@@ -101,7 +101,8 @@ public sealed class PesoControlSearchPostgresTests
         var jobOnRepository = new DapperJobOnRepository(CreateFactory("peso-dup-jobon-" + context.Suffix));
         var accessor = new PesoOperadorAccessor(context.ActorId);
         var service = new PesoService(
-            new PesoAuthorizationGate(accessor), repository, jobOnRepository,
+            new PesoAuthorizationGate(accessor, new FixedAuthorship(context.ActorId)),
+            repository, jobOnRepository,
             new FixedTestClock(new DateTimeOffset(2026, 9, 10, 8, 0, 0, TimeSpan.Zero)));
 
         var first = await service.CreateControlAsync(new CreateControlRequest(
@@ -444,6 +445,11 @@ public sealed class PesoControlSearchPostgresTests
     {
         public CurrentUser? Current => new(
             Guid.Parse(actorId), "Operador", ["peso"], Array.Empty<string>());
+    }
+
+    private sealed class FixedAuthorship(string actorId) : IPersistenceAuthorshipAccessor
+    {
+        public PersistenceAuthorship Current { get; } = new(actorId, DateTimeOffset.UtcNow);
     }
 
     private sealed class FixedTestClock(DateTimeOffset fixedUtcNow) : IClock
