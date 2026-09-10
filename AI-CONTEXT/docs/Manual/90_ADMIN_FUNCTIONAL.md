@@ -52,6 +52,8 @@ ADMIN is the **administration surface of the portal**. Its functional job is to 
 
 FUNCTIONAL RULE: Admin is for **administration of users / profiles / access templates / applications / audit**. It is **not** by itself an operational presence inside the production modules.
 
+> **SUPERSEDED-NOTE (2026-09-10) — TEMPLATE ASSOCIATION MODEL** — the older wording in this Manual (§10/§11: "one or more access templates associated per user") is SUPERSEDED by a NEWER owner decision recorded in migration `N31_template_profiles_single_assignment.sql` (rationalization pack 2026-08-27/28): the final functional model is **one effective template per user** (`internal_users.template_id` is the authority pointer; the template carries the functional profile via `access_template_profiles`). The functional rule "profile ≠ assigned modules; profile never auto-grants modules" is unaffected. See also `03_USERS_ACCESS_OPERATIONAL.md` STATUS-NOTE.
+
 ---
 
 ## 2. Is Admin a top-level assignable module?

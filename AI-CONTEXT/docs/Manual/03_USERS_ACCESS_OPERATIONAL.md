@@ -109,6 +109,8 @@ modelo funcional resolvido. Os templates de acesso geridos no Admin são a forma
 são associados ao utilizador; os mecanismos técnicos por baixo dessa atribuição são matéria de mapeamento técnico,
 não deste modelo funcional.
 
+> **STATUS-NOTE (2026-09-10) — TEMPLATE ASSOCIATION MODEL (SUPERSEDED wording)** — a passagem "Known implementation gaps: Functional model: one or more associated templates per user. Current implementation: single `template_id` per user" descreve o estado anterior. Por decisão Owner mais recente (migração `N31_template_profiles_single_assignment.sql`, pack 2026-08-27/28) o modelo final é **um template efetivo por utilizador** (`internal_users.template_id` → `access_templates` → `access_template_profiles.functional_profile`); os espelhos legados foram removidos (N33/N34). O modelo funcional "perfil ≠ módulos atribuídos" mantém-se inalterado.
+
 ---
 
 ## Implementation Pointers

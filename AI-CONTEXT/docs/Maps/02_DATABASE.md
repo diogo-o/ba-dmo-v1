@@ -55,7 +55,7 @@ Related maps: [00_INDEX.md](00_INDEX.md) · [01_DOMAIN.md](01_DOMAIN.md) · [03_
 | 12 | `tool_lotes` | N04 | Ferramentas | Current-state |
 | 13 | `physical_pieces` | N04 | Ferramentas | Current-state |
 | 14 | `tool_check_rules` | N04 | Ferramentas | Current-state/config |
-| 15 | `tool_check_occurrences` | N04 | Ferramentas | Current-state |
+| 15 | `tool_check_occurrences` | N04 | Ferramentas | **REMOVED — N42 (dormant occurrence twin; live surface = `job_on_verification_occurrence`)** |
 | 16 | `job_on` | N05 | Job On | Current-state (aggregate) |
 | 17 | `job_on_revision` | N05 | Job On | History/immutable snapshot (append-only N25) |
 | 18 | `job_on_component` | N05 | Job On | History/immutable snapshot (append-only N25) |
@@ -68,7 +68,7 @@ Related maps: [00_INDEX.md](00_INDEX.md) · [01_DOMAIN.md](01_DOMAIN.md) · [03_
 | 25 | `peso_lotes` | N06 | Peso (Controlo area) | Current-state |
 | 26 | `peso_controlos` | N06 | Peso (Controlo area) | Current-state |
 | 27 | `peso_leituras` | N06 | Peso (Controlo area) | Current-state |
-| 28 | `peso_comparacao_anterior` | N06 | Peso (Controlo area) | Current-state (derived) |
+| 28 | `peso_comparacao_anterior` | N06 | Peso (Controlo area) | **REMOVED — N37 (comparison history = `peso_controlos.previous_control` JSON snapshot; base explicitly chosen by the user)** |
 | 29 | `peso_day_approvals` | N06 | Peso (Controlo area) | Current-state |
 | 30 | `peso_settings` | N06 | Peso (Controlo area) | Lookup/config |
 | 31 | `pegamento_controlos` | N07 | Pegamentos (Controlo area) | Current-state |

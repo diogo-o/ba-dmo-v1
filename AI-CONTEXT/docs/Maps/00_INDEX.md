@@ -7,7 +7,7 @@
 | Repository | `D:\BA-DMO` (git worktree root) |
 | Solution | `BA-DMO.sln` |
 | Branch | `main` |
-| HEAD | `847830824262bc42aadfc9a34d9c4d9bdc058baf` — "Render one persistent Admin navigation" (2026-08-27 16:27:58 +0100) |
+| HEAD | `847830824262bc42aadfc9a34d9c4d9bdc058baf` — "Render one persistent Admin navigation" (2026-08-27 16:27:58 +0100) — **OUTDATED: repository moved to `bb3065c6` (2026-09-10); maps below REVERIFY (see STATUS-NOTE)** |
 | Target framework | `net10.0` for every project (`Directory.Build.props`), `LangVersion latest`, nullable enabled, `pt-PT` neutral language |
 | Container | `Dockerfile` — SDK 10.0 build of `src\BA.Dmo.Web`, `aspnet:10.0` runtime, `ASPNETCORE_URLS=http://0.0.0.0:10000` |
 
@@ -33,7 +33,7 @@ D:\BA-DMO
 ├── Directory.Build.props  (net10.0, nullable, pt-PT)
 ├── Dockerfile
 ├── database\
-│   ├── migrations\N01_identity.sql … N31_template_profiles_single_assignment.sql
+│   ├── migrations\N01_identity.sql … N42_tool_check_occurrences_removal.sql
 │   └── consolidated_clean_install.sql
 ├── src\
 │   ├── BA.Dmo.Domain\        (Modules\* + Shared\Access + Shared\Kernel)
@@ -159,6 +159,8 @@ Canonical module names/order are registry metadata only; technical map contents 
 | 10 | Admin | — | Admin | `15_ADMIN.md` | COMPLETE |
 
 Statuses refreshed 2026-08-27 at HEAD `8478308` (see Execution Log).
+
+> **STATUS-NOTE (2026-09-10): REVERIFY ALL MAPS** — repository moved to `bb3065c6` with migrations N32–N42 (incl. removals N34/N37/N38/N42, N39/N40/N41 and the Sep-09/10 fixes). Every map above pre-dates those changes; the Execution Log statuses are STALE. Per-module re-verification was performed for the reconciliation report (Sessions 01–08); map files themselves carry targeted fixes (see Maps 02/03/06).
 
 ### Controlo — Canonical Structure
 

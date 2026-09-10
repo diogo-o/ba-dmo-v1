@@ -392,6 +392,15 @@ Mudança de Linha na correção: recalcula o contexto para a nova Linha sem alte
 
 `Apagar registo` é uma anulação auditável.
 
+> **STATUS (2026-09-10): IMPLEMENTED** — anulação lógica auditável implementada (N43:
+> `internal_repair_records.annulled_at_utc/annulled_by`; `POST /api/reparacao-interna/{id}/anular`;
+> `reparacao_interna.anular` no diário global de auditoria + `repair_events.canceled=TRUE` no mesmo
+> UoW; UI com confirmação em 2 passos). A anulação marca a raiz da cadeia — o registo sai da vista
+> operacional ativa (listas) e o facto histórico permanece legível no detalhe com ator/data;
+> backend: apenas os próprios registos, sem motivo obrigatório, repetição rejeitada
+> (`REPINT_ALREADY_ANNULLED`). Coberto por testes unitários (fluxo, papel, atribuição, repetição,
+> cadeia). Divergência DIV-10/D10 encerrada.
+
 A anulação:
 
 - remove o registo da vista operacional ativa;
@@ -563,7 +572,7 @@ Detalhes adiados documentados, específicos da RI, não bloqueantes. Não são q
 5. Representação exata da anulação em listas/consultas.
 6. Superfícies de UI em aberto, por exemplo nota da correção e composição do fluxo.
 7. Política de relógio/offset de fábrica (DST).
-8. Entrega da consulta ligada do Job On (`Ver reparações`).
+8. Entrega da consulta ligada do Job On (`Ver reparações`). — **IMPLEMENTED (2026-09-10)** — o link `Ver reparações` na página Job On (com jobOnId + revisão + produção + linha) foi verificado no source (Sessions 01/04); o nº 8 deixa de estar adiado.
 
 <a id="resumo-funcional-final"></a>
 ## Resumo Funcional Final
@@ -606,7 +615,7 @@ Zero questões genuínas em aberto. Q1 e Q2 foram fechadas por clarificação ex
 ### Known implementation gaps
 
 - `Editar contexto` is NOT part of the functional truth — if it exists in the implementation, treat it as a divergence of the current implementation (Contexto de Produção).
-- Job On linked query delivery (`Ver reparações`) for the Responsável production-level read-only view is listed as a deferred detail (Detalhes Adiados nº 8) — the Job On query surface is not yet delivered.
+- Job On linked query delivery (`Ver reparações`) for the Responsável production-level read-only view is listed as a deferred detail (Detalhes Adiados nº 8) — **IMPLEMENTED (2026-09-10)**: the Job On page delivers the linked query surface with the exact production/revision context.
 - Deferred (non-blocking) context-resolution details affecting implementation: individual-number format/range, more than one active lot of the same type per Linha, "turno" field, factory clock/DST offset policy (affects the 06:00/09:00 rule).
 
 ### Design reference

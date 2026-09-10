@@ -2,6 +2,8 @@
 
 Snapshot of disk state: 2026-08-24 -- 84 directories, 871 files under the root.
 
+> **STATUS-NOTE (2026-09-10): STALE SNAPSHOT** — this map pre-dates: `design-bundle/` (2026-08-30), `BA.Dmo.VisualHost`, migrations N27–N42 (only N01–N26 shown in the build-output copies), the post-August test files (Access rail/context suites, JobOn suites), and the current `old-design/` additions (`0_ASSET_SHELL.css`). Test `bin/obj` outputs are git-ignored build artifacts, not tracked content. Do NOT use this map as the current tree; the reconciliation report lists the current inventory.
+
 ## Root
 
 `AI-CONTEXT/docs/`

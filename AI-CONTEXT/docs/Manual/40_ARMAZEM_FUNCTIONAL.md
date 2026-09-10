@@ -354,8 +354,8 @@ Não criar dentro do Armazém áreas de “Definições” para reparadores, est
 | Saídas programadas / ciclo de saída para Reparação | workflow partilhado Reparação ↔ Armazém; não é módulo separado; implementação via port existe, fluxo completo em UI não está ativo |
 | Substituir | ação presente na implementação; fora do alvo funcional atual; divergência = TECHNICAL RECONCILIATION REQUIRED |
 | Definições | não é módulo; não criar dentro do Armazém |
-| Corrigir localização | correção de operador; requisito funcional confirmado; implementação ausente |
-| + Criar novo | workflow de criação de nova ferramenta a partir do Armazém; requisito funcional estabelecido; implementação ausente |
+| Corrigir localização | correção de operador; requisito funcional confirmado; **IMPLEMENTED** (2026-09-10 — `CorrigirLocalizacaoAsync` + `POST /api/armazem/corrigir-localizacao` + UI wiring + audit `armazem.corrigir_localizacao` verified in source; the previous "implementação ausente" note was stale) |
+| + Criar novo | workflow de criação de nova ferramenta a partir do Armazém; requisito funcional estabelecido; **IMPLEMENTED** (2026-09-10 — page form + `armazem.js` creates the master via the Ferramentas flow then registers the Entrada; the previous "implementação ausente" note was stale) |
 
 ---
 
@@ -675,7 +675,9 @@ o operador pode abrir **Corrigir localização**, separada de uma Entrada normal
 - Preserva histórico.
 - Distingue-se da edição de master do Responsável.
 
-O requisito funcional existe e está confirmado; a sua materialização é matéria de reconciliação técnica. Não existe questão owner sobre a existência do requisito.
+O requisito funcional existe e está confirmado; a sua materialização é matéria de reconciliação técnica.
+
+> **STATUS (2026-09-10): IMPLEMENTED** — correção de localização materializada (service, endpoint, UI e auditoria verificados). Esta secção mantém-se como autoridade funcional; o texto "implementação ausente" foi corrigido. Não existe questão owner sobre a existência do requisito.
 
 ---
 
@@ -698,6 +700,8 @@ Fluxo:
 A UI pode começar no Armazém, mas o ownership do master permanece em Ferramentas.
 
 A materialização deste workflow é matéria de reconciliação técnica.
+
+> **STATUS (2026-09-10): IMPLEMENTED** — "+ Criar novo" materializado (master em Ferramentas + Entrada em Armazém, na mesma superfície).
 
 ---
 
