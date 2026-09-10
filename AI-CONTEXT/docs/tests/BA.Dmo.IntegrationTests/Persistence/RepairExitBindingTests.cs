@@ -75,6 +75,10 @@ public sealed class RepairExitBindingTests
             var outside = await repository.ListExitsAsync(
                 RepairType.MF, null, new DateOnly(2026, 11, 1), new DateOnly(2026, 12, 1));
             Assert.DoesNotContain(outside, e => e.RepairExitId == exitId);
+            // All-null filters: the parameters arrive untyped (42P08 without the
+            // ::date casts) - the list/histórico surfaces call this shape.
+            var allNull = await repository.ListExitsAsync(null, null, null, null);
+            Assert.Contains(allNull, e => e.RepairExitId == exitId);
         }
         finally
         {

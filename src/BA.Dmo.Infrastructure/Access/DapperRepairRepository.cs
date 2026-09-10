@@ -115,8 +115,8 @@ SELECT repair_exit_id, repair_type, repairer_id, repairer_snapshot, planned_date
 FROM repair_exits
 WHERE (@Type IS NULL OR repair_type = @Type)
   AND (@Status IS NULL OR status = @Status)
-  AND (@From IS NULL OR planned_date >= @From)
-  AND (@To IS NULL OR planned_date <= @To)
+  AND (@From::date IS NULL OR planned_date >= @From::date)
+  AND (@To::date IS NULL OR planned_date <= @To::date)
 ORDER BY created_at_utc DESC;";
         var conn = await Open(_connectionFactory, ct);
         try
