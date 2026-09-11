@@ -90,8 +90,22 @@ Required direction:
 
 This is a shell/overlay-layer defect, not a Job On-specific visual patch.
 
+## R-065 — PU Job On fields `% uso` / `Quantidade em máquina` are unauthorized and invented
+**Status:** `OPEN / REGRESSION / REMOVE`
+
+The Job On PU block currently exposes fields/concepts such as `% uso` and `Quantidade em máquina` that are not part of the owner-authorized workflow and were not requested.
+
+Correct owner rule:
+- remove `% uso` from the Job On PU block unless an authoritative current Manual/owner rule proves a real operational use;
+- remove `Quantidade em máquina` from the Job On PU block unless an authoritative current Manual/owner rule proves a real operational use;
+- do not invent utilization percentages, machine quantities or derived operational logic for PU;
+- Job On should show only the PU information actually required for the production sheet/context;
+- do not preserve invented fields merely because they already exist in UI/tests/DTOs.
+
+Before removal, trace whether these are presentation-only fields or whether stale DTO/service/schema/test assumptions were introduced around them. Remove unsupported logic safely rather than hiding labels while leaving dead behavior underneath.
+
 ---
 
 ## Priority
 
-Treat `R-058`–`R-064` as part of the current recovery backlog. `R-058`, `R-059`, `R-060`, `R-062` and `R-064` are correctness/regression items; `R-061` is a UX sizing defect; `R-063` is an owner-authorized contextual data reuse requirement.
+Treat `R-058`–`R-065` as part of the current recovery backlog. `R-058`, `R-059`, `R-060`, `R-062`, `R-064` and `R-065` are correctness/regression items; `R-061` is a UX sizing defect; `R-063` is an owner-authorized contextual data reuse requirement.
