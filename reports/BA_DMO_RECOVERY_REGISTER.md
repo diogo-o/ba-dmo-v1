@@ -64,6 +64,21 @@ Where a sidepanel is useful, it must reuse one consistent outer shell:
 
 Content may differ by module.
 
+## R-057 — Controls are flush against card edges
+**Status:** `OPEN / UX / REGRESSION`
+
+Confirmed across multiple pages/modules: buttons, inputs, text areas, selects and other controls can sit directly against the card/container edge with little or no internal breathing room.
+
+Required direction:
+- cards/panels must provide consistent internal padding around interactive controls;
+- controls must not visually touch card borders;
+- labels, fields and action rows need a stable minimum inset from container edges;
+- spacing must be owned by the card/layout component, not repaired with one-off margins on individual buttons/inputs;
+- compact/dense UI is still required, but density must not remove basic readable padding;
+- the same spacing language should apply across modules so one page does not look cramped while another has excessive empty space.
+
+This is a cross-module design-system/layout issue, not a page-specific patch.
+
 ---
 
 # 2. Job On / Planeamento
@@ -654,7 +669,7 @@ This is **not** permission to implement all items at once. Use small verified ba
 
 ## P0 — Make the application trustworthy/useable
 1. Job On role/mode enforcement (`R-004`, `R-005`, `R-006`).
-2. Global shell shifts / Admin header (`R-001`, `R-002`, `R-003`).
+2. Global shell shifts / Admin header (`R-001`, `R-002`, `R-003`, `R-057`).
 3. Job On overflow/layout basics (`R-007`).
 4. Controlo real Job On selection (`R-015`).
 5. Raw/technical data leaking into UI (`R-041`, `R-042`).
@@ -692,6 +707,7 @@ This is **not** permission to implement all items at once. Use small verified ba
 | ID | Area | Status | Fix Commit | Verified in PROD | Notes |
 |---|---|---|---|---|---|
 | R-001 | Shell | OPEN | — | No | Tabs shift, Boquilhas confirmed example |
+| R-057 | Global UI spacing | OPEN | — | No | Controls touch card/container edges |
 | R-004 | Job On | OPEN | — | No | Operador editable while UI says Consulta |
 | R-015 | Controlo | MISSING | — | No | No usable Job On selector |
 | R-019 | Boquilhas/RE | SUPERSEDED | — | No | Duplicate repair ownership |
