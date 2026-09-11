@@ -12,16 +12,16 @@
 
 The central rule is:
 
-> **A Ferramenta is the persistent identity. Production is usage context. Job On is the medium that selects the correct tools for a production. Controlo and Reparação Interna record what happened to those tools in that production context. Boquilhas follows the same contextual-linking principle for repair/history while preserving its own individual-tracking model.**
+> **A Ferramenta is the persistent identity. Production is usage context. Job On is the medium that selects the correct tools for a production. Tool-specific control/repair events stay linked to the tool, while production-wide control information belongs to the Job On/production context.**
 
-The Job On must stop acting as a giant container that duplicates information already owned by Ferramentas, Controlo, Peso, Pegamentos or repair records.
+The Job On must stop acting as a giant container that duplicates information already owned by Ferramentas or tool-specific control/repair records. At the same time, information whose meaning is inherently about the **whole production and the set of tools used together at that moment** belongs to the Job On/production context.
 
 The intended direction is relational:
 
 ```text
 Ferramenta
    │
-   ├── historical control records
+   ├── historical tool-specific control records
    ├── historical notes
    ├── historical internal repairs
    └── historical production usages
@@ -31,9 +31,11 @@ Ferramenta
             │
             ▼
           Job On
+            │
+            ├── selected tool set for this production
+            ├── production-wide control summary
+            └── production-wide Pegamentos where applicable
 ```
-
-The Job On remains the operational production hub, but it should primarily associate the correct tools to the production rather than own duplicated copies of all tool/control information.
 
 ---
 
@@ -114,8 +116,6 @@ The authoritative statement is:
 
 > **In this production, Tool A was used together with Tool X.**
 
-This enables later traceability without inventing permanent compatibility rules.
-
 ---
 
 # 4. Job On becomes the production medium / context hub
@@ -137,32 +137,34 @@ Job On
    └── ...
 ```
 
-The Job On should own only information that genuinely belongs to the production sheet itself, for example:
+The Job On should own information whose meaning genuinely belongs to the production instance, including:
 
 - production identity/context;
 - planned start/end dates;
 - Job On-specific notes;
 - verification/revision state;
 - tool associations for that production;
+- production-wide control summary;
+- Pegamentos where their meaning/results concern the production/tool set as a whole rather than one isolated tool;
 - generated production documents / document references.
 
 It should **not** duplicate full copies of:
 
 - tool identity data;
 - tool history;
-- Peso records;
-- Pegamentos records;
-- control history;
+- tool-specific Peso/control records;
 - internal repair history;
 - historical tool notes.
 
-Those remain in their own domains and are reached through relationships.
+The distinction is ownership by meaning:
+
+> **If a value describes one tool, keep it with that tool/event. If it describes the production and the set of tools working together at that instant, keep it with the Job On/production context.**
 
 ---
 
-# 5. Controlo belongs to the tool, with production context
+# 5. Controlo links tool-specific records to the tool, with production context
 
-Controlo must record control information against the actual tool.
+Controlo is the workflow that processes control information, but not every control result has the same ownership.
 
 Normal production flow:
 
@@ -171,14 +173,14 @@ Production
    ↓
 Job On
    ↓
-Selected Tool
+Selected Tool(s)
    ↓
 Controlo
 ```
 
 The Job On supplies the already-correct tool selection for that production.
 
-The resulting control record belongs to:
+For a tool-specific control record, the resulting record belongs to:
 
 - the tool;
 - and the production usage/context in which that control occurred.
@@ -186,7 +188,7 @@ The resulting control record belongs to:
 Conceptually:
 
 ```text
-ControlRecord
+ToolControlRecord
 - control_id
 - tool_id
 - production_id (when performed in production context)
@@ -198,6 +200,8 @@ ControlRecord
 - actor
 - timestamps
 ```
+
+Production-wide outcomes produced through Controlo are instead associated to the Job On/production context as defined in Section 6.
 
 ## Controlo should reuse tool information instead of asking for it again
 
@@ -211,9 +215,7 @@ At minimum, where those fields genuinely belong to the selected tool, the contro
 - `NNPB` / `PS` classification or equivalent established field;
 - associated machine(s)/line(s).
 
-The purpose is to avoid repeatedly typing information that the application already knows.
-
-Do **not** create a second independently editable copy of these values inside Controlo unless a control-specific snapshot is explicitly required by a later document/history rule.
+Do **not** create a second independently editable copy of these values inside Controlo unless a specific historical snapshot rule requires it.
 
 The normal model should be:
 
@@ -227,11 +229,9 @@ Type / Reference / Lot / Classification / Machines
 Control workflow
 ```
 
-If the control occurs in a production context, the active `ProductionToolUsage` also supplies the production-specific context.
-
 ## Control without an existing Job On
 
-A Job On must **not** be structurally required for Controlo to exist.
+A Job On must **not** be structurally required for tool-specific Controlo to exist.
 
 A new tool may require control before a production/Job On has been scheduled.
 
@@ -246,7 +246,7 @@ Conceptually:
 ```text
 Tool
    ↓
-ControlRecord
+ToolControlRecord
 production_id = null until/unless a real production context exists
 ```
 
@@ -255,52 +255,64 @@ The same control subsystem must therefore support two valid entry paths:
 1. **Via Job On / Production** — tool is already selected by the production context.
 2. **Direct Tool Selection** — when no production/Job On exists yet.
 
-The underlying control record model should remain the same.
-
 ---
 
-# 6. Peso and Pegamentos remain owned by Controlo
+# 6. Ownership split: tool-specific control vs production-wide control summary / Pegamentos
 
-Peso and Pegamentos information should not be copied into Job On as a second source of truth.
+This section corrects the earlier assumption that all Peso/Pegamentos/summary information should live against individual tools.
 
-Controlo can be the processing/workflow area for these records.
+The correct rule is based on what the information actually describes.
 
-The tool can expose an aggregated control summary built from its related control records.
+## Tool-specific information
+
+Information that describes one exact tool stays linked to that tool, with production context when applicable.
+
+Examples include:
+
+- a control performed on one CM/MF;
+- tool-specific Peso data where the record truly belongs to that tool;
+- observations about the state of one tool;
+- internal repair events for one CM/MF.
+
+## Production-wide information
+
+Information that describes the **combined production setup** — the set of tools selected together for that production — belongs to the Job On/production context.
+
+This includes:
+
+- the overall/resume of Controlo when it spans several tools;
+- Pegamentos when they represent the production/tool combination rather than one isolated tool;
+- other future control results whose meaning depends on the actual set of tools working together at that moment.
 
 Conceptually:
 
 ```text
-ToolControlSummary
-├── Peso
-│   ├── has record
-│   ├── latest/relevant control
-│   ├── result/status
-│   ├── date
-│   └── production context if any
+JobOn / Production 202601
+├── ProductionToolUsage
+│   ├── CM -> Tool A
+│   ├── MF -> Tool X
+│   ├── BQ -> Tool B
+│   └── ...
+│
+├── ProductionControlSummary
+│   ├── overall control/result fields
+│   └── references to relevant underlying tool controls as needed
 │
 └── Pegamentos
-    ├── has record
-    ├── latest/relevant control
-    ├── result/status
-    ├── date
-    └── production context if any
+    └── values/results for this production/tool set
 ```
 
-The UI must show these as separate meaningful fields/sections, not as raw JSON or an opaque generic blob.
+This is important because the same CM can later work with a different MF. A Pegamentos result or overall control summary from the first production must remain attached to the **first production/tool combination**, not become a permanent property of that CM.
 
-The exact document-generation selection rule (for example which approved Peso/Pegamentos record is used for a specific production document) must be explicitly defined during implementation. Do not infer it from "latest record" without authority.
+Do not make the tool history falsely imply that a multi-tool production result belongs intrinsically to one tool.
+
+The tool history may still show that a production containing that tool had a particular production-wide control/Pegamentos result, but that is a **related production event**, not a tool-owned value.
 
 ---
 
 # 7. Tool notes must preserve both tool and production context
 
-When a note describes the state/condition/observation of a tool during a production, it must not be stored as a free-floating Job On-only note if its meaning is about that tool.
-
-The system must be able to answer later:
-
-- what notes exist for this exact tool;
-- in which production was each note recorded;
-- what was recorded about this tool during Production X.
+When a note describes the state/condition/observation of a tool during a production, it must be attributable to that exact tool and production context.
 
 Conceptually:
 
@@ -327,13 +339,13 @@ and:
 Production history -> notes for each tool used in that production
 ```
 
-Do not duplicate the same note into multiple independent stores.
+Genuinely production-wide notes remain Job On/production notes and must not be forced into a tool record.
 
 ---
 
 # 8. Reparação Interna follows the same Job On -> Tool context path
 
-Reparação Interna must also associate its records directly with the actual tool and the production in which that tool was being used.
+Reparação Interna must associate its records directly with the actual tool and the production in which that tool was being used.
 
 Normal flow:
 
@@ -350,8 +362,6 @@ Reparação Interna
 The important rule is:
 
 > **Controlo and Reparação Interna both retrieve the required tool from the Job On in the same way when operating inside a production context.**
-
-They do not independently re-select an arbitrary warehouse tool when the production already established the correct one.
 
 The resulting RI record belongs to the tool and its production context.
 
@@ -378,21 +388,15 @@ Reparação Interna remains:
 - distinct from CM/MF external programmed repair handled through Armazém;
 - distinct from Boquilhas repair/tracking.
 
-This relation should also eliminate the current class of errors where RI history copies the reference into `lote` instead of resolving the actual tool/lot.
-
 ---
 
 # 9. Boquilhas repair/history should use the same production-context linking pattern
 
 Boquilhas keeps its own operational model and **must preserve individual BQ tracking**. It must not be collapsed into the CM/MF lot-level repair model.
 
-However, when a Boquilhas repair/event is associated with a production, the same contextual principle should apply:
+When a Boquilhas repair/event is associated with a production, the repair record belongs to the real BQ identity/record and is linked to the production in which that BQ/lot was used.
 
-> **The repair record belongs to the real BQ identity/record and is linked to the production in which that BQ/lot was used, instead of storing disconnected copied text.**
-
-The Boquilhas module should therefore be able to create/read repair history with explicit production context where applicable.
-
-The repair record must be able to resolve/display the relevant real context such as:
+The repair record must be able to resolve/display:
 
 - repairer;
 - production;
@@ -411,43 +415,19 @@ BqRepairRecord
 - production_id (when associated to a production)
 - jobon_id / ProductionToolUsage reference where useful
 - repairer
-- reference/lot/machine context resolved from authoritative relations
 - repair state/data
 - notes
 - dates
 - actor
 ```
 
-Important:
-
-- do not duplicate `reference`, `lot` and `machine` as new independent truths merely because they are displayed on the repair record;
-- when production context exists, resolve it through the BQ/tool + ProductionToolUsage/Job On association;
-- when there is no production context, Boquilhas must still retain its normal independent individual-tracking capability;
-- this change is about **linking repair history to the real tool/BQ + production context**, not making BQ repair behave like CM/MF repair.
-
-This gives later traceability such as:
-
-```text
-BQ / lot history
-  -> repairer
-  -> production where used
-  -> reference / lot / machine context
-  -> repair event
-```
-
-and:
-
-```text
-Production history
-  -> BQ used
-  -> repair events associated with that production
-```
+Do not duplicate `reference`, `lot` and `machine` as new independent truths merely because they are displayed on the repair record.
 
 ---
 
-# 10. Historical context becomes much richer
+# 10. Historical context becomes richer without confusing ownership
 
-With explicit ProductionToolUsage + tool-linked events, a tool history can reconstruct the actual context of every production in which that tool participated.
+With explicit ProductionToolUsage + tool-linked events + production-wide control records, history can reconstruct both levels correctly.
 
 For a CM, the system should eventually be able to show, per production:
 
@@ -455,46 +435,44 @@ For a CM, the system should eventually be able to show, per production:
 - Job On context;
 - MF used alongside it;
 - other associated tools as relevant;
-- control records;
-- Peso/Pegamentos summary where applicable;
+- tool-specific control records;
+- production-wide control summary for that production;
+- Pegamentos for that production/tool combination;
 - internal repairs;
 - notes;
 - generated production documents.
 
-For Boquilhas, the history should likewise be able to show the production context of relevant repair/tracking events without losing individual BQ granularity.
+The important distinction is that production-wide summary/Pegamentos are reached **through the production in which the tool participated**, not treated as permanent properties of the tool.
 
-This is historical context, not an inference engine.
+For Boquilhas, history should likewise show the production context of relevant repair/tracking events without losing individual BQ granularity.
 
-The application may show that Tool A was paired with Tool X in one production and Tool Y in another. It must not conclude that either pairing is universally valid/invalid unless an explicit owner rule exists.
+Historical pairings are context, not inferred compatibility rules.
 
 ---
 
 # 11. Loading/performance direction
 
-This redesign should reduce the amount of information Job On must load eagerly.
+This redesign should reduce the amount of information Job On must load eagerly while still allowing the Job On to own lightweight production-wide records.
 
-The Job On can load its own production sheet and tool associations first.
+The Job On can load its own sheet, production tool associations, and only the summary information required for the normal view.
 
-Related information can be loaded by relationship when required, for example:
+Detailed related information can be loaded when required, for example:
 
-- tool control summary;
-- full tool control history;
+- tool-specific control detail/history;
 - internal repair history;
 - Boquilhas repair/history context;
-- historical notes;
+- historical tool notes;
 - production pairing history.
 
 Do not make the Job On preload every historical record for every associated tool merely because those records are accessible from the Job On.
-
-Accessibility through the production hub does not imply eager duplication/loading.
 
 ---
 
 # 12. Document generation direction
 
-Job On will remain the place from which production documents are accessible by production.
+Job On remains the place from which production documents are accessible by production.
 
-However, document generation should aggregate authoritative data from the actual sources rather than relying on copied Job On fields.
+Document generation should aggregate authoritative data from the actual owners of each field.
 
 Conceptually:
 
@@ -502,11 +480,11 @@ Conceptually:
 DocumentGenerationContext
 ├── Production
 ├── Job On
+│   ├── ProductionControlSummary
+│   └── Pegamentos for this production/tool set
 ├── ProductionToolUsage
 ├── Tools
-├── relevant Control records
-│   ├── Peso
-│   └── Pegamentos
+├── relevant tool-specific Control/Peso records
 ├── production/tool notes
 ├── other document-required data
 └── output document metadata
@@ -514,11 +492,10 @@ DocumentGenerationContext
 
 The generated PDF is the historical snapshot of what was emitted/sent to production at that point in time.
 
-The database should not need to duplicate all source information into Job On merely to preserve a document snapshot.
-
 Before this area is considered ready for a later CLEAN rebuild, implementation must explicitly verify and define:
 
-- which control/Peso/Pegamentos record feeds each production document;
+- which tool-specific control/Peso records feed each production document;
+- which Job On production-wide summary/Pegamentos values feed each document;
 - approval/state requirements for document data;
 - document revision behavior after Job On/tool/control edits;
 - PDF naming convention;
@@ -530,13 +507,11 @@ Before this area is considered ready for a later CLEAN rebuild, implementation m
 - whether generated PDFs are immutable or versioned;
 - how the application finds previously generated PDFs.
 
-Do not leave PDF backup/storage behavior implicit.
-
 ---
 
 # 13. Job On editing/revision implications
 
-Because Job On becomes primarily a production-context/tool-association hub, Job On editing must explicitly define what happens when an associated tool changes.
+Because Job On represents the production-context/tool combination, editing must explicitly define what happens when an associated tool changes.
 
 Example:
 
@@ -550,18 +525,17 @@ CM -> Tool A
 MF -> Tool Y
 ```
 
-The system must preserve enough history to know what associations existed for the relevant production/revision/document emission.
+The system must preserve enough history to know what associations existed for the relevant production/revision/document emission and which combination a production-wide Controlo/Pegamentos result belongs to.
 
-Do not silently rewrite historical context that was already used for control, repair or issued documents.
+Do not silently rewrite historical context already used for control, repair, Pegamentos, summary or issued documents.
 
 The implementation plan must therefore resolve:
 
 - whether ProductionToolUsage is revisioned/effective-dated;
 - how tool changes are audited;
-- whether existing control/repair records remain tied to the original usage/context;
+- whether existing tool-specific control/repair records remain tied to the original usage/context;
+- how production-wide summary/Pegamentos remain tied to the correct tool set/revision;
 - how generated documents preserve the association snapshot used at generation time.
-
-This is a required design decision before destructive schema simplification or LIVE → CLEAN rebuild.
 
 ---
 
@@ -570,16 +544,15 @@ This is a required design decision before destructive schema simplification or L
 Do not solve this redesign by:
 
 - copying tool reference/lot/machine/classification fields into every module as independent truth;
-- making Job On own Peso/Pegamentos data;
-- forcing Controlo to require a fake Job On;
+- attaching production-wide Pegamentos or multi-tool control summary permanently to one tool;
+- duplicating the same production-wide summary independently on every tool;
+- forcing Controlo to require a fake Job On for a tool-specific pre-production control;
 - forcing the user to retype tool-owned fields in Controlo after the tool is already known;
 - making RI select arbitrary warehouse tools when production context already selected the correct tool;
 - treating machine/line as exactly one permanent value per tool;
 - storing permanent CM↔MF compatibility inferred from historical pairings;
 - collapsing Boquilhas individual tracking into the CM/MF lot repair model;
-- storing Boquilhas repair production context only as copied free-text fields;
 - loading all historical tool data eagerly every time Job On opens;
-- using raw JSON as the user-facing control summary;
 - deleting current data/schema before migration behavior is proven.
 
 ---
@@ -596,18 +569,17 @@ Inspect the current running behavior and current schema/code paths specifically 
 - how Job On stores CM/MF/BQ/PU/etc.;
 - how machine/line associations are represented;
 - where `NNPB` / `PS` or equivalent classification is currently stored and whether it is genuinely tool-owned;
-- how Peso and Pegamentos are stored;
+- how Peso and Pegamentos are currently stored and whether current records are tool-specific or production-wide;
+- how the current Controlo summary is assembled and which fields span several tools;
 - how Controlo finds its current Job On/tool context;
 - which tool-owned fields Controlo currently asks the user to re-enter;
 - how RI stores reference/lot/production context;
 - how Boquilhas repair records currently store repairer/reference/lot/machine/production context;
 - how notes are persisted;
-- how production documents currently obtain Peso/Pegamentos/tool data;
+- how production documents currently obtain control/Peso/Pegamentos/tool data;
 - how generated PDFs are stored/backed up locally today.
 
 This is a targeted implementation prerequisite, **not** a general legacy audit.
-
-Do not treat old tests/reports/migrations as requirements merely because they exist.
 
 ## Phase B — Define new relational contracts
 
@@ -618,12 +590,12 @@ Define the minimum contracts required for:
 - tool-owned classification/context fields that Controlo can reuse;
 - ProductionToolUsage;
 - Tool-linked control records;
+- Job On / production-wide control summary;
+- Job On / production-wide Pegamentos;
 - Tool + production-linked notes;
 - Tool + production-linked internal repair records;
 - BQ individual identity/tracking + production-linked repair records;
 - document generation context.
-
-Do not yet delete legacy structures.
 
 ## Phase C — Implement ProductionToolUsage
 
@@ -636,16 +608,18 @@ Acceptance criteria:
 - same tool can appear across multiple productions;
 - historical production pairings can be reconstructed.
 
-## Phase D — Rewire Controlo
+## Phase D — Rewire Controlo with explicit ownership split
 
 Controlo must support:
 
-1. production/Job On entry path -> receives the Job On-selected tool;
-2. direct tool entry path -> allows control before a production exists.
+1. production/Job On entry path -> receives the Job On-selected tool(s);
+2. direct tool entry path -> allows tool-specific control before a production exists.
 
-Store the control against the tool and, when applicable, the production context.
+Once a tool is selected, Controlo must reuse authoritative tool information instead of asking the user to type it again.
 
-Once the tool is selected, Controlo must reuse authoritative tool information instead of asking the user to type it again.
+Tool-specific results are stored against the tool + optional production context.
+
+Production-wide summary and Pegamentos that span the tool set are stored/associated with the Job On/production context.
 
 Acceptance criteria include:
 
@@ -654,8 +628,10 @@ Acceptance criteria include:
 - lot resolved from tool;
 - NNPB/PS or equivalent established classification resolved from tool where applicable;
 - one-or-more associated machines/lines available from the tool;
-- no second independently maintained copy of these tool-owned values in the control workflow without explicit snapshot need;
-- Peso/Pegamentos remain owned by Controlo and are exposed through a structured tool summary.
+- one control workflow can use the Job On-selected tool set without duplicating their identity fields;
+- production-wide summary remains tied to the exact production/tool set;
+- Pegamentos remains tied to the exact production/tool set when it is multi-tool in meaning;
+- a tool-specific pre-production control remains possible without a Job On.
 
 ## Phase E — Rewire Reparação Interna
 
@@ -663,8 +639,7 @@ RI receives the CM/MF tool from the active Job On/production context and stores 
 
 Acceptance criteria:
 
-- no independent arbitrary warehouse selection for the production flow;
-- real lot comes from/resolves through the tool identity;
+- real lot resolves through the tool identity;
 - historical RI records can be viewed by tool and by production;
 - current `lote = reference` class of bug is impossible in the new relation model.
 
@@ -676,39 +651,25 @@ Acceptance criteria:
 
 - repairer is explicit;
 - production association is explicit when applicable;
-- reference/lot/machine context resolves from the real BQ/tool + production relation rather than disconnected copied text;
+- reference/lot/machine context resolves from the real BQ/tool + production relation;
 - individual BQ identity remains available;
-- Boquilhas repair remains independent when no production context exists;
-- production history can retrieve the relevant BQ repair events.
+- Boquilhas repair remains independent when no production context exists.
 
 ## Phase G — Tool notes / production observations
 
-Move tool-specific observations to explicit tool-linked records with production context when applicable.
-
-Do not convert genuinely Job On-wide notes into tool notes. Ownership must follow meaning.
+Store tool-specific observations against the tool + production context when applicable. Keep genuinely production-wide notes at Job On/production level.
 
 ## Phase H — Job On query/load simplification
 
-Remove the need for Job On to eagerly carry duplicated tool/control data.
+Remove the need for Job On to eagerly carry duplicated tool histories. Keep only its own production-wide data and lightweight summaries needed for the normal production view.
 
-Use relationship-based summary/detail queries.
-
-Measure query count/payload and avoid N+1 behavior while still not loading unnecessary full histories.
+Measure query count/payload and avoid N+1 behavior.
 
 ## Phase I — Document generation contract
 
-Before changing PDF output behavior, document and test the exact source of every required field.
+Document and test the exact owner/source of every required field before changing PDF output behavior.
 
-Define:
-
-- source records;
-- state/approval selection;
-- production/tool context;
-- snapshot/revision rules;
-- filesystem/backup conventions;
-- reprint behavior.
-
-Then implement the generator against authoritative sources and persist generated-document metadata/snapshot references.
+Define source records, state/approval selection, production/tool context, snapshot/revision rules, filesystem/backup conventions and reprint behavior.
 
 ## Phase J — Migration/backfill strategy
 
@@ -727,15 +688,15 @@ Before a later LIVE → CLEAN rebuild, validate at least:
 - one CM paired with different MF tools across productions;
 - tool with multiple machines/lines;
 - Controlo auto-populates/reuses tool type/reference/lot/classification/machines rather than requiring duplicate entry;
-- control created through Job On;
-- control created before any Job On exists;
-- Peso control and Pegamentos control retrieval by tool;
+- tool-specific control created through Job On;
+- tool-specific control created before any Job On exists;
+- production-wide control summary tied to one exact production/tool set;
+- Pegamentos tied to one exact production/tool set where multi-tool in meaning;
 - RI record associated to Job On-selected CM/MF;
 - BQ repair record associated to repairer + production + real BQ/reference/lot/machine context;
-- BQ repair record can still exist outside production where the Boquilhas workflow requires it;
 - tool note associated to tool + production;
 - Job On opens without loading unnecessary full histories;
-- document generation pulls the correct data;
+- document generation pulls the correct tool-specific and production-wide data;
 - generated PDF remains traceable to production/revision/source context;
 - local PDF backup/retrieval works as intended.
 
@@ -749,21 +710,21 @@ These decisions are the reason for this plan and must not be lost during impleme
 2. A tool can be associated with more than one machine/line.
 3. Tool-owned information such as type, reference, lot, machines/lines and established classification such as NNPB/PS should be reusable by Controlo instead of repeatedly re-entered.
 4. Job On selects the correct tools for a production and acts as the normal medium/context for downstream production workflows.
-5. Job On should associate tools, not duplicate all tool/control data.
-6. ProductionToolUsage should preserve which exact tools worked together in each production.
-7. Controlo is associated to the tool and, when applicable, to the production in which the tool was used.
-8. Controlo must also work for a tool that does not yet have a scheduled production/Job On.
-9. Peso and Pegamentos remain owned by Controlo; Job On does not need duplicate copies.
-10. Tool control summaries should expose meaningful separated fields/sections for Peso/Pegamentos, not opaque raw blobs.
-11. Tool-specific notes must be attributable to the exact tool and production context where applicable.
+5. ProductionToolUsage preserves which exact tools worked together in each production.
+6. Tool-specific control records belong to the tool and, when applicable, the production in which the tool was used.
+7. Tool-specific Controlo must also work for a tool that does not yet have a scheduled production/Job On.
+8. The overall/resume of Controlo that spans several tools belongs to the Job On/production context.
+9. Pegamentos belongs to the Job On/production context when its meaning is about the combined tool set used in that production.
+10. Production-wide summary/Pegamentos must not become permanent properties of one tool merely because that tool participated in the production.
+11. Tool-specific notes must be attributable to the exact tool and production context where applicable; production-wide notes stay with Job On.
 12. Reparação Interna obtains the required CM/MF tool from the Job On production context in the same general way as Controlo.
 13. RI records belong to the tool + production context, not to copied reference/lot text.
-14. Boquilhas keeps individual tracking, but BQ repair history must be able to associate the repairer/event with the production and real reference/lot/machine context where applicable.
-15. Historical pairing changes (for example same CM with different MF in different productions) must remain queryable.
+14. Boquilhas keeps individual tracking, but BQ repair history can associate the repairer/event with the production and real reference/lot/machine context where applicable.
+15. Historical pairing changes (for example same CM with different MF in different productions) remain queryable.
 16. Historical pairings are context, not permanent inferred compatibility rules.
-17. Job On should not eagerly load all information merely because it is accessible from the production hub.
-18. Production documents aggregate from authoritative sources; the generated PDF is the snapshot that must remain traceable/versioned/backed up.
-19. Job On editing/tool changes must preserve historical associations already used by control, repairs and generated documents.
+17. Job On should not eagerly load all detailed historical information merely because it is accessible from the production hub.
+18. Production documents aggregate from the authoritative owner of each field; the generated PDF is the historical snapshot that remains traceable/versioned/backed up.
+19. Job On editing/tool changes must preserve historical associations already used by control, repairs, production-wide Pegamentos/summary and generated documents.
 
 ---
 
