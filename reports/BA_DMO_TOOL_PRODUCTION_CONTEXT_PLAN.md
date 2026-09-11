@@ -16,12 +16,19 @@ The central rule is:
 
 The Job On must stop acting as a giant container that duplicates information already owned by Ferramentas or tool-specific control/repair records. At the same time, information whose meaning is inherently about the **whole production and the set of tools used together at that moment** belongs to the Job On/production context.
 
+A critical ownership distinction is now explicit:
+
+- **Peso belongs to the CM that was weighed**, even when the weighing happened during a specific production;
+- **Pegamentos belongs to the production/Job On context** when it describes the combined set of tools used in that production;
+- **the overall/resume of Controlo belongs to the production/Job On context** when it summarizes several tools used together.
+
 The intended direction is relational:
 
 ```text
 Ferramenta
    │
    ├── historical tool-specific control records
+   │      └── Peso -> CM
    ├── historical notes
    ├── historical internal repairs
    └── historical production usages
@@ -34,7 +41,7 @@ Ferramenta
             │
             ├── selected tool set for this production
             ├── production-wide control summary
-            └── production-wide Pegamentos where applicable
+            └── Pegamentos for this exact tool combination
 ```
 
 ---
@@ -102,19 +109,21 @@ Example:
 Production 202601
 - CM -> Tool A
 - MF -> Tool X
+- BQ -> Tool B
 
 Production 202602
 - CM -> Tool A
 - MF -> Tool Y
+- BQ -> Tool C
 ```
 
-The history of Tool A must therefore be able to show that it worked with MF X in one production and MF Y in another.
+The history of Tool A must therefore be able to show that it worked with different companion tools across productions.
 
 Do **not** store "CM A works with MF X" as permanent truth on the tool itself.
 
 The authoritative statement is:
 
-> **In this production, Tool A was used together with Tool X.**
+> **In this production, Tool A was used together with this exact set of tools.**
 
 ---
 
@@ -145,14 +154,14 @@ The Job On should own information whose meaning genuinely belongs to the product
 - verification/revision state;
 - tool associations for that production;
 - production-wide control summary;
-- Pegamentos where their meaning/results concern the production/tool set as a whole rather than one isolated tool;
+- Pegamentos for the exact production/tool combination;
 - generated production documents / document references.
 
 It should **not** duplicate full copies of:
 
 - tool identity data;
 - tool history;
-- tool-specific Peso/control records;
+- Peso records owned by a CM;
 - internal repair history;
 - historical tool notes.
 
@@ -183,7 +192,7 @@ The Job On supplies the already-correct tool selection for that production.
 For a tool-specific control record, the resulting record belongs to:
 
 - the tool;
-- and the production usage/context in which that control occurred.
+- and the production usage/context in which that control occurred, when applicable.
 
 Conceptually:
 
@@ -257,32 +266,68 @@ The same control subsystem must therefore support two valid entry paths:
 
 ---
 
-# 6. Ownership split: tool-specific control vs production-wide control summary / Pegamentos
+# 6. Ownership split: Peso vs production-wide control summary / Pegamentos
 
-This section corrects the earlier assumption that all Peso/Pegamentos/summary information should live against individual tools.
+This section is authoritative for the ownership of Peso, Pegamentos and the overall Controlo summary.
 
-The correct rule is based on what the information actually describes.
+## Peso belongs to the CM
 
-## Tool-specific information
+Peso uses only the **CM**. Therefore a Peso record belongs to that exact CM, even when the measurement is performed for a specific production.
 
-Information that describes one exact tool stays linked to that tool, with production context when applicable.
+Conceptually:
 
-Examples include:
+```text
+PesoRecord
+- peso_id
+- cm_tool_id
+- production_id (when measured for a production)
+- jobon_id / ProductionToolUsage reference where useful
+- measurement data
+- approval/state
+- actor
+- timestamps
+```
 
-- a control performed on one CM/MF;
-- tool-specific Peso data where the record truly belongs to that tool;
-- observations about the state of one tool;
-- internal repair events for one CM/MF.
+This matters because the same CM can be reused with different MF and BQ lots in later productions.
 
-## Production-wide information
+Example:
 
-Information that describes the **combined production setup** — the set of tools selected together for that production — belongs to the Job On/production context.
+```text
+Production 202601
+CM A + MF X + BQ Lote 1
+Peso -> CM A
 
-This includes:
+Production 202602
+CM A + MF Y + BQ Lote 4
+Peso -> CM A
+```
 
-- the overall/resume of Controlo when it spans several tools;
-- Pegamentos when they represent the production/tool combination rather than one isolated tool;
-- other future control results whose meaning depends on the actual set of tools working together at that moment.
+The Peso history remains a history of **CM A**, with the production context showing when each measurement occurred.
+
+Changing MF, BQ or their lots does not change the ownership of the Peso record.
+
+Do not attach Peso primarily to the whole Job On/tool combination merely because the measurement happened during a production.
+
+## Pegamentos belongs to the production/tool combination
+
+Pegamentos represents a result of a **specific set of tools working together**. Its meaning is therefore production-wide, not intrinsic to one CM, MF or BQ.
+
+Conceptually:
+
+```text
+JobOn / Production 202601
+├── CM -> Tool A
+├── MF -> Tool X
+├── BQ -> Tool B / Lote context
+└── Pegamentos
+     └── values/results for this exact production/tool set
+```
+
+If one of the tools changes in another production, that is a different production/tool combination and its Pegamentos must remain separate.
+
+## Overall/resume of Controlo also belongs to the production/tool combination
+
+When the Controlo summary combines information about several tools used together, the summary belongs to the Job On/production context.
 
 Conceptually:
 
@@ -296,17 +341,15 @@ JobOn / Production 202601
 │
 ├── ProductionControlSummary
 │   ├── overall control/result fields
-│   └── references to relevant underlying tool controls as needed
+│   └── references to underlying records when useful
 │
 └── Pegamentos
-    └── values/results for this production/tool set
+    └── values/results for this exact tool combination
 ```
 
-This is important because the same CM can later work with a different MF. A Pegamentos result or overall control summary from the first production must remain attached to the **first production/tool combination**, not become a permanent property of that CM.
+The same CM may later appear in another production with a different MF or BQ lot. The previous Pegamentos and previous overall Controlo summary must remain attached to the **original production/tool combination**, not become permanent properties of the CM.
 
-Do not make the tool history falsely imply that a multi-tool production result belongs intrinsically to one tool.
-
-The tool history may still show that a production containing that tool had a particular production-wide control/Pegamentos result, but that is a **related production event**, not a tool-owned value.
+Tool history may show that a production containing that tool had a certain Pegamentos/summary result, but that is a related production event rather than tool-owned data.
 
 ---
 
@@ -434,15 +477,19 @@ For a CM, the system should eventually be able to show, per production:
 - production number;
 - Job On context;
 - MF used alongside it;
+- BQ/lot used alongside it;
 - other associated tools as relevant;
-- tool-specific control records;
+- Peso records owned by that CM;
 - production-wide control summary for that production;
 - Pegamentos for that production/tool combination;
 - internal repairs;
 - notes;
 - generated production documents.
 
-The important distinction is that production-wide summary/Pegamentos are reached **through the production in which the tool participated**, not treated as permanent properties of the tool.
+The important distinction is:
+
+- Peso is reached directly through the CM, with production context;
+- production-wide summary/Pegamentos are reached through the production in which the CM participated.
 
 For Boquilhas, history should likewise show the production context of relevant repair/tracking events without losing individual BQ granularity.
 
@@ -458,7 +505,7 @@ The Job On can load its own sheet, production tool associations, and only the su
 
 Detailed related information can be loaded when required, for example:
 
-- tool-specific control detail/history;
+- CM-specific Peso/control detail/history;
 - internal repair history;
 - Boquilhas repair/history context;
 - historical tool notes;
@@ -484,7 +531,8 @@ DocumentGenerationContext
 │   └── Pegamentos for this production/tool set
 ├── ProductionToolUsage
 ├── Tools
-├── relevant tool-specific Control/Peso records
+│   └── CM
+│       └── relevant Peso record(s)
 ├── production/tool notes
 ├── other document-required data
 └── output document metadata
@@ -494,7 +542,7 @@ The generated PDF is the historical snapshot of what was emitted/sent to product
 
 Before this area is considered ready for a later CLEAN rebuild, implementation must explicitly verify and define:
 
-- which tool-specific control/Peso records feed each production document;
+- which CM Peso record feeds each production document;
 - which Job On production-wide summary/Pegamentos values feed each document;
 - approval/state requirements for document data;
 - document revision behavior after Job On/tool/control edits;
@@ -519,13 +567,17 @@ Example:
 Production 202601 initially:
 CM -> Tool A
 MF -> Tool X
+BQ -> Tool B
 
 Later corrected/revised:
 CM -> Tool A
 MF -> Tool Y
+BQ -> Tool C
 ```
 
 The system must preserve enough history to know what associations existed for the relevant production/revision/document emission and which combination a production-wide Controlo/Pegamentos result belongs to.
+
+Peso for CM A remains linked to CM A, while its `production_id`/usage context identifies which production the measurement came from.
 
 Do not silently rewrite historical context already used for control, repair, Pegamentos, summary or issued documents.
 
@@ -533,7 +585,7 @@ The implementation plan must therefore resolve:
 
 - whether ProductionToolUsage is revisioned/effective-dated;
 - how tool changes are audited;
-- whether existing tool-specific control/repair records remain tied to the original usage/context;
+- whether existing tool-specific control/repair/Peso records remain tied to the original usage/context;
 - how production-wide summary/Pegamentos remain tied to the correct tool set/revision;
 - how generated documents preserve the association snapshot used at generation time.
 
@@ -544,6 +596,7 @@ The implementation plan must therefore resolve:
 Do not solve this redesign by:
 
 - copying tool reference/lot/machine/classification fields into every module as independent truth;
+- attaching Peso to the full Job On/tool set when the Peso measurement is specifically about the CM;
 - attaching production-wide Pegamentos or multi-tool control summary permanently to one tool;
 - duplicating the same production-wide summary independently on every tool;
 - forcing Controlo to require a fake Job On for a tool-specific pre-production control;
@@ -569,7 +622,8 @@ Inspect the current running behavior and current schema/code paths specifically 
 - how Job On stores CM/MF/BQ/PU/etc.;
 - how machine/line associations are represented;
 - where `NNPB` / `PS` or equivalent classification is currently stored and whether it is genuinely tool-owned;
-- how Peso and Pegamentos are currently stored and whether current records are tool-specific or production-wide;
+- how Peso is currently stored and how directly it can be tied to the CM;
+- how Pegamentos is currently stored and how it represents the multi-tool production setup;
 - how the current Controlo summary is assembled and which fields span several tools;
 - how Controlo finds its current Job On/tool context;
 - which tool-owned fields Controlo currently asks the user to re-enter;
@@ -589,7 +643,8 @@ Define the minimum contracts required for:
 - Tool ↔ Machines/Lines (0..N);
 - tool-owned classification/context fields that Controlo can reuse;
 - ProductionToolUsage;
-- Tool-linked control records;
+- CM-linked Peso records with optional production context;
+- other Tool-linked control records;
 - Job On / production-wide control summary;
 - Job On / production-wide Pegamentos;
 - Tool + production-linked notes;
@@ -617,9 +672,12 @@ Controlo must support:
 
 Once a tool is selected, Controlo must reuse authoritative tool information instead of asking the user to type it again.
 
-Tool-specific results are stored against the tool + optional production context.
+Ownership rules:
 
-Production-wide summary and Pegamentos that span the tool set are stored/associated with the Job On/production context.
+- Peso -> exact CM, with production context when applicable;
+- other tool-specific results -> exact tool, with production context when applicable;
+- Pegamentos -> Job On/production/tool combination;
+- overall/resume of Controlo spanning several tools -> Job On/production/tool combination.
 
 Acceptance criteria include:
 
@@ -628,9 +686,10 @@ Acceptance criteria include:
 - lot resolved from tool;
 - NNPB/PS or equivalent established classification resolved from tool where applicable;
 - one-or-more associated machines/lines available from the tool;
-- one control workflow can use the Job On-selected tool set without duplicating their identity fields;
+- Peso record resolves to one exact CM;
+- changing MF/BQ in another production does not move/re-own historical Peso away from the CM;
 - production-wide summary remains tied to the exact production/tool set;
-- Pegamentos remains tied to the exact production/tool set when it is multi-tool in meaning;
+- Pegamentos remains tied to the exact production/tool set;
 - a tool-specific pre-production control remains possible without a Job On.
 
 ## Phase E — Rewire Reparação Interna
@@ -686,17 +745,19 @@ Before a later LIVE → CLEAN rebuild, validate at least:
 
 - one tool used across multiple productions;
 - one CM paired with different MF tools across productions;
+- one CM paired with different BQ lots across productions;
 - tool with multiple machines/lines;
 - Controlo auto-populates/reuses tool type/reference/lot/classification/machines rather than requiring duplicate entry;
-- tool-specific control created through Job On;
-- tool-specific control created before any Job On exists;
+- Peso created through Job On and stored against the exact CM;
+- Peso created for a CM before any Job On exists where that workflow is valid;
+- same CM retains its Peso history across productions with different MF/BQ combinations;
 - production-wide control summary tied to one exact production/tool set;
-- Pegamentos tied to one exact production/tool set where multi-tool in meaning;
+- Pegamentos tied to one exact production/tool set;
 - RI record associated to Job On-selected CM/MF;
 - BQ repair record associated to repairer + production + real BQ/reference/lot/machine context;
 - tool note associated to tool + production;
 - Job On opens without loading unnecessary full histories;
-- document generation pulls the correct tool-specific and production-wide data;
+- document generation pulls the correct CM Peso and correct production-wide summary/Pegamentos;
 - generated PDF remains traceable to production/revision/source context;
 - local PDF backup/retrieval works as intended.
 
@@ -711,20 +772,21 @@ These decisions are the reason for this plan and must not be lost during impleme
 3. Tool-owned information such as type, reference, lot, machines/lines and established classification such as NNPB/PS should be reusable by Controlo instead of repeatedly re-entered.
 4. Job On selects the correct tools for a production and acts as the normal medium/context for downstream production workflows.
 5. ProductionToolUsage preserves which exact tools worked together in each production.
-6. Tool-specific control records belong to the tool and, when applicable, the production in which the tool was used.
-7. Tool-specific Controlo must also work for a tool that does not yet have a scheduled production/Job On.
-8. The overall/resume of Controlo that spans several tools belongs to the Job On/production context.
-9. Pegamentos belongs to the Job On/production context when its meaning is about the combined tool set used in that production.
-10. Production-wide summary/Pegamentos must not become permanent properties of one tool merely because that tool participated in the production.
-11. Tool-specific notes must be attributable to the exact tool and production context where applicable; production-wide notes stay with Job On.
-12. Reparação Interna obtains the required CM/MF tool from the Job On production context in the same general way as Controlo.
-13. RI records belong to the tool + production context, not to copied reference/lot text.
-14. Boquilhas keeps individual tracking, but BQ repair history can associate the repairer/event with the production and real reference/lot/machine context where applicable.
-15. Historical pairing changes (for example same CM with different MF in different productions) remain queryable.
-16. Historical pairings are context, not permanent inferred compatibility rules.
-17. Job On should not eagerly load all detailed historical information merely because it is accessible from the production hub.
-18. Production documents aggregate from the authoritative owner of each field; the generated PDF is the historical snapshot that remains traceable/versioned/backed up.
-19. Job On editing/tool changes must preserve historical associations already used by control, repairs, production-wide Pegamentos/summary and generated documents.
+6. **Peso belongs to the exact CM being weighed.** Production/Job On is context, not the owner of Peso.
+7. The same CM can retain its Peso history even when later productions use different MF, BQ or lots.
+8. Tool-specific Controlo must also work for a tool that does not yet have a scheduled production/Job On where the workflow requires it.
+9. **The overall/resume of Controlo that spans several tools belongs to the Job On/production context.**
+10. **Pegamentos belongs to the Job On/production context because it represents the specific set of tools used together in that production.**
+11. Production-wide summary/Pegamentos must not become permanent properties of one tool merely because that tool participated in the production.
+12. Tool-specific notes must be attributable to the exact tool and production context where applicable; production-wide notes stay with Job On.
+13. Reparação Interna obtains the required CM/MF tool from the Job On production context in the same general way as Controlo.
+14. RI records belong to the tool + production context, not to copied reference/lot text.
+15. Boquilhas keeps individual tracking, but BQ repair history can associate the repairer/event with the production and real reference/lot/machine context where applicable.
+16. Historical pairing changes (for example same CM with different MF or BQ lots in different productions) remain queryable.
+17. Historical pairings are context, not permanent inferred compatibility rules.
+18. Job On should not eagerly load all detailed historical information merely because it is accessible from the production hub.
+19. Production documents aggregate from the authoritative owner of each field; the generated PDF is the historical snapshot that remains traceable/versioned/backed up.
+20. Job On editing/tool changes must preserve historical associations already used by Peso, control, repairs, production-wide Pegamentos/summary and generated documents.
 
 ---
 
