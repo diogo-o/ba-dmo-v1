@@ -104,18 +104,21 @@ Correct owner rule:
 
 Before removal, trace whether these are presentation-only fields or whether stale DTO/service/schema/test assumptions were introduced around them. Remove unsupported logic safely rather than hiding labels while leaving dead behavior underneath.
 
-## R-066 — Pinças Job On `Stock em máquina` is unauthorized and invented
-**Status:** `OPEN / REGRESSION / REMOVE`
+## R-066 — Pinças Job On confuses required quantity with `Stock em máquina`
+**Status:** `OPEN / REGRESSION / CORRECT SEMANTICS`
 
-The Job On Pinças/PI block currently exposes `Stock em máquina` (or equivalent stock-in-machine information), but Pinças do not use this concept in the real workflow and the owner never defined it.
+The current Job On Pinças/PI block uses or presents `Stock em máquina`, but that is not the real production concept.
 
 Correct owner rule:
-- remove `Stock em máquina` from the Pinças/PI Job On UI;
-- do not invent stock, machine-stock, required-quantity or utilization logic for Pinças;
-- Job On should show only the Pinças information actually used in the production sheet/context;
-- do not retain unsupported fields because they happen to exist in current UI/tests/DTOs.
+- Pinças **do have a quantity required for the production**, based on what the selected production line uses;
+- this is the quantity the production is expected to require/use for that line;
+- it is **not** `Stock em máquina`;
+- before the production is actually running, the application cannot know how many Pinças are physically in the machine;
+- therefore do not label, store or infer the required quantity as an observed machine stock/current quantity;
+- preserve the legitimate required-quantity field/calculation/source if it already exists, but give it the correct meaning and presentation;
+- do not invent live machine-state information from planned production data.
 
-Before removal, trace whether the field is presentation-only or whether stale DTO/service/schema/test assumptions were introduced around it. Remove unsupported logic safely rather than only hiding the label.
+Trace the current UI, DTO/service logic, tests and persistence to distinguish the legitimate `quantidade necessária para a produção/linha` from the invented `stock em máquina` concept. Remove only the invented semantics; do not delete the real required-quantity information.
 
 ---
 
