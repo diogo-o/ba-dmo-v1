@@ -58,8 +58,40 @@ Correct owner rule:
 
 Before removal, trace whether these labels are presentation-only or backed by stale DTO/service/schema/test assumptions. Remove stale UI/logic safely rather than merely hiding labels if unused code was introduced around them.
 
+## R-063 — CM/MF repairer should prefill from latest repair record
+**Status:** `MISSING / AUTHORITY`
+
+For CM and MF shown in Job On, the `Reparador` field should reuse the latest known repair context for that exact tool/lot instead of requiring the user to repeatedly type information the system already has.
+
+Correct owner rule:
+- resolve the latest repair record associated with the exact CM/MF tool context;
+- prefill `Reparador` from that latest repair record when one exists;
+- if there is no prior repair record, leave the field empty;
+- this is contextual prefill, not an industrial validity rule;
+- Responsável may alter the value while editing Job On;
+- do not hardcode or invent a default repairer;
+- historical repairer information must never block a legitimate current selection.
+
+Use the canonical persisted tool identity/relationship rather than matching only on a loose reference string. Preserve the distinction between CM/MF external repair history and Reparação Interna records as defined by their respective flows.
+
+## R-064 — Job On `...` dropdown renders behind the header
+**Status:** `OPEN / UX / REGRESSION`
+
+The Job On secondary `...` menu opens, but its dropdown/content is rendered behind the global header and becomes partially or fully invisible.
+
+Required direction:
+- overlay menus must render above the global shell/header;
+- opening a menu must not move or resize the page;
+- do not fix this with arbitrary page-specific offsets;
+- establish a consistent overlay/z-index layer in the shared design system for menus, popovers and dialogs;
+- ensure the menu is not clipped by parent `overflow` rules;
+- preserve keyboard/focus behavior and click-outside dismissal;
+- verify the same overlay behavior anywhere the shared `...` menu pattern is reused.
+
+This is a shell/overlay-layer defect, not a Job On-specific visual patch.
+
 ---
 
 ## Priority
 
-Treat `R-058`–`R-062` as part of the current recovery backlog. `R-058`, `R-059`, `R-060` and `R-062` are correctness/regression items; `R-061` is a UX sizing defect.
+Treat `R-058`–`R-064` as part of the current recovery backlog. `R-058`, `R-059`, `R-060`, `R-062` and `R-064` are correctness/regression items; `R-061` is a UX sizing defect; `R-063` is an owner-authorized contextual data reuse requirement.
