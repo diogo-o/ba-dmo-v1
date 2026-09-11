@@ -104,8 +104,21 @@ Correct owner rule:
 
 Before removal, trace whether these are presentation-only fields or whether stale DTO/service/schema/test assumptions were introduced around them. Remove unsupported logic safely rather than hiding labels while leaving dead behavior underneath.
 
+## R-066 — Pinças Job On `Stock em máquina` is unauthorized and invented
+**Status:** `OPEN / REGRESSION / REMOVE`
+
+The Job On Pinças/PI block currently exposes `Stock em máquina` (or equivalent stock-in-machine information), but Pinças do not use this concept in the real workflow and the owner never defined it.
+
+Correct owner rule:
+- remove `Stock em máquina` from the Pinças/PI Job On UI;
+- do not invent stock, machine-stock, required-quantity or utilization logic for Pinças;
+- Job On should show only the Pinças information actually used in the production sheet/context;
+- do not retain unsupported fields because they happen to exist in current UI/tests/DTOs.
+
+Before removal, trace whether the field is presentation-only or whether stale DTO/service/schema/test assumptions were introduced around it. Remove unsupported logic safely rather than only hiding the label.
+
 ---
 
 ## Priority
 
-Treat `R-058`–`R-065` as part of the current recovery backlog. `R-058`, `R-059`, `R-060`, `R-062`, `R-064` and `R-065` are correctness/regression items; `R-061` is a UX sizing defect; `R-063` is an owner-authorized contextual data reuse requirement.
+Treat `R-058`–`R-066` as part of the current recovery backlog. `R-058`, `R-059`, `R-060`, `R-062`, `R-064`, `R-065` and `R-066` are correctness/regression items; `R-061` is a UX sizing defect; `R-063` is an owner-authorized contextual data reuse requirement.
