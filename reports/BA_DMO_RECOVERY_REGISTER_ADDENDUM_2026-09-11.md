@@ -120,8 +120,24 @@ Correct owner rule:
 
 Trace the current UI, DTO/service logic, tests and persistence to distinguish the legitimate `quantidade necessária para a produção/linha` from the invented `stock em máquina` concept. Remove only the invented semantics; do not delete the real required-quantity information.
 
+## R-067 — Calibres fields were removed but must be manual and duplicable
+**Status:** `OPEN / REGRESSION / FUNCTIONAL`
+
+The current Job On Calibres block has lost the manual fields that were part of the real workflow.
+
+Correct owner rule:
+- Calibres are one of the Job On records that must be entered manually by the user;
+- the fields must exist in the Job On so the first production can be registered correctly;
+- when a later Job On is duplicated from the previous production/reference, the Calibres values must be carried forward with the rest of the duplicated Job On data;
+- after duplication, Responsável must be able to edit the copied Calibres values for the new production;
+- do not replace these manual fields with inferred/default values;
+- do not remove Calibres fields simply because they are not derived from another module;
+- manual entry is intentional here and is the source that makes later duplication useful.
+
+Recovery work must compare the current Calibres UI/model with the authoritative Job On field set and restore **all fields that were removed**, not just one guessed field. Trace UI, page model/DTO, save/load, duplicate logic, persistence and tests so the restored values survive round-trip and duplication.
+
 ---
 
 ## Priority
 
-Treat `R-058`–`R-066` as part of the current recovery backlog. `R-058`, `R-059`, `R-060`, `R-062`, `R-064`, `R-065` and `R-066` are correctness/regression items; `R-061` is a UX sizing defect; `R-063` is an owner-authorized contextual data reuse requirement.
+Treat `R-058`–`R-067` as part of the current recovery backlog. `R-058`, `R-059`, `R-060`, `R-062`, `R-064`, `R-065`, `R-066` and `R-067` are correctness/regression items; `R-061` is a UX sizing defect; `R-063` is an owner-authorized contextual data reuse requirement.
